@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Братство Академистов — личный кабинет</title>
+  <meta name="description" content="Старейшее студенческое сообщество России. Вход в личный кабинет Братства Академистов." />
+  <meta name="theme-color" content="#12100e" />
+
+  <!-- DEPLOY STEP: подставить реальный адрес сайта в og:url и og:image -->
+  <meta property="og:title" content="Братство Академистов — личный кабинет" />
+  <meta property="og:description" content="Старейшее студенческое сообщество России. Вход в личный кабинет." />
+  <meta property="og:image" content="assets/portrait.jpg" />
+  <meta property="og:url" content="https://REPLACE-AT-DEPLOY" />
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2312100e'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='%23d9b57b' font-family='Georgia,serif'%3E%D0%90%3C/text%3E%3C/svg%3E" />
+
+  <script>document.documentElement.className += " js";</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- те же начертания, что и в самом кабинете (webapp/index.html) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <div class="env" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+
+  <div class="hero-pin">
+    <div class="hero-stage">
+
+      <figure class="plate">
+        <div class="plate-img">
+          <img src="assets/portrait.jpg" width="1208" height="734"
+               alt="Групповой портрет членов Братства Академистов, архивный снимок" />
+          <div class="plate-dim" aria-hidden="true"></div>
+          <div class="plate-vig" aria-hidden="true"></div>
+          <svg class="plate-frame" aria-hidden="true">
+            <rect x="0" y="0" width="100%" height="100%" pathLength="1" />
+          </svg>
+          <span class="corner tl" aria-hidden="true"></span>
+          <span class="corner tr" aria-hidden="true"></span>
+          <span class="corner bl" aria-hidden="true"></span>
+          <span class="corner br" aria-hidden="true"></span>
+        </div>
+        <figcaption class="plate-label label">Архивный снимок · <b>Братство Академистов</b></figcaption>
+      </figure>
+
+      <div class="bands">
+        <div class="band band-1 entrance-rise" data-active="0">
+          <p class="label">Братство Академистов</p>
+          <h1 data-split>Старейшее студенческое сообщество России</h1>
+        </div>
+
+        <div class="band band-2 entrance-depth" data-active="0">
+          <p data-split>Мы не начинались вчера. Мы продолжаем сегодня.</p>
+        </div>
+
+        <div class="band band-3 entrance-settle" data-active="0">
+          <h2 class="headline" data-split>Личный кабинет Братства</h2>
+          <p class="subline">Мероприятия, задачи и ваше звание — в одном месте.</p>
+          <div class="cta-row">
+            <a class="btn" href="https://t.me/AcademistCabinetBot">Войти в личный кабинет</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="scroll-cue" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <main id="main" tabindex="-1">
+
+    <div class="divider" aria-hidden="true">
+      <svg viewBox="0 0 1120 2" preserveAspectRatio="none"><path d="M0,1 L1120,1" pathLength="1" /></svg>
+    </div>
+
+    <!-- История движения: узлы переключают снимок, архив сменяется сегодняшним днём -->
+    <section class="section tl-section" id="history">
+      <p class="label">История движения</p>
+      <h2 class="section-title">От первых академистов до сегодняшнего дня</h2>
+
+      <figure class="tl-stage">
+        <div class="tl-frame">
+          <img class="tl-img is-on" data-key="portrait" src="assets/portrait.jpg" width="1208" height="734"
+               alt="Групповой портрет членов Братства Академистов, архивный снимок" />
+          <img class="tl-img" data-key="hangout" src="assets/now-hangout.jpg" width="1208" height="734"
+               alt="Сходка академистов" loading="lazy" />
+          <img class="tl-img" data-key="sjezd" src="assets/now-sjezd.jpg" width="1208" height="734"
+               alt="Съезд академистов" loading="lazy" />
+          <img class="tl-img" data-key="ball" src="assets/now-ball.jpg" width="1208" height="734"
+               alt="Бал академистов" loading="lazy" />
+          <div class="tl-vig" aria-hidden="true"></div>
+          <span class="corner tl" aria-hidden="true"></span>
+          <span class="corner tr" aria-hidden="true"></span>
+          <span class="corner bl" aria-hidden="true"></span>
+          <span class="corner br" aria-hidden="true"></span>
+          <span class="tl-photo-label label" aria-hidden="true">Архивный снимок</span>
+        </div>
+        <figcaption class="tl-caption" aria-live="polite">
+          <span class="tl-year label">1903–1905</span>
+          <span class="tl-text">Учреждение</span>
+        </figcaption>
+      </figure>
+
+      <div class="tl-track" role="tablist" aria-label="История движения"></div>
+    </section>
+
+    <div class="divider" aria-hidden="true">
+      <svg viewBox="0 0 1120 2" preserveAspectRatio="none"><path d="M0,1 L1120,1" pathLength="1" /></svg>
+    </div>
+
+    <section class="section">
+      <p class="label">Наследие</p>
+      <p class="lede">Наследие — это не то, что позади. Это то, что несёшь и продолжаешь сегодня.</p>
+
+      <div class="pillars">
+        <div class="pillar">
+          <p class="label num">01</p>
+          <h3>Преемственность</h3>
+          <p>Традиции передаются лично, из рук в руки. Они не лежат в архиве, а живут в каждом новом Академисте.</p>
+        </div>
+        <div class="pillar">
+          <p class="label num">02</p>
+          <h3>Братство как действие</h3>
+          <p>Событие, задача, взаимная помощь. Членство здесь не звание на бумаге, а то, что вы делаете вместе.</p>
+        </div>
+        <div class="pillar">
+          <p class="label num">03</p>
+          <h3>Ваш кабинет</h3>
+          <p>Мероприятия отделения, личные задачи, звание и путь внутри Братства. Всё видно сразу.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="close-band">
+      <button class="hold" type="button" aria-describedby="hold-hint">
+        <svg viewBox="0 0 132 132" aria-hidden="true">
+          <circle class="track" cx="66" cy="66" r="64" />
+          <circle class="prog" cx="66" cy="66" r="64" pathLength="1" />
+        </svg>
+        <img src="assets/emblem.png" alt="" aria-hidden="true" />
+        <span class="sr-only">Удерживайте, чтобы проявить снимок</span>
+      </button>
+      <p class="hold-hint label" id="hold-hint">Нажмите и удерживайте</p>
+
+      <p class="close-line">Строй не прерывался ни разу. Ваше место в нём уже есть.</p>
+
+      <a class="btn" href="https://t.me/AcademistCabinetBot">Войти в личный кабинет</a>
+    </section>
+
+    <footer>
+      <span>© Братство Академистов</span>
+      <div class="footer-links">
+        <a href="https://academists.ru">academists.ru</a>
+        <a href="https://t.me/AcademistCabinetBot">Телеграм-бот</a>
+      </div>
+    </footer>
+  </main>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
