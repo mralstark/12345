@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    /* Токены сняты из webapp/styles.css без изменений. */
+    body { margin: 0; }
+    a { color: #d9b57b; } a:hover { color: #e8c68f; }
+    .scr {
+      width: 375px; height: 812px; overflow: hidden; position: relative;
+      background: #141414; color: #ece6dc;
+      font-family: "PT Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px; line-height: 1.45;
+      display: flex; flex-direction: column;
+    }
+    .pf { font-family: "Playfair Display", Georgia, serif; }
+    .topbar {
+      flex: none; background: #141414; border-bottom: 1px solid rgba(217,181,123,0.22);
+      padding: 12px;
+    }
+    .topbar__title { font-family: "Playfair Display", Georgia, serif; font-size: 19px; line-height: 1.2; }
+    .topbar__sub { font-size: 12px; color: #9c9082; }
+    .view { flex: 1 1 auto; overflow: hidden; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+    .card { background: #1e1b17; border-radius: 12px; padding: 12px; }
+    .card__title { font-family: "Playfair Display", Georgia, serif; font-size: 16px; }
+    .sub { font-size: 12px; color: #9c9082; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22); }
+    .row:last-child { border-bottom: none; }
+    .row__side { text-align: right; white-space: nowrap; color: #9c9082; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 44px; padding: 12px 16px; border: none; border-radius: 10px;
+      background: #d9b57b; color: #201a12; font-family: inherit; font-size: 14px; font-weight: 500;
+    }
+    .btn--ghost { background: #1e1b17; color: #ece6dc; box-shadow: inset 0 0 0 1px rgba(217,181,123,0.22); }
+    .btn--sm { min-height: 32px; padding: 8px 12px; font-size: 13px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 12px; color: #9c9082; margin-bottom: 4px; }
+    .input {
+      width: 100%; padding: 8px 12px; border-radius: 9px; border: 1px solid rgba(217,181,123,0.22);
+      background: #141414; color: #ece6dc; font-size: 16px; box-sizing: border-box;
+    }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; background: rgba(217,181,123,0.22);
+      display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+    .nav {
+      flex: none; display: grid; grid-template-columns: repeat(5, minmax(0,1fr));
+      background: #141414; border-top: 1px solid rgba(217,181,123,0.22);
+    }
+    .nav__i { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      min-height: 56px; padding: 8px 4px; color: #9c9082; font-size: 11px; }
+    .nav__i--on { color: #d9b57b; }
+    .nav__i svg { width: 24px; height: 24px; }
+    .tag { display: inline-block; padding: 4px 12px; border-radius: 999px; background: #141414;
+      border: 1px solid rgba(217,181,123,0.22); font-size: 12px; color: #d9b57b; }
+  </style>
+</helmet>
+<div class="scr">
+  <div class="topbar">
+    <div class="topbar__title">Лебедев Сергей</div>
+    <div class="topbar__sub">Член Братства</div>
+  </div>
+  <div class="view">
+    <div style="display: flex; justify-content: center;">
+      <span style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; color: #9c9082; font-size: 12px;">23 августа</span>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px;">
+        <span class="avatar" style="background:#c8a24a; color:#201a12;">А</span>
+        <span style="flex: 1 1 auto; font-weight: 700; font-size: 14px;">Академисты | Москва</span>
+        <span class="sub">18:20</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px;">
+        <div style="aspect-ratio: 1; background: #2f4536;"></div>
+        <div style="aspect-ratio: 1; background: #4a5a3a;"></div>
+      </div>
+      <div style="padding: 12px;">Открытие сезона Чемпионата Межвузовских дебатов. Спасибо всем, кто пришёл.</div>
+      <div style="display: flex; align-items: center; gap: 16px; padding: 8px 12px 12px; color: #9c9082; font-size: 13px;">
+        <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V10l4.5-7a2 2 0 0 1 2.9 2.4L13 9h5.4a2 2 0 0 1 2 2.5l-1.7 7A2.5 2.5 0 0 1 16.2 21z"></path><path d="M7 10H4v11h3"></path></svg><span>12</span></span>
+        <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"></path></svg><span>3</span></span>
+        <span style="margin-left:auto; display:inline-flex; align-items:center; gap:4px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.5"></circle></svg><span>48</span></span>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px;">
+        <span class="avatar">И</span>
+        <span style="flex: 1 1 auto; font-weight: 700; font-size: 14px;">Иванов Иван</span>
+        <span class="sub">14:05</span>
+      </div>
+      <div style="padding: 0 12px 12px;">Ищу попутчиков до Новосибирска на съезд, выезжаю в пятницу утром.</div>
+      <div style="display: flex; align-items: center; gap: 16px; padding: 0 12px 12px; color: #9c9082; font-size: 13px;">
+        <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V10l4.5-7a2 2 0 0 1 2.9 2.4L13 9h5.4a2 2 0 0 1 2 2.5l-1.7 7A2.5 2.5 0 0 1 16.2 21z"></path><path d="M7 10H4v11h3"></path></svg><span>4</span></span>
+        <span style="display:inline-flex; align-items:center; gap:4px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"></path></svg><span>1</span></span>
+        <span style="margin-left:auto; display:inline-flex; align-items:center; gap:4px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.5"></circle></svg><span>31</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; right: 16px; bottom: 88px; width: 52px; height: 52px; border-radius: 50%; background: #d9b57b; color: #201a12; display: flex; align-items: center; justify-content: center; font-size: 26px; box-shadow: 0 8px 24px rgba(0,0,0,.45);">+</div>
+  <div class="nav">
+    <div class="nav__i nav__i--on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path></svg><span>Главная</span></div>
+    <div class="nav__i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span>Мероприятия</span></div>
+    <div class="nav__i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9V6z"></path></svg><span>Лобби</span></div>
+    <div class="nav__i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg><span>Магазин</span></div>
+    <div class="nav__i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"></path></svg><span>Профиль</span></div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":375,"height":812}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; position: relative; overflow: hidden; background: #141414; color: #ece6dc; font-family: 'PT Sans', sans-serif;">
+
+  <div style="padding: 12px; border-bottom: 1px solid rgba(217,181,123,0.22); background: #141414;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600;">Лебедев Сергей</div>
+  </div>
+
+  <div style="height: 700px; overflow: hidden; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+
+    <button type="button" style="display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0; border: none; background: none; color: #d9b57b; font-family: inherit; font-size: 15px; cursor: pointer; align-self: flex-start;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M15 5l-7 7 7 7"></path></svg>
+      <span>Назад</span>
+    </button>
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span style="flex: none; width: 72px; height: 72px; border-radius: 50%; background: rgba(217,181,123,0.22); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700;">Л</span>
+      <div style="min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 20px; line-height: 1.2;">Лебедев Сергей</span>
+          <img src="badge-member.webp" alt="" style="width: 20px; height: 20px; flex: none; display: block;">
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px; color: #d9b57b; font-size: 13px; font-weight: 700;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px; flex: none;"><path d="M12 3l2.4 5 5.6.8-4 3.9.9 5.5-4.9-2.6L7.1 18.2l.9-5.5-4-3.9L9.6 8z"></path></svg>
+          <span>Руководитель отделения</span>
+        </div>
+        <div style="font-size: 12px; color: #9c9082; margin-top: 2px;">Москва · СПбГУ</div>
+      </div>
+    </div>
+
+    <!-- Написать можно всем и всегда: кнопка не зависит ни от какой настройки.
+         Единственное, что ей нужно, — ник, по которому открыть переписку -->
+    <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
+      <button type="button" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 17px; height: 17px;"><path d="M21 4L3 11l6 2 2 6z"></path><path d="M21 4l-10 9"></path></svg>
+        <span>Написать в Телеграм</span>
+      </button>
+    </sc-if>
+
+    <!-- Ника нет — кнопка не притворяется рабочей и говорит почему -->
+    <sc-if value="{{ cannotWrite }}" hint-placeholder-val="{{ true }}">
+      <div style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 10px; background: rgba(156,144,130,0.16); color: #9c9082; font-size: 14px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 17px; height: 17px;"><path d="M21 4L3 11l6 2 2 6z"></path><path d="M21 4l-10 9"></path></svg>
+        <span>Телеграм не указан</span>
+      </div>
+    </sc-if>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+      <button type="button" onClick="{{ openPosts }}" style="{{ postsTabStyle }}">
+        <span>Публикации</span>
+        <span style="{{ countStyle }}">12</span>
+      </button>
+      <button type="button" onClick="{{ openAbout }}" style="{{ aboutTabStyle }}">О себе</button>
+    </div>
+
+    <sc-if value="{{ onPosts }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <sc-for list="{{ posts }}" as="post" hint-placeholder-count="2">
+          <div style="background: #1e1b17; border-radius: 12px; overflow: hidden;">
+            <sc-if value="{{ post.photo }}" hint-placeholder-val="{{ true }}">
+              <img src="{{ post.photo }}" alt="" style="width: 100%; height: 160px; object-fit: cover; display: block;">
+            </sc-if>
+            <div style="padding: 12px;">
+              <div style="font-size: 12px; color: #9c9082;">{{ post.when }}</div>
+              <div style="margin-top: 4px;">{{ post.text }}</div>
+              <div style="display: flex; align-items: center; gap: 16px; margin-top: 12px; color: #9c9082; font-size: 13px;">
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M7 11v9H4v-9z"></path><path d="M7 11l5-8 1.2.6a2 2 0 0 1 1 2.3L13 10h5.4a2 2 0 0 1 2 2.5l-1.5 6A2 2 0 0 1 17 20H7z"></path></svg>
+                  <span>{{ post.likes }}</span>
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="width: 16px; height: 16px;"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.6"></circle></svg>
+                  <span>{{ post.views }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ onAbout }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; margin-bottom: 8px;">О себе</div>
+          <div style="white-space: pre-wrap;">Историк, снимаю на плёнку. Веду разбор судебных речей по четвергам.</div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 0 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+            <div style="min-width: 0; flex: 1 1 auto;">Учёба</div>
+            <div style="text-align: right; flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere;">Юридический факультет · 3 курс</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0;">
+            <div style="min-width: 0; flex: 1 1 auto;">Телеграм</div>
+            <div style="text-align: right; flex: 0 1 auto; min-width: 0;">{{ telegramValue }}</div>
+          </div>
+          <!-- Телефона тут нет вовсе: Сергей оставил его скрытым. Не строка
+               «скрыто», а отсутствие строки — скрытое не должно себя выдавать -->
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 56px; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: #141414; border-top: 1px solid rgba(217,181,123,0.22);">
+    <sc-for list="{{ nav }}" as="item" hint-placeholder-count="5">
+      <div style="{{ item.style }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width: 22px; height: 22px;"><path d="{{ item.icon }}"></path></svg>
+        <span style="font-size: 11px;">{{ item.label }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "telegramFilled": {"editor": "boolean", "default": true, "section": "Контакты"},
+  "$preview": {"width": 375, "height": 812}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'posts' };
+  }
+
+  tabStyle(active) {
+    return 'display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 8px;'
+      + ' border: none; background: none; cursor: pointer; font-family: inherit; font-size: 14px;'
+      + ' border-bottom: 2px solid ' + (active ? '#d9b57b' : 'transparent') + ';'
+      + ' color: ' + (active ? '#ece6dc' : '#9c9082') + ';'
+      + ' font-weight: ' + (active ? '700' : '400') + ';';
+  }
+
+  renderVals() {
+    const filled = this.props.telegramFilled ?? true;
+    return {
+      canWrite: filled,
+      cannotWrite: !filled,
+      telegramValue: filled ? '@lebedev' : 'не указан',
+
+      onPosts: this.state.tab === 'posts',
+      onAbout: this.state.tab === 'about',
+      openPosts: () => this.setState({ tab: 'posts' }),
+      openAbout: () => this.setState({ tab: 'about' }),
+      postsTabStyle: this.tabStyle(this.state.tab === 'posts'),
+      aboutTabStyle: this.tabStyle(this.state.tab === 'about'),
+      countStyle: 'display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px;'
+        + ' padding: 0 5px; border-radius: 999px; background: rgba(217,181,123,0.18); color: #d9b57b; font-size: 11px; font-weight: 700;',
+
+      posts: [
+        { photo: 'intro-bg-sjezd.jpg', when: 'вчера в 19:40', text: 'Съезд Братства в Петербурге: 140 делегатов из двенадцати отделений.', likes: '14', views: '312' },
+        { photo: null, when: '20 авг в 12:05', text: 'Разбор речи Плевако по делу Засулич — в четверг в 19:00, ауд. 312. Приходите со своими тезисами.', likes: '6', views: '188' },
+        { photo: 'intro-bg-ball.jpg', when: '18 авг в 23:10', text: 'Осенний бал. Спасибо всем, кто пришёл.', likes: '11', views: '274' }
+      ],
+
+      nav: [
+        { label: 'Главная', icon: 'M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z', style: 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #d9b57b;' },
+        { label: 'Мероприятия', icon: 'M4 6h16v14H4zM4 10h16M9 3v4M15 3v4', style: 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #9c9082;' },
+        { label: 'Лобби', icon: 'M12 3l8 3v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6z', style: 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #9c9082;' },
+        { label: 'Магазин', icon: 'M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2', style: 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #9c9082;' },
+        { label: 'Профиль', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20c1.2-3.2 4-5 7-5s5.8 1.8 7 5', style: 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #9c9082;' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

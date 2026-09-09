@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; overflow-y: auto; background: #141414; color: #ece6dc; font-family: 'PT Sans', sans-serif; padding: 16px 12px 24px;">
+
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+    <button type="button" style="flex: none; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 8px; background: #1e1b17; color: #9c9082; cursor: pointer;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M15 6l-6 6 6 6"></path></svg>
+    </button>
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 18px; min-width: 0;">Сибирский федеральный университет</div>
+  </div>
+
+  <!-- Руководитель — первой строкой и всегда на виду, а не третьим пунктом
+       внутри бесконечной шторки. -->
+  <div style="display: flex; align-items: center; gap: 10px; background: #1e1b17; border-radius: 12px; padding: 12px;">
+    <span style="flex: none; width: 36px; height: 36px; border-radius: 50%; background: rgba(217,181,123,0.18); display: flex; align-items: center; justify-content: center; color: #d9b57b; font-weight: 700;">К</span>
+    <span style="min-width: 0; flex: 1 1 auto;">
+      <span style="display: block; font-size: 12px; color: #9c9082;">Руководитель ячейки</span>
+      <span style="display: block; font-weight: 500;">Кузнецов Иван</span>
+    </span>
+    <button type="button" style="flex: none; padding: 6px 10px; border: 1px solid rgba(217,181,123,0.22); border-radius: 8px; background: none; color: #9c9082; font-family: inherit; font-size: 13px; cursor: pointer;">Сменить</button>
+  </div>
+
+  <!-- Раньше всё это — обзор, бюджет, весь состав, все мероприятия и форма
+       правки — лежало в одном модальном окне подряд. На телефоне выходила
+       бесконечная прокрутка внутри шторки, где не найти нужное. -->
+  <div style="display: flex; gap: 6px; margin: 16px 0 12px;">
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+      <button type="button" onClick="{{ t.pick }}" style="{{ t.style }}">{{ t.label }}</button>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+    <div>
+      <!-- Бюджета у ячейки нет: денег на неё не расписывают. Раньше он
+           занимал весь обзор — и в двух местах в разном порядке. -->
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1 1 0; background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-size: 12px; color: #9c9082;">Состав</div>
+          <div style="font-size: 20px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums;">14</div>
+          <div style="font-size: 12px; color: #9c9082; margin-top: 2px;">6 посвящённых</div>
+        </div>
+        <div style="flex: 1 1 0; background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-size: 12px; color: #9c9082;">Мероприятий за год</div>
+          <div style="font-size: 20px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums;">7</div>
+          <div style="font-size: 12px; color: #9c9082; margin-top: 2px;">ближайшее 12 сент</div>
+        </div>
+      </div>
+
+      <!-- Откуда ячейка взялась. Она производная от вуза: заводится сама,
+           как только человеку в отделении впишут этот вуз. -->
+      <div style="display: flex; align-items: center; gap: 10px; background: #1e1b17; border-radius: 12px; padding: 12px; margin-top: 8px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#d9b57b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; flex: none;"><path d="M3 9l9-5 9 5-9 5z"></path><path d="M7 11v5c0 1.7 2.2 3 5 3s5-1.3 5-3v-5"></path></svg>
+        <span style="min-width: 0;">
+          <span style="display: block; font-size: 12px; color: #9c9082;">Вуз</span>
+          <span style="display: block; font-weight: 500;">Сибирский федеральный университет</span>
+        </span>
+      </div>
+
+      <a href="#" style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; text-decoration: none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" style="width: 16px; height: 16px; flex: none;"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg>
+        vk.com/academists_sfu
+      </a>
+
+      <button type="button" style="width: 100%; min-height: 44px; margin-top: 16px; padding: 12px 16px; border: 1px solid rgba(217,181,123,0.22); border-radius: 10px; background: none; color: #ece6dc; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">Правка ячейки</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isMembers }}" hint-placeholder-val="{{ false }}">
+    <div style="background: #1e1b17; border-radius: 12px; padding: 0 12px;">
+      <sc-for list="{{ members }}" as="m" hint-placeholder-count="5">
+        <div style="{{ m.rowStyle }}">
+          <span style="flex: none; width: 32px; height: 32px; border-radius: 50%; background: rgba(217,181,123,0.18); display: flex; align-items: center; justify-content: center; color: #d9b57b; font-weight: 700; font-size: 13px;">{{ m.initial }}</span>
+          <span style="min-width: 0; flex: 1 1 auto;">
+            <span style="display: block; font-weight: 500;">{{ m.name }}</span>
+            <span style="display: block; font-size: 12px; color: #9c9082;">{{ m.status }}</span>
+          </span>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isEvents }}" hint-placeholder-val="{{ false }}">
+    <div style="background: #1e1b17; border-radius: 12px; padding: 0 12px;">
+      <sc-for list="{{ events }}" as="e" hint-placeholder-count="3">
+        <div style="{{ e.rowStyle }}">
+          <span style="flex: none; width: 40px; text-align: center;">
+            <span style="display: block; font-size: 18px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums;">{{ e.day }}</span>
+            <span style="display: block; font-size: 11px; color: #9c9082;">{{ e.month }}</span>
+          </span>
+          <span style="min-width: 0; flex: 1 1 auto;">
+            <span style="display: block; font-weight: 500;">{{ e.title }}</span>
+            <span style="display: block; font-size: 12px; color: #9c9082;">{{ e.sub }}</span>
+          </span>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": {"width": 375, "height": 812}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'overview' };
+  }
+
+  renderVals() {
+    const tab = this.state.tab;
+    const defs = [
+      { id: 'overview', label: 'Обзор' },
+      { id: 'members', label: 'Состав · 14' },
+      { id: 'events', label: 'Мероприятия' },
+    ];
+
+    const row = (i, total) =>
+      'display: flex; align-items: center; gap: 10px; padding: 12px 0;'
+      + (i === total - 1 ? '' : ' border-bottom: 1px solid rgba(217,181,123,0.22);');
+
+    const members = [
+      { name: 'Кузнецов Иван', status: 'Член Братства · руководитель ячейки' },
+      { name: 'Родченко Денис', status: 'Член Братства' },
+      { name: 'Иванов Иван', status: 'Активист' },
+      { name: 'Петров Пётр', status: 'Активист' },
+      { name: 'Сидоров Семён', status: 'Выпускник' },
+    ];
+
+    const events = [
+      { day: '12', month: 'сент', title: 'Посвящение первокурсников', sub: 'Актовый зал, 18:00' },
+      { day: '28', month: 'сент', title: 'Лекция «История студенчества»', sub: 'Ауд. 4-12, 17:30' },
+      { day: '05', month: 'окт', title: 'Выезд в Дивногорск', sub: 'Весь день' },
+    ];
+
+    return {
+      tabs: defs.map((d) => ({
+        label: d.label,
+        style: 'flex: 0 1 auto; padding: 6px 12px; border-radius: 999px; font-family: inherit; font-size: 12px; cursor: pointer;'
+          + (d.id === tab
+              ? ' background: #d9b57b; border: 1px solid #d9b57b; color: #201a12; font-weight: 700;'
+              : ' background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); color: #ece6dc;'),
+        pick: () => this.setState({ tab: d.id }),
+      })),
+      isOverview: tab === 'overview',
+      isMembers: tab === 'members',
+      isEvents: tab === 'events',
+      members: members.map((m, i) => ({ ...m, initial: m.name[0], rowStyle: row(i, members.length) })),
+      events: events.map((e, i) => ({ ...e, rowStyle: row(i, events.length) })),
+    };
+  }
+}
+</script>
+</body>
+</html>

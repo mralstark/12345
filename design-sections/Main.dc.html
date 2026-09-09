@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; position: relative; overflow: hidden; background: #141414; color: #ece6dc; font-family: 'PT Sans', sans-serif; display: flex; align-items: flex-end;">
+  <div style="width: 100%; max-height: 100%; overflow-y: auto; background: #141414; border-radius: 16px 16px 0 0; padding: 16px 16px 24px; border-top: 1px solid rgba(217,181,123,0.22);">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 17px;">Задания</div>
+      <div style="flex: none; width: 32px; height: 32px; border-radius: 999px; background: #1e1b17; display: flex; align-items: center; justify-content: center; color: #9c9082;">×</div>
+    </div>
+
+    <!-- Кого отмечаем — с аватаром, как в ленте: раньше имя было только в
+         заголовке окна, мелким шрифтом рядом со словом «Задания». -->
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <span style="flex: none; width: 36px; height: 36px; border-radius: 50%; background: rgba(217,181,123,0.18); display: flex; align-items: center; justify-content: center; color: #d9b57b; font-weight: 700;">И</span>
+      <span style="min-width: 0;">
+        <span style="display: block; font-weight: 700; font-size: 14px;">Иванов Иван</span>
+        <span style="display: block; font-size: 12px; color: #9c9082;">Активист · Академисты | Красноярск</span>
+      </span>
+    </div>
+
+    <!-- Баланс человека. Его не было нигде: руководитель жал «+1» и не видел
+         ни одной цифры — ни до, ни после. -->
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <div style="flex: 1 1 0; background: #1e1b17; border-radius: 12px; padding: 12px;">
+        <div style="font-size: 12px; color: #9c9082;">Уже забрал</div>
+        <div style="font-size: 20px; font-weight: 700; margin-top: 2px;">{{ claimed }} <span style="color: #d9b57b;">★</span></div>
+      </div>
+      <div style="flex: 1 1 0; background: #1e1b17; border-radius: 12px; padding: 12px;">
+        <div style="font-size: 12px; color: #9c9082;">Ждёт в Лобби</div>
+        <div style="font-size: 20px; font-weight: 700; margin-top: 2px; {{ pendingStyle }}">{{ pending }} <span style="color: #d9b57b;">★</span></div>
+      </div>
+    </div>
+
+    <!-- Итог того, что руководитель сделал в этом окне. Ровно тот вопрос,
+         на который раньше не было ответа: отметил ли, сколько, и что с того. -->
+    <sc-if value="{{ didSomething }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; gap: 10px; align-items: flex-start; background: rgba(78,139,93,0.12); border: 1px solid rgba(78,139,93,0.4); border-radius: 12px; padding: 12px; margin-bottom: 12px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4e8b5d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex: none; margin-top: 1px;"><path d="M20 6L9 17l-5-5"></path></svg>
+        <div style="min-width: 0;">
+          <div style="font-size: 14px;">{{ sessionLine }}</div>
+          <div style="font-size: 12px; color: #9c9082; margin-top: 2px;">{{ sessionSub }}</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-for list="{{ groups }}" as="group" hint-placeholder-count="2">
+      <div style="font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #9c9082; margin: 16px 0 8px;">{{ group.label }}</div>
+
+      <div style="background: #1e1b17; border-radius: 12px; padding: 0 12px;">
+        <sc-for list="{{ group.quests }}" as="q" hint-placeholder-count="3">
+          <div style="{{ q.rowStyle }}">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+              <div style="min-width: 0; flex: 1 1 auto;">
+                <div style="font-weight: 500;">{{ q.title }}</div>
+
+                <!-- Полоска и подпись под ней: сколько сейчас, сколько до
+                     следующей ступени и что она даст. Раньше была одна
+                     строчка «3/5» без всякого объяснения. -->
+                <div style="height: 4px; border-radius: 999px; background: rgba(217,181,123,0.16); margin: 8px 0 6px; overflow: hidden;">
+                  <div style="{{ q.barStyle }}"></div>
+                </div>
+                <div style="font-size: 12px; color: #9c9082;">{{ q.progressLine }}</div>
+              </div>
+
+              <button type="button" onClick="{{ q.mark }}" style="{{ q.buttonStyle }}">{{ q.buttonLabel }}</button>
+            </div>
+
+            <!-- Что случилось от последнего нажатия — прямо в строке, а не
+                 молча. Держится до закрытия окна, чтобы не пропустить. -->
+            <sc-if value="{{ q.justChanged }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(217,181,123,0.22);">
+                <span style="font-size: 12px; color: {{ q.noteColor }};">{{ q.note }}</span>
+                <button type="button" onClick="{{ q.undo }}" style="flex: none; padding: 2px 8px; border: 1px solid rgba(217,181,123,0.22); border-radius: 999px; background: none; color: #9c9082; font-family: inherit; font-size: 12px; cursor: pointer;">Отменить</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+
+    <!-- Почему баланс не прыгнул сразу. Без этой строки «открылось 2 ★», но
+         «уже забрал» не изменилось выглядит как поломка. -->
+    <div style="display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; font-size: 12px; color: #9c9082;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" style="width: 16px; height: 16px; flex: none; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16v.01"></path></svg>
+      <div>Звёзды человек забирает сам — в «Лобби», кнопкой «Получить». Поэтому «уже забрал» меняется не сейчас, а когда он туда зайдёт.</div>
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-top: 16px;">
+      <button type="button" style="flex: 1 1 auto; min-height: 44px; padding: 12px 16px; border: 1px solid rgba(217,181,123,0.22); border-radius: 10px; background: none; color: #ece6dc; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">Закрыть</button>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": {"width": 375, "height": 812}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      claimed: 12,
+      // count — сколько отмечено; thresholds — лесенка ступеней;
+      // starsPer — сколько звёзд открывает каждая пройденная ступень.
+      quests: [
+        { id: 1, group: 'Братство', title: 'Побывать на собрании отделения', count: 3, thresholds: [1, 5, 10], starsPer: 2, marked: 0, opened: 0 },
+        { id: 2, group: 'Братство', title: 'Привести нового человека', count: 0, thresholds: [1, 3], starsPer: 3, marked: 0, opened: 0 },
+        { id: 3, group: 'Просвещение', title: 'Выступить с докладом', count: 1, thresholds: [1, 3, 5], starsPer: 3, marked: 0, opened: 0 },
+        { id: 4, group: 'Просвещение', title: 'Организовать лекцию', count: 5, thresholds: [1, 3, 5], starsPer: 3, marked: 0, opened: 0 },
+      ],
+    };
+  }
+
+  earned(q) {
+    return q.thresholds.filter((t) => q.count >= t).length * q.starsPer;
+  }
+
+  nextTarget(q) {
+    return q.thresholds.find((t) => q.count < t) ?? null;
+  }
+
+  plural(n, one, few, many) {
+    const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
+    return n + ' ' + (tail === 1 ? one : (tail >= 2 && tail <= 4 ? few : many));
+  }
+
+  step(id, delta) {
+    this.setState({
+      quests: this.state.quests.map((q) => {
+        if (q.id !== id) return q;
+        const before = this.earned(q);
+        const next = { ...q, count: Math.max(0, q.count + delta) };
+        const after = this.earned(next);
+        next.marked = q.marked + delta;
+        next.opened = q.opened + (after - before);
+        return next;
+      }),
+    });
+  }
+
+  renderVals() {
+    const qs = this.state.quests;
+    const pending = qs.reduce((sum, q) => sum + this.earned(q), 0) - this.state.claimed;
+    const markedTotal = qs.reduce((sum, q) => sum + q.marked, 0);
+    const openedTotal = qs.reduce((sum, q) => sum + q.opened, 0);
+
+    const byGroup = [];
+    for (const q of qs) {
+      let g = byGroup.find((x) => x.label === q.group);
+      if (!g) { g = { label: q.group, quests: [] }; byGroup.push(g); }
+
+      const target = this.nextTarget(q);
+      const done = target === null;
+      const pct = done ? 100 : Math.round((q.count / target) * 100);
+
+      g.quests.push({
+        title: q.title,
+        rowStyle: 'padding: 12px 0;' + (q.id === qs[qs.length - 1].id ? '' : ' border-bottom: 1px solid rgba(217,181,123,0.22);'),
+        barStyle: 'height: 100%; width: ' + pct + '%; border-radius: 999px; background: ' + (done ? '#4e8b5d' : '#d9b57b') + ';',
+        progressLine: done
+          ? 'Выполнено полностью · отмечено ' + q.count
+          : q.count + ' из ' + target + ' — на ступени откроется ' + q.starsPer + ' ★',
+        buttonLabel: done ? 'Отметить ещё' : 'Отметить',
+        buttonStyle: 'flex: none; min-height: 32px; padding: 6px 12px; border: none; border-radius: 8px;'
+          + ' font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;'
+          + (done ? ' background: #1e1b17; color: #9c9082; border: 1px solid rgba(217,181,123,0.22);'
+                  : ' background: #d9b57b; color: #201a12;'),
+        justChanged: q.marked > 0,
+        note: q.opened > 0
+          ? 'Отмечено ' + q.marked + ' — открылось ' + q.opened + ' ★'
+          : 'Отмечено ' + q.marked + ', до ступени ещё ' + (target !== null ? target - q.count : 0),
+        noteColor: q.opened > 0 ? '#4e8b5d' : '#9c9082',
+        mark: () => this.step(q.id, 1),
+        undo: () => this.step(q.id, -q.marked),
+      });
+    }
+
+    return {
+      claimed: this.state.claimed,
+      pending: pending,
+      pendingStyle: pending > 0 ? 'color: #d9b57b;' : '',
+      didSomething: markedTotal > 0,
+      sessionLine: openedTotal > 0
+        ? 'Отмечено ' + this.plural(markedTotal, 'раз', 'раза', 'раз') + ' — открыто ' + openedTotal + ' ★'
+        : 'Отмечено ' + this.plural(markedTotal, 'раз', 'раза', 'раз'),
+      sessionSub: openedTotal > 0
+        ? 'Человеку ушло уведомление в бот'
+        : 'Ни одна ступень пока не пройдена — звёзд не прибавилось',
+      groups: byGroup,
+    };
+  }
+}
+</script>
+</body>
+</html>

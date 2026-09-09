@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; overflow-y: auto; background: #141414; color: #ece6dc; font-family: 'PT Sans', sans-serif; padding: 16px 12px 24px;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 20px;">Регионы</div>
+    <div style="font-size: 12px; color: #9c9082;">{{ countLine }}</div>
+  </div>
+
+  <sc-for list="{{ regions }}" as="r" hint-placeholder-count="3">
+    <div style="background: #1e1b17; border-radius: 12px; padding: 12px; margin-bottom: 8px;">
+
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <div style="font-weight: 700; min-width: 0;">{{ r.name }}</div>
+        <button type="button" style="flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 8px; background: none; color: #9c9082; cursor: pointer;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width: 16px; height: 16px;"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+        </button>
+      </div>
+
+      <!-- Две должности — двумя одинаковыми строками. Раньше «Назначить» у
+           куратора не было вовсе: назначали отдельной кнопкой внизу экрана,
+           а в строке оставалось только «Снять».
+           Куратор теперь не отдельная роль, а член бюро с переданным
+           полномочием: «Назначить» ведёт в бюро, а не в свою форму. -->
+      <sc-for list="{{ r.posts }}" as="post" hint-placeholder-count="2">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 0 0;">
+          <span style="flex: none; width: 28px; height: 28px; border-radius: 50%; background: rgba(217,181,123,0.14); display: flex; align-items: center; justify-content: center; color: #d9b57b;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="{{ post.icon }}"></path><circle cx="12" cy="8" r="3.2"></circle></svg>
+          </span>
+          <span style="min-width: 0; flex: 1 1 auto;">
+            <span style="display: block; font-size: 12px; color: #9c9082;">{{ post.label }}</span>
+            <span style="display: block; {{ post.nameStyle }}">{{ post.name }}</span>
+            <sc-if value="{{ post.alsoLine }}" hint-placeholder-val="{{ true }}">
+              <span style="display: block; font-size: 12px; color: #9c9082;">{{ post.alsoLine }}</span>
+            </sc-if>
+          </span>
+          <button type="button" onClick="{{ post.act }}" style="{{ post.actStyle }}">{{ post.actLabel }}</button>
+        </div>
+      </sc-for>
+
+    </div>
+  </sc-for>
+
+  <button type="button" style="width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; padding: 12px 16px; border: 1px dashed rgba(217,181,123,0.35); border-radius: 10px; background: none; color: #d9b57b; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width: 18px; height: 18px;"><path d="M12 5v14M5 12h14"></path></svg>
+    Создать регион
+  </button>
+
+  <!-- Своё подтверждение вместо системного окна браузера. Прежнее confirm()
+       рисовала операционная система: белый прямоугольник поверх тёмного
+       кабинета, с кнопками «ОК» и «Отмена» на языке телефона. -->
+  <sc-if value="{{ asking }}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: rgba(10,10,10,0.72); display: flex; align-items: flex-end;">
+      <div style="width: 100%; background: #141414; border-top: 1px solid rgba(217,181,123,0.22); border-radius: 16px 16px 0 0; padding: 16px 16px 24px;">
+        <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 17px; margin-bottom: 8px;">{{ askTitle }}</div>
+        <div style="font-size: 14px; color: #ece6dc;">{{ askBody }}</div>
+        <div style="font-size: 12px; color: #9c9082; margin-top: 8px;">{{ askAftermath }}</div>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button type="button" onClick="{{ confirm }}" style="flex: 1 1 auto; min-height: 44px; padding: 12px 16px; border: none; border-radius: 10px; background: #c0392b; color: #fff; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">{{ askConfirmLabel }}</button>
+          <button type="button" onClick="{{ cancel }}" style="flex: none; min-height: 44px; padding: 12px 16px; border: 1px solid rgba(217,181,123,0.22); border-radius: 10px; background: none; color: #ece6dc; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": {"width": 375, "height": 812}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      asking: null,
+      regions: [
+        { id: 1, name: 'Академисты | Красноярск', leader: 'Родченко Денис', coord: 'Евпятьев Владислав', coordAlso: ['Новосибирск', 'Томск'] },
+        { id: 2, name: 'Академисты | Санкт-Петербург', leader: 'Харитонов Даниил', coord: null, coordAlso: [] },
+        { id: 3, name: 'Академисты | Кемерово', leader: null, coord: null, coordAlso: [] },
+      ],
+    };
+  }
+
+  ask(region, post) {
+    this.setState({ asking: { region, post } });
+  }
+
+  renderVals() {
+    const a = this.state.asking;
+    const held = a ? (a.post === 'leader' ? a.region.leader : a.region.coord) : null;
+
+    const actStyle = (kind) =>
+      'flex: none; padding: 6px 10px; border-radius: 8px; font-family: inherit; font-size: 13px; cursor: pointer;'
+      + (kind === 'assign'
+          ? ' border: none; background: #d9b57b; color: #201a12; font-weight: 500;'
+          : ' border: 1px solid rgba(217,181,123,0.22); background: none; color: #9c9082;');
+
+    return {
+      countLine: this.state.regions.length + ' отделения',
+      regions: this.state.regions.map((r) => ({
+        name: r.name,
+        posts: [
+          {
+            label: 'Руководитель',
+            icon: 'M4.5 20a7.5 7.5 0 0 1 15 0',
+            name: r.leader ?? 'не назначен',
+            nameStyle: r.leader ? 'font-weight: 500;' : 'font-weight: 500; color: #9c9082;',
+            alsoLine: null,
+            actLabel: r.leader ? 'Снять' : 'Назначить',
+            actStyle: actStyle(r.leader ? 'drop' : 'assign'),
+            act: () => r.leader ? this.ask(r, 'leader') : null,
+          },
+          {
+            label: 'Куратор от бюро',
+            icon: 'M4.5 20a7.5 7.5 0 0 1 15 0',
+            name: r.coord ?? 'не назначен',
+            nameStyle: r.coord ? 'font-weight: 500;' : 'font-weight: 500; color: #9c9082;',
+            // Раньше нигде не было видно, что куратор ведёт ещё несколько
+            // отделений, — а снятие затрагивает их все.
+            alsoLine: r.coordAlso.length ? 'ведёт ещё: ' + r.coordAlso.join(', ') : null,
+            actLabel: r.coord ? 'Снять' : 'В бюро →',
+            actStyle: actStyle(r.coord ? 'drop' : 'assign'),
+            act: () => r.coord ? this.ask(r, 'coord') : null,
+          },
+        ],
+      })),
+
+      asking: a !== null,
+      askTitle: a ? (a.post === 'leader' ? 'Снять руководителя?' : 'Снять куратора?') : '',
+      askBody: a
+        ? held + ' — ' + (a.post === 'leader'
+            ? 'отделение ' + a.region.name + ' останется без руководителя.'
+            : 'перестанет вести ' + ([a.region.name].concat(a.region.coordAlso).length) + ' отделения: ' + [a.region.name.replace('Академисты | ', '')].concat(a.region.coordAlso).join(', ') + '.')
+        : '',
+      askAftermath: a && a.post === 'coord'
+        ? 'В бюро он останется — уйдёт только это полномочие.'
+        : 'Личный кабинет сохранится — человек останется в составе, просто без должности.',
+      askConfirmLabel: 'Снять',
+      confirm: () => this.setState({ asking: null }),
+      cancel: () => this.setState({ asking: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

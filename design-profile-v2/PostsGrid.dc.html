@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 600px; overflow: hidden; background: #141414; color: #ece6dc; font-family: 'PT Sans', sans-serif; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+
+  <div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; color: #9c9082;">Вариант А · Сетка</span>
+      <span style="padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(156,144,130,0.35); color: #9c9082; font-size: 11px;">не выбран</span>
+    </div>
+    <div style="font-size: 13px; color: #9c9082; margin-top: 2px;">Оставлено как след решения: длинный текст тут ужимался до цитаты.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 4px 0 8px;">
+    <div style="text-align: center;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 20px; line-height: 1.2;">12</div>
+      <div style="font-size: 12px; color: #9c9082;">публикаций</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 20px; line-height: 1.2;">1 240</div>
+      <div style="font-size: 12px; color: #9c9082;">просмотров</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 20px; line-height: 1.2;">38</div>
+      <div style="font-size: 12px; color: #9c9082;">отметок «нравится»</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px;">
+    <sc-for list="{{ posts }}" as="post" hint-placeholder-count="9">
+      <div style="{{ post.tileStyle }}">
+        <sc-if value="{{ post.photo }}" hint-placeholder-val="{{ true }}">
+          <img src="{{ post.photo }}" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+        </sc-if>
+        <sc-if value="{{ post.textOnly }}" hint-placeholder-val="{{ true }}">
+          <span style="position: absolute; inset: 0; padding: 8px; display: flex; align-items: center; font-family: 'Playfair Display', Georgia, serif; font-size: 12px; line-height: 1.25; color: #ece6dc; text-align: left; overflow: hidden;">{{ post.excerpt }}</span>
+        </sc-if>
+        <span style="position: absolute; right: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px; border-radius: 999px; background: rgba(20,20,20,0.72); color: #ece6dc; font-size: 10px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="width: 12px; height: 12px;"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.6"></circle></svg>
+          <span>{{ post.views }}</span>
+        </span>
+      </div>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview": {"width": 375, "height": 600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const source = [
+      { photo: 'intro-bg-sjezd.jpg', text: 'Съезд Братства в Петербурге', views: '312' },
+      { photo: null, text: 'Разбор речи Плевако по делу Засулич — в четверг в 19:00', views: '188' },
+      { photo: 'intro-bg-ball.jpg', text: 'Осенний бал', views: '274' },
+      { photo: null, text: 'Ищу попутчиков до Новосибирска на форум 14–16 сентября', views: '96' },
+      { photo: 'intro-bg-hangout.jpg', text: 'После собрания', views: '203' },
+      { photo: 'intro-bg-brat.jpg', text: 'Посвящение новых членов', views: '167' },
+      { photo: null, text: 'Протокол заседания выложен в документах', views: '74' },
+      { photo: 'intro-bg-sjezd.jpg', text: 'Делегация отделения', views: '129' },
+      { photo: null, text: 'Собираем библиотеку отделения — принесите книгу', views: '112' }
+    ];
+    return {
+      posts: source.map((post) => ({
+        photo: post.photo,
+        textOnly: !post.photo,
+        excerpt: post.text.length > 64 ? post.text.slice(0, 64).trim() + '…' : post.text,
+        views: post.views,
+        tileStyle: 'position: relative; aspect-ratio: 1 / 1; width: 100%; overflow: hidden; background: #1e1b17;'
+          + (post.photo ? '' : ' border: 1px solid rgba(217,181,123,0.14);')
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

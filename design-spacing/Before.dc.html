@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 420px; height: 660px; background: #0a0a0a; color: #ece6dc; font-family: 'PT Sans', sans-serif; padding: 20px 0 0;">
+
+  <!-- Всё ниже — точные числа из webapp/styles.css, а не прикидка на глаз.
+       Окно: padding 20 по бокам. Заголовок: 17px Playfair, отступ снизу 12.
+       Карточка: padding 12 со всех сторон. Строка должности внутри неё:
+       padding 8px 0 0 — вот отсюда и перекос. -->
+  <div style="background: #141414; border-radius: 16px 16px 0 0; padding: 20px 20px 24px; border-top: 1px solid rgba(217,181,123,0.22);">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 17px; min-width: 0;">Новосибирский государственный университет</div>
+      <div style="flex: none; width: 32px; height: 32px; border-radius: 999px; background: #1e1b17; display: flex; align-items: center; justify-content: center; color: #9c9082;">×</div>
+    </div>
+
+    <!-- Карточка с должностью. Обратите внимание на просвет над строкой и
+         под ней: сверху 12 + 8 = 20, снизу 12. Восемь точек разницы —
+         глаз их видит, даже не понимая, что именно не так. -->
+    <div style="position: relative; background: #1e1b17; border-radius: 12px; padding: 12px;">
+      <span style="position: absolute; left: 0; right: 0; top: 0; height: 20px; background: rgba(192,57,43,0.22);"></span>
+      <span style="position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: rgba(192,57,43,0.22);"></span>
+      <span style="position: absolute; right: 6px; top: 2px; font-size: 10px; color: #e88; z-index: 1;">20</span>
+      <span style="position: absolute; right: 6px; bottom: 1px; font-size: 10px; color: #e88; z-index: 1;">12</span>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0 0; position: relative;">
+        <span style="flex: none; width: 28px; height: 28px; border-radius: 50%; background: rgba(217,181,123,0.22); display: flex; align-items: center; justify-content: center; color: #d9b57b;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><circle cx="12" cy="8" r="3.2"></circle><path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path></svg>
+        </span>
+        <span style="min-width: 0; flex: 1 1 auto;">
+          <span style="display: block; font-size: 12px; color: #9c9082;">Руководитель ячейки</span>
+          <span style="display: block; font-weight: 500; color: #9c9082;">не назначен</span>
+        </span>
+        <button type="button" style="flex: none; padding: 4px 8px; border: none; border-radius: 8px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 13px; font-weight: 500;">Назначить</button>
+      </div>
+    </div>
+
+    <!-- Между карточкой и вкладками 16, а между заголовком и карточкой 12.
+         Шаг всё время разный, и вертикаль не читается как ритм. -->
+    <div style="display: flex; gap: 6px; margin: 16px 0 12px;">
+      <span style="padding: 4px 12px; border-radius: 999px; background: #d9b57b; border: 1px solid #d9b57b; color: #201a12; font-size: 12px; font-weight: 700;">Обзор</span>
+      <span style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px;">Состав · 1</span>
+      <span style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px;">Мероприятия</span>
+    </div>
+
+    <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+        <span style="min-width: 0;">
+          <span style="display: block; font-weight: 500;">Вуз</span>
+          <span style="display: block; font-size: 12px; color: #9c9082;">от него ячейка и произошла</span>
+        </span>
+        <span style="flex: none; text-align: right; min-width: 0;">Новосибирский государственный университет</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0;">
+        <span style="font-weight: 500;">Мероприятий</span>
+        <span style="font-variant-numeric: tabular-nums;">0</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview": {"width": 420, "height": 660}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

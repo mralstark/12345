@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; overflow-y: auto; background: #141414; color: #ece6dc; font-family: 'PT Sans', sans-serif; padding: 16px 12px 24px;">
+
+  <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 20px;">Бюро Братства</div>
+  <div style="font-size: 12px; color: #9c9082; margin: 4px 0 16px;">Кому Координатор передал часть своих полномочий</div>
+
+  <!-- Должность у члена бюро свободная — её определяет Координатор Братства.
+       Здесь свободный текст как раз на месте: это его формулировка, а не
+       список из системы. А вот под должностью — то, чего сейчас нет вовсе:
+       какие именно полномочия ему переданы. -->
+  <sc-for list="{{ people }}" as="p" hint-placeholder-count="3">
+    <div style="background: #1e1b17; border-radius: 12px; padding: 12px; margin-bottom: 8px;">
+
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="flex: none; width: 40px; height: 40px; border-radius: 50%; background: rgba(217,181,123,0.18); display: flex; align-items: center; justify-content: center; color: #d9b57b; font-weight: 700;">{{ p.initial }}</span>
+        <span style="min-width: 0; flex: 1 1 auto;">
+          <span style="display: block; font-weight: 700;">{{ p.name }}</span>
+          <span style="display: block; font-size: 12px; color: #d9b57b;">{{ p.title }}</span>
+        </span>
+        <button type="button" style="flex: none; padding: 6px 10px; border: 1px solid rgba(217,181,123,0.22); border-radius: 8px; background: none; color: #9c9082; font-family: inherit; font-size: 13px; cursor: pointer;">Правка</button>
+      </div>
+
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(217,181,123,0.22);">
+        <div style="font-size: 12px; color: #9c9082; margin-bottom: 8px;">{{ p.powersLabel }}</div>
+
+        <sc-if value="{{ p.hasPowers }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <sc-for list="{{ p.powers }}" as="w" hint-placeholder-count="3">
+              <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgba(217,181,123,0.12); border: 1px solid rgba(217,181,123,0.28); font-size: 12px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#d9b57b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width: 11px; height: 11px; flex: none;"><path d="M20 6L9 17l-5-5"></path></svg>
+                {{ w.label }}
+              </span>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ p.noPowers }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size: 13px; color: #9c9082;">Полномочия не переданы — должность почётная.</div>
+        </sc-if>
+
+        <!-- Полномочие может быть отдано не по всему Братству, а по своим
+             отделениям: тогда «назначать руководителей» действует только там. -->
+        <sc-if value="{{ p.scopeLine }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 12px; color: #9c9082;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; flex: none; margin-top: 2px;"><path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11z"></path><circle cx="12" cy="10" r="2.4"></circle></svg>
+            <span>{{ p.scopeLine }}</span>
+          </div>
+        </sc-if>
+      </div>
+
+    </div>
+  </sc-for>
+
+  <button type="button" style="width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; padding: 12px 16px; border: 1px dashed rgba(217,181,123,0.35); border-radius: 10px; background: none; color: #d9b57b; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width: 18px; height: 18px;"><path d="M12 5v14M5 12h14"></path></svg>
+    Ввести в бюро
+  </button>
+
+  <div style="display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; font-size: 12px; color: #9c9082;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" style="width: 16px; height: 16px; flex: none; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16v.01"></path></svg>
+    <div>Бюро формируете вы. Переданное полномочие можно забрать в любой момент — человек останется в бюро с должностью, но без него.</div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": {"width": 375, "height": 812}
+}'>
+class Component extends DCLogic {
+  renderVals() {
+    const people = [
+      { name: 'Макогон Ярослав', title: 'Куратор Северо-Запада',
+        powers: ['Назначать руководителей', 'Подтверждать анкеты'],
+        scope: 'Только по отделениям: Санкт-Петербург, Новгород' },
+      { name: 'Кожемяченко Олег', title: 'Секретарь Бюро',
+        powers: ['Открывать отделения', 'Новости от имени Братства', 'Сигналы модерации'],
+        scope: null },
+      { name: 'Федюлин Роман', title: 'Хранитель традиций',
+        powers: [],
+        scope: null },
+    ];
+
+    const plural = (n) => {
+      const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
+      return n + (tail === 1 ? ' полномочие' : (tail >= 2 && tail <= 4 ? ' полномочия' : ' полномочий'));
+    };
+
+    return {
+      people: people.map((p) => ({
+        name: p.name,
+        title: p.title,
+        initial: p.name[0],
+        powersLabel: p.powers.length ? 'Передано ' + plural(p.powers.length) : 'Полномочия',
+        hasPowers: p.powers.length > 0,
+        noPowers: p.powers.length === 0,
+        powers: p.powers.map((label) => ({ label })),
+        scopeLine: p.scope,
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

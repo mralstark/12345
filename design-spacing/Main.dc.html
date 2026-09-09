@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 420px; height: 660px; background: #0a0a0a; color: #ece6dc; font-family: 'PT Sans', sans-serif; padding: 20px 0 0;">
+
+  <div style="background: #141414; border-radius: 16px 16px 0 0; padding: 20px 20px 24px; border-top: 1px solid rgba(217,181,123,0.22);">
+
+    <!-- Заголовок отодвинут от карточки на те же 16, что и всё остальное:
+         шаг по вертикали теперь один, а не 12 / 16 / 12 вперемешку. -->
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 17px; min-width: 0;">Новосибирский государственный университет</div>
+      <div style="flex: none; width: 32px; height: 32px; border-radius: 999px; background: #1e1b17; display: flex; align-items: center; justify-content: center; color: #9c9082;">×</div>
+    </div>
+
+    <!-- Строка должности больше не добавляет себе отступ сверху: просвет
+         задаёт сама карточка, и он одинаков со всех сторон. Значок вырос с
+         28 до 36 — как у аватара в ленте, и строка перестала казаться
+         приплюснутой. -->
+    <div style="{{ cardStyle }}">
+      <sc-if value="{{ showGuides }}" hint-placeholder-val="{{ false }}">
+        <span style="position: absolute; left: 0; right: 0; top: 0; height: 14px; background: rgba(78,139,93,0.25);"></span>
+      </sc-if>
+      <sc-if value="{{ showGuides }}" hint-placeholder-val="{{ false }}">
+        <span style="position: absolute; left: 0; right: 0; bottom: 0; height: 14px; background: rgba(78,139,93,0.25);"></span>
+      </sc-if>
+
+      <div style="display: flex; align-items: center; gap: 12px; position: relative;">
+        <span style="flex: none; width: 36px; height: 36px; border-radius: 50%; background: rgba(217,181,123,0.18); display: flex; align-items: center; justify-content: center; color: #d9b57b;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 19px; height: 19px;"><circle cx="12" cy="8" r="3.2"></circle><path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path></svg>
+        </span>
+        <span style="min-width: 0; flex: 1 1 auto;">
+          <span style="display: block; font-size: 12px; color: #9c9082;">Руководитель ячейки</span>
+          <span style="display: block; font-weight: 500; color: #9c9082;">не назначен</span>
+        </span>
+        <!-- Кнопка перестала быть пятнышком: 8/14 вместо 4/8, и высота
+             сравнялась с двумя строками рядом. -->
+        <button type="button" style="flex: none; min-height: 34px; padding: 8px 14px; border: none; border-radius: 9px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;">Назначить</button>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 6px; margin: 16px 0;">
+      <span style="padding: 6px 14px; border-radius: 999px; background: #d9b57b; border: 1px solid #d9b57b; color: #201a12; font-size: 12px; font-weight: 700;">Обзор</span>
+      <span style="padding: 6px 14px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px;">Состав · 1</span>
+      <span style="padding: 6px 14px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px;">Мероприятия</span>
+    </div>
+
+    <!-- Строки внутри карточки: первая и последняя не добавляют своего
+         отступа — просвет держит карточка. Раньше выходило 12 + 12 сверху и
+         столько же снизу, отчего карточка распухала. -->
+    <div style="background: #1e1b17; border-radius: 12px; padding: 14px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid rgba(217,181,123,0.22);">
+        <span style="min-width: 0;">
+          <span style="display: block; font-weight: 500;">Вуз</span>
+          <span style="display: block; font-size: 12px; color: #9c9082;">от него ячейка и произошла</span>
+        </span>
+        <span style="flex: none; text-align: right; min-width: 0;">Новосибирский государственный университет</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px;">
+        <span style="font-weight: 500;">Мероприятий</span>
+        <span style="font-variant-numeric: tabular-nums;">0</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "showGuides": {"editor": "boolean", "default": false, "section": "Разметка"},
+  "$preview": {"width": 420, "height": 660}
+}'>
+class Component extends DCLogic {
+  renderVals() {
+    const guides = this.props.showGuides ?? false;
+    return {
+      showGuides: guides,
+      // 14 со всех сторон — одно число вместо 20 сверху и 12 снизу.
+      cardStyle: 'position: relative; background: #1e1b17; border-radius: 12px; padding: 14px;',
+    };
+  }
+}
+</script>
+</body>
+</html>

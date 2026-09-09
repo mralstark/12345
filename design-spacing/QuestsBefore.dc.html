@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 400px; height: 690px; background: #0a0a0a; color: #ece6dc; font-family: 'PT Sans', sans-serif; padding: 16px 0 0;">
+  <div style="background: #141414; border-radius: 16px 16px 0 0; padding: 20px 20px 24px; border-top: 1px solid rgba(217,181,123,0.22);">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 17px;">Задания</div>
+      <div style="flex: none; width: 32px; height: 32px; border-radius: 999px; background: #1e1b17; display: flex; align-items: center; justify-content: center; color: #9c9082;">×</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px; background: #1e1b17; border-radius: 12px; padding: 12px;">
+      <span style="flex: none; width: 36px; height: 36px; border-radius: 50%; background: rgba(217,181,123,0.18); display: flex; align-items: center; justify-content: center; color: #d9b57b; font-weight: 700;">А</span>
+      <span style="min-width: 0;">
+        <span style="display: block; font-weight: 500;">Активов Актив</span>
+        <span style="display: block; font-size: 12px; color: #9c9082;">Активист</span>
+      </span>
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-top: 12px;">
+      <div style="flex: 1 1 0; background: #1e1b17; border-radius: 12px; padding: 12px;">
+        <div style="font-size: 12px; color: #9c9082;">Уже забрал</div>
+        <div style="font-size: 20px; font-weight: 700; margin-top: 2px;">1 <span style="color: #d9b57b;">★</span></div>
+      </div>
+      <div style="flex: 1 1 0; background: #1e1b17; border-radius: 12px; padding: 12px;">
+        <div style="font-size: 12px; color: #9c9082;">Ждёт в Лобби</div>
+        <div style="font-size: 20px; font-weight: 700; margin-top: 2px; color: #d9b57b;">5 ★</div>
+      </div>
+    </div>
+
+    <!-- Заголовок раздела: сверху 12, снизу минус 4. Он почти касается
+         карточки под собой и стоит дальше от неё, чем от чужого блока сверху.
+         Подсвечено красным. -->
+    <div style="position: relative; margin: 12px 0 -4px;">
+      <span style="position: absolute; left: -20px; right: -20px; top: -12px; height: 12px; background: rgba(192,57,43,0.20);"></span>
+      <span style="position: absolute; left: -20px; right: -20px; bottom: -4px; height: 4px; background: rgba(192,57,43,0.45);"></span>
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #9c9082; position: relative;">Лидерство</div>
+    </div>
+
+    <div style="background: #1e1b17; border-radius: 12px; padding: 0 12px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+        <div style="min-width: 0; flex: 1 1 auto;">
+          <div style="font-weight: 500;">Посетить мероприятие</div>
+          <!-- Полоска идёт до самой кнопки и на глаз в неё врезается. -->
+          <div style="height: 6px; border-radius: 3px; background: rgba(217,181,123,0.22); margin: 8px 0 4px; overflow: hidden;">
+            <div style="height: 100%; width: 60%; background: #d9b57b; border-radius: 3px;"></div>
+          </div>
+          <div style="font-size: 12px; color: #9c9082;">3 из 5 — на ступени откроется 5 ★</div>
+        </div>
+        <div style="flex: none;">
+          <button type="button" style="min-height: 32px; padding: 8px 12px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 13px; font-weight: 500;">Отметить</button>
+        </div>
+      </div>
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 0;">
+        <div style="min-width: 0; flex: 1 1 auto;">
+          <div style="font-weight: 500;">Привести нового участника</div>
+          <div style="height: 6px; border-radius: 3px; background: rgba(217,181,123,0.22); margin: 8px 0 4px; overflow: hidden;">
+            <div style="height: 100%; width: 0%; background: #d9b57b; border-radius: 3px;"></div>
+          </div>
+          <div style="font-size: 12px; color: #9c9082;">0 из 1 — на ступени откроется 1 ★</div>
+        </div>
+        <div style="flex: none;">
+          <button type="button" style="min-height: 32px; padding: 8px 12px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 13px; font-weight: 500;">Отметить</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 10px; align-items: flex-start; margin-top: 12px; padding: 12px; border: 1px solid rgba(217,181,123,0.22); border-radius: 12px; background: rgba(217,181,123,0.10); font-size: 13px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#d9b57b" stroke-width="1.6" stroke-linecap="round" style="width: 18px; height: 18px; flex: none; margin-top: 2px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16v.01"></path></svg>
+      <div>Звёзды человек забирает сам — в «Лобби», кнопкой «Получить». Поэтому «уже забрал» меняется не сейчас, а когда он туда зайдёт.</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview": {"width": 400, "height": 690}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

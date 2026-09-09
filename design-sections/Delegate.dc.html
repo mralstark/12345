@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "PT Sans", sans-serif; font-size: 15px; line-height: 1.45; }
+    a { color: #d9b57b; } a:hover { color: #c9a05f; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; position: relative; overflow: hidden; background: #141414; color: #ece6dc; font-family: 'PT Sans', sans-serif; display: flex; align-items: flex-end;">
+  <div style="width: 100%; max-height: 100%; overflow-y: auto; background: #141414; border-radius: 16px 16px 0 0; padding: 16px 16px 24px; border-top: 1px solid rgba(217,181,123,0.22);">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 17px;">Макогон Ярослав</div>
+      <div style="flex: none; width: 32px; height: 32px; border-radius: 999px; background: #1e1b17; display: flex; align-items: center; justify-content: center; color: #9c9082;">×</div>
+    </div>
+
+    <!-- Должность задаёт Координатор Братства — свободной строкой, своими
+         словами. Это единственное поле, которое в разделе уже есть. -->
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 12px; color: #9c9082; margin-bottom: 4px;">Должность в бюро</div>
+      <div style="padding: 10px 12px; border-radius: 9px; border: 1px solid rgba(217,181,123,0.22); background: #141414; font-size: 16px;">Куратор Северо-Запада</div>
+    </div>
+
+    <div style="font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #9c9082; margin-bottom: 8px;">Что передаём</div>
+
+    <!-- Перечень взят не с потолка: это ровно то, что сегодня может только
+         Координатор Братства. Отмеченное человек сможет делать сам. -->
+    <div style="background: #1e1b17; border-radius: 12px; padding: 0 12px;">
+      <sc-for list="{{ powers }}" as="w" hint-placeholder-count="6">
+        <button type="button" onClick="{{ w.toggle }}" style="{{ w.rowStyle }}">
+          <span style="{{ w.boxStyle }}">
+            <sc-if value="{{ w.on }}" hint-placeholder-val="{{ true }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#201a12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px;"><path d="M20 6L9 17l-5-5"></path></svg>
+            </sc-if>
+          </span>
+          <span style="min-width: 0; text-align: left; flex: 1 1 auto;">
+            <span style="display: block; font-weight: 500;">{{ w.label }}</span>
+            <span style="display: block; font-size: 12px; color: #9c9082;">{{ w.hint }}</span>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+
+    <!-- Полномочие по всему Братству или только по своим отделениям. Без
+         этого выбора «назначать руководителей» означало бы во всех отделениях
+         сразу, а куратору Северо-Запада нужны только его. -->
+    <div style="font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #9c9082; margin: 16px 0 8px;">Где действует</div>
+    <div style="display: flex; gap: 6px;">
+      <sc-for list="{{ scopes }}" as="s" hint-placeholder-count="2">
+        <button type="button" onClick="{{ s.pick }}" style="{{ s.style }}">{{ s.label }}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{ narrow }}" hint-placeholder-val="{{ true }}">
+      <div style="background: #1e1b17; border-radius: 12px; padding: 0 12px; margin-top: 12px;">
+        <sc-for list="{{ regions }}" as="r" hint-placeholder-count="4">
+          <button type="button" onClick="{{ r.toggle }}" style="{{ r.rowStyle }}">
+            <span style="{{ r.boxStyle }}">
+              <sc-if value="{{ r.on }}" hint-placeholder-val="{{ true }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#201a12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px;"><path d="M20 6L9 17l-5-5"></path></svg>
+              </sc-if>
+            </span>
+            <span style="min-width: 0; text-align: left; flex: 1 1 auto; font-weight: 500;">{{ r.name }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- Итог словами до нажатия: что человек сможет и где. -->
+    <div style="display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; font-size: 13px; color: {{ summaryColor }};">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" style="width: 16px; height: 16px; flex: none; margin-top: 2px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16v.01"></path></svg>
+      <div>{{ summary }}</div>
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-top: 16px;">
+      <button type="button" style="flex: 1 1 auto; min-height: 44px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">Сохранить</button>
+      <button type="button" style="flex: none; min-height: 44px; padding: 12px 16px; border: 1px solid rgba(217,181,123,0.22); border-radius: 10px; background: none; color: #ece6dc; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">Отмена</button>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": {"width": 375, "height": 812}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { on: ['leader', 'apply'], scope: 'own', regions: [1, 2] };
+  }
+
+  catalogue() {
+    // Ровно то, что сегодня может только федеральный координатор, — взято
+    // из api/routers/regions.py, register.py, bureau.py и services/news.py.
+    return [
+      { id: 'region', label: 'Открывать отделения', hint: 'Заводить новые регионы' },
+      { id: 'leader', label: 'Назначать руководителей', hint: 'Ставить и снимать руководителя отделения' },
+      { id: 'curator', label: 'Назначать кураторов', hint: 'Закреплять отделения за членами бюро' },
+      { id: 'apply', label: 'Подтверждать анкеты', hint: 'Впускать новых людей в Братство' },
+      { id: 'news', label: 'Новости от имени Братства', hint: 'Уведомление уходит всем' },
+      { id: 'moderation', label: 'Сигналы модерации', hint: 'Узнавать о постах со спорными словами' },
+    ];
+    // «Формировать бюро» в перечне нет намеренно: бюро формирует только
+    // Координатор Братства, и передавать полномочия дальше член бюро не может.
+  }
+
+  allRegions() {
+    return [
+      { id: 1, name: 'Санкт-Петербург' },
+      { id: 2, name: 'Новгород' },
+      { id: 3, name: 'Красноярск' },
+      { id: 4, name: 'Барнаул' },
+    ];
+  }
+
+  plural(n, one, few, many) {
+    const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
+    return n + ' ' + (tail === 1 ? one : (tail >= 2 && tail <= 4 ? few : many));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const on = s.on;
+    const narrow = s.scope === 'own';
+
+    const box = (isOn) =>
+      'flex: none; width: 20px; height: 20px; border-radius: 6px; display: flex; align-items: center; justify-content: center;'
+      + (isOn ? ' background: #d9b57b; border: 1px solid #d9b57b;' : ' background: none; border: 1px solid rgba(217,181,123,0.35);');
+
+    const row = (i, total) =>
+      'width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 0; background: none; border: none;'
+      + ' font-family: inherit; font-size: 15px; color: #ece6dc; cursor: pointer;'
+      + (i === total - 1 ? '' : ' border-bottom: 1px solid rgba(217,181,123,0.22);');
+
+    const cat = this.catalogue();
+    const regions = this.allRegions();
+
+    return {
+      powers: cat.map((w, i) => {
+        const isOn = on.includes(w.id);
+        return {
+          label: w.label,
+          hint: w.hint,
+          on: isOn,
+          boxStyle: box(isOn),
+          rowStyle: row(i, cat.length),
+          toggle: () => this.setState({ on: isOn ? on.filter((x) => x !== w.id) : on.concat([w.id]) }),
+        };
+      }),
+
+      scopes: [
+        { id: 'all', label: 'По всему Братству' },
+        { id: 'own', label: 'Только свои отделения' },
+      ].map((sc) => ({
+        label: sc.label,
+        style: 'flex: 1 1 0; padding: 8px 12px; border-radius: 999px; font-family: inherit; font-size: 12px; cursor: pointer;'
+          + (sc.id === s.scope
+              ? ' background: #d9b57b; border: 1px solid #d9b57b; color: #201a12; font-weight: 700;'
+              : ' background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); color: #ece6dc;'),
+        pick: () => this.setState({ scope: sc.id }),
+      })),
+
+      narrow: narrow,
+      regions: regions.map((r, i) => {
+        const isOn = s.regions.includes(r.id);
+        return {
+          name: r.name,
+          on: isOn,
+          boxStyle: box(isOn),
+          rowStyle: row(i, regions.length),
+          toggle: () => this.setState({
+            regions: isOn ? s.regions.filter((x) => x !== r.id) : s.regions.concat([r.id]),
+          }),
+        };
+      }),
+
+      summary: on.length === 0
+        ? 'Ничего не передано — должность останется почётной, без прав.'
+        : 'Сможет: ' + cat.filter((w) => on.includes(w.id)).map((w) => w.label.toLowerCase()).join(', ')
+          + (narrow
+              ? '. Только в ' + this.plural(s.regions.length, 'отделении', 'отделениях', 'отделениях') + ': '
+                + regions.filter((r) => s.regions.includes(r.id)).map((r) => r.name).join(', ') + '.'
+              : '. Во всех отделениях.'),
+      summaryColor: on.length === 0 ? '#9c9082' : '#d9b57b',
+    };
+  }
+}
+</script>
+</body>
+</html>
