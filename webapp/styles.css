@@ -1,0 +1,1932 @@
+/* Кабинет Братства Академистов — Mini App.
+   Фирменная палитра в тонах сайта academists.ru (тёмный фон + золото,
+   Playfair Display в заголовках), а не тема Telegram: пользователь сам
+   выбирает светлый/тёмный вариант тумблером в шапке (см. app.js), выбор
+   хранится в localStorage. --tg-theme-* используется только как подсказка
+   для начального выбора темы при самом первом открытии (см. initTheme в app.js). */
+
+:root,
+[data-theme="dark"] {
+  --bg: #141414;
+  --secondary-bg: #1e1b17;
+  --text: #ece6dc;
+  --hint: #9c9082;
+  --link: #d9b57b;
+  --button: #d9b57b;
+  --button-text: #201a12;
+  --accent: #d9b57b;
+  --danger: #c0392b;
+  --success: #4e8b5d;
+  --radius: 12px;
+  --border: rgba(217, 181, 123, 0.22);
+}
+
+[data-theme="light"] {
+  --bg: #f5f1e9;
+  --secondary-bg: #ffffff;
+  --text: #201d19;
+  --hint: #7d7368;
+  --link: #8f6530;
+  --button: #8f6530;
+  --button-text: #ffffff;
+  --accent: #8f6530;
+  --danger: #c0392b;
+  --success: #2f855a;
+  --radius: 12px;
+  --border: rgba(143, 101, 48, 0.2);
+}
+
+/* Шкала отступов — шаг 4px, одна и та же для margin/padding/gap/позиционирования
+   по всему кабинету (задача «рефакторинг отступов»: раньше были случайные
+   6px/7px/9px/10px/22px и т.п. — теперь любое значение отступа берётся только
+   из этого списка). Названы по величине в px, не xs/sm/md — на 10 ступенях
+   семантические имена (xs/sm/md/lg/xl) быстро кончаются и требуют либо
+   дырок в шкале, либо неочевидных синонимов; числовое имя однозначно и легко
+   искать. Округление старых значений — до ближайшей ступени, ровно посередине
+   (6→8, 10→12, 14→16, 22→24) — в большую сторону: точечно чуть просторнее,
+   но не теснее, чем было. */
+:root {
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+}
+
+* { box-sizing: border-box; }
+
+/* Ссылки в кабинете не были оформлены вовсе: токен --link объявлен с самого
+   начала, но ни одно правило его не брало, и браузер красил каждую ссылку
+   своим синим — на тёмном фоне он и нечитаем, и чужой. Пока такая ссылка была
+   одна (страница ВКонтакте у ячейки), это не бросалось в глаза. */
+a { color: var(--link); }
+a:hover { color: var(--accent); }
+
+/* Сколько сверху занято не нами — складывается из двух разных вещей.
+   Первое: чёлка и строка состояния самого телефона. Её сообщают сразу двое —
+   браузер через env() и Telegram через --tg-safe-area-inset-top; это одна и та
+   же величина из двух источников, поэтому берём больший, а не сумму.
+   Второе: собственная панель Telegram с «Закрыть» поверх Mini App —
+   --tg-content-safe-area-inset-top. Telegram отсчитывает её уже внутри
+   безопасной области, так что она именно прибавляется к первому.
+   Переменные --tg-* приходят от telegram-web-app.js (Bot API 8.0+); в обычном
+   браузере их нет и всё выражение даёт ноль.
+   Отдельная переменная, а не env() по месту, — чтобы отступ можно было
+   проверить, подставив значение руками. */
+:root {
+  --top-inset: calc(
+    max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px))
+    + var(--tg-content-safe-area-inset-top, 0px)
+  );
+}
+
+body {
+  margin: 0;
+  /* Единый веб-шрифт для всего кабинета — иначе на разных ОС (Segoe UI на
+     Windows, San Francisco на Mac, Roboto на Android) вид расходится и
+     ощущается "дёшево", даже когда сама вёрстка одна и та же. Системный
+     стек остаётся только запасным, если Google Fonts недоступен. */
+  font-family: "PT Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  /* место под фиксированную нижнюю панель */
+  padding-bottom: calc(56px + var(--space-24) + env(safe-area-inset-bottom, 0px));
+}
+
+.topbar__title,
+.card__title,
+.modal__title,
+.section-title {
+  font-family: "Playfair Display", Georgia, serif;
+}
+
+/* --- Интро --------------------------------------------------------------- */
+/* Полноэкранное приветствие при входе (в духе Сбербанка) — персональное
+   «Добрый день, {Имя}» на фоне одного из кадров жизни Братства, случайно
+   выбранного при каждом открытии (см. app.js::showIntroGreeting). Держится
+   поверх шапки и вкладок (z-index 10), пока кабинет догружается за ней. */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #0c0c0c;
+  overflow: hidden;
+  transition: opacity 0.6s ease;
+}
+
+.intro--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intro__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.intro__bg--visible {
+  opacity: 1;
+}
+
+/* Тёмная дымка поверх фото — текст должен читаться на любом кадре, а не
+   только на тех, что сами по себе тёмные. */
+.intro__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.15) 40%, rgba(0, 0, 0, 0.7) 100%);
+}
+
+.intro__greeting {
+  position: absolute;
+  top: var(--space-64);
+  left: var(--space-24);
+  right: var(--space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  opacity: 0;
+  transform: translateY(var(--space-8));
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.intro__greeting--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.intro__mark {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.intro__greeting-text {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Подпись-цитата снизу кадра (в духе Сбербанка) — та же логика появления,
+   что у приветствия сверху (см. app.js::showIntroGreeting), просто у
+   нижнего края вместо верхнего. */
+.intro__caption {
+  position: absolute;
+  left: var(--space-24);
+  right: var(--space-24);
+  bottom: var(--space-64);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  opacity: 0;
+  transform: translateY(var(--space-8));
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.intro__caption--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Обе строки — один шрифт и размер, различается только цвет: цитата белая,
+   подпись под ней приглушённая серая (--hint). Подпись необязательна —
+   не у каждого кадра есть вторая строка (см. app.js::showIntroGreeting). */
+.intro__caption-quote,
+.intro__caption-author {
+  font-size: 14px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+.intro__caption-quote {
+  color: #fff;
+}
+
+.intro__caption-author {
+  color: var(--hint);
+}
+
+/* --- Шапка --------------------------------------------------------------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  /* Сверху добавляем занятое телефоном и Telegram: иначе первое, что стоит в
+     шапке, уезжает под чёлку — заметнее всего с баннером «Вы смотрите как». */
+  padding: calc(var(--space-12) + var(--top-inset)) var(--space-12) var(--space-12);
+}
+
+.topbar__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.topbar__title { font-weight: 600; }
+.topbar__subtitle { font-size: 12px; color: var(--hint); }
+
+/* --- Переключатель кабинетов ---------------------------------------------- */
+/* Был системный <select>: на телефоне открывает окно операционной системы и
+   выпадает из вида кабинета. Теперь своя кнопка со своей шторкой — заодно на
+   неё встал счётчик того, что ждёт в других кабинетах. */
+
+.cabinet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  max-width: 60%;
+  min-height: 40px;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cabinet[hidden] { display: none; }
+.cabinet__icon { width: 17px; height: 17px; flex: none; color: var(--accent); }
+.cabinet__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cabinet__chev { width: 15px; height: 15px; flex: none; color: var(--hint); }
+.cabinet__badge {
+  flex: none;
+  min-width: 17px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* Строка кабинета в шторке: та же .more-list, плюс галочка у текущего. */
+.cabinet-row__check { width: 18px; height: 18px; flex: none; color: var(--accent); }
+
+.theme-toggle {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--secondary-bg);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Superuser в режиме «войти как» (см. utils.users.resolve_user) — всегда
+   видно, чей это на самом деле кабинет, и как из него выйти.
+   [hidden] обязателен явно: атрибут hidden в браузере реализован как
+   низкоприоритетное правило [hidden]{display:none}, и наш же display:flex
+   ниже иначе его всегда перебивает — баннер был бы виден даже пустым. */
+.impersonation-banner[hidden] { display: none; }
+.impersonation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  /* Скруглением и отбивкой снизу — чтобы читалось как плашка состояния над
+     шапкой, а не как обрезанная полоса, приклеенная к имени под ней. */
+  margin-bottom: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--button-text);
+  font-size: 13px;
+}
+.impersonation-banner .btn--ghost {
+  background: transparent;
+  border: 1px solid var(--button-text);
+  color: var(--button-text);
+}
+
+
+.tabs::-webkit-scrollbar { display: none; }
+
+/* --- Нижняя панель ------------------------------------------------------- */
+/* Раньше вкладки жили в шапке и прокручивались вбок: при пяти и более пунктов
+   последние уезжали за край, и до них надо было домотать. Теперь основные
+   разделы стоят внизу, в зоне большого пальца, все сразу; когда их больше
+   пяти, четвёртый с конца заменяется на «Ещё» со шторкой (renderTabs). */
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  /* Домашний индикатор на iPhone перекрывает нижние пиксели — отступ по
+     safe-area (в index.html для этого стоит viewport-fit=cover). */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 56px;
+  padding: var(--space-8) var(--space-4);
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .2s ease;
+}
+
+.tab__icon { flex: none; width: 24px; height: 24px; }
+.tab__label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab--active { color: var(--accent); }
+.tab__badge {
+  position: absolute;
+  top: var(--space-4);
+  left: 50%;
+  margin-left: var(--space-4);
+  min-width: 17px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* Точка вместо числа — на «Ещё», когда счётчик висит на скрытом пункте. */
+.tab__dot {
+  position: absolute;
+  top: var(--space-8);
+  left: 50%;
+  margin-left: var(--space-8);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+/* Список разделов в шторке «Ещё». */
+.more-list { display: flex; flex-direction: column; }
+.more-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-12) var(--space-4);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.more-list__item:last-child { border-bottom: none; }
+.more-list__item--active { color: var(--accent); }
+.more-list__item .tab__icon { color: var(--hint); }
+.more-list__item--active .tab__icon { color: var(--accent); }
+.more-list__label { flex: 1 1 auto; }
+.more-list__badge {
+  flex: none;
+  min-width: 17px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* --- Общая раскладка ----------------------------------------------------- */
+/* Симметричный горизонтальный отступ основного контейнера — одно и то же
+   значение слева/справа на всех экранах, ничего не «съезжает» на мобильных. */
+.view { padding: var(--space-12); display: flex; flex-direction: column; gap: var(--space-12); }
+.loader, .empty { color: var(--hint); text-align: center; padding: var(--space-24) var(--space-8); }
+
+/* --- «Открыть на ПК» (keyboards/main_menu.py, ?layout=desktop) ------------
+   Та же вёрстка в один столбец, просто на широком экране мобильная колонка
+   растягивалась бы во всю ширину монитора — ограничиваем и центрируем,
+   без сетки: строки и карточки остаются друг под другом, только шире. */
+.layout-desktop .topbar__row,
+.layout-desktop .tabs,
+.layout-desktop .view {
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+.card {
+  background: var(--secondary-bg);
+  border-radius: var(--radius);
+  padding: var(--space-12);
+}
+.card__title { font-weight: 600; margin-bottom: var(--space-8); }
+
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--hint);
+  margin: var(--space-4) 0 calc(var(--space-4) * -1);
+}
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-8); }
+
+.stat {
+  background: var(--secondary-bg);
+  border-radius: var(--radius);
+  padding: var(--space-12) var(--space-12);
+}
+.stat__label { font-size: 12px; color: var(--hint); }
+.stat__value { font-size: 19px; font-weight: 600; margin-top: var(--space-4); }
+.stat__value--income { color: var(--success); }
+.stat__value--expense { color: var(--danger); }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--border);
+}
+.row:last-child { border-bottom: none; }
+/* flex: 1 обязателен — без него ширина .row__main определяется контентом
+   (текстом заголовка), и полоска прогресса внутри считает % от разной базы
+   в разных строках: категория с длинным названием получает более широкий
+   контейнер и её полоска визуально длиннее при меньшем реальном проценте. */
+.row__main { min-width: 0; flex: 1 1 auto; }
+.row__title { font-weight: 500; overflow-wrap: anywhere; }
+.row__sub { font-size: 12px; color: var(--hint); overflow-wrap: anywhere; }
+/* nowrap оставлен только для коротких значений — сумм, дат, счётчиков. Длинное
+   название вуза при нём вылезало за карточку, поэтому текст переносится, а
+   ужиматься строке не даёт min-width: 0 у соседа. */
+.row__side {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.row__main { min-width: 0; }
+/* Правая колонка обычно тянется и переносит длинное значение по буквам
+   (overflow-wrap выше). Там, где справа стоит плашка, переносить нечего —
+   колонка держит свою ширину, а ужимается строка слева. */
+.row__side--tight { flex: none; overflow-wrap: normal; }
+.nowrap { white-space: nowrap; }
+.row--clickable { cursor: pointer; }
+.row--muted .row__title, .row--muted .row__sub { color: var(--hint); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.chip {
+  padding: var(--space-4) var(--space-12);
+  border-radius: 999px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+.chip--active { background: var(--button); color: var(--button-text); border-color: transparent; }
+
+/* --- Календарь мероприятий ------------------------------------------------ */
+.calendar__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4) var(--space-12);
+}
+.calendar__nav-title { font-weight: 600; font-family: "Playfair Display", Georgia, serif; }
+.calendar__nav button {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.calendar__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-4); }
+.calendar__weekday { text-align: center; font-size: 11px; color: var(--hint); padding-bottom: var(--space-4); }
+.calendar__day {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--secondary-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  cursor: pointer;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.calendar__day--outside { opacity: 0.35; }
+.calendar__day--empty { cursor: default; }
+.calendar__day--today { border-color: var(--accent); border-width: 2px; }
+.calendar__day-num { font-size: 13px; }
+.calendar__day-dots { display: flex; gap: var(--space-4); }
+.calendar__dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.calendar__day-count { font-size: 10px; color: var(--hint); }
+
+@keyframes avatarIdle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.avatar-idle { animation: avatarIdle 4.2s ease-in-out infinite; transform-origin: 50% 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-idle { animation: none; }
+}
+
+.outfit-grid { display: flex; flex-wrap: wrap; gap: var(--space-12); justify-content: center; }
+.outfit-card {
+  width: 120px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--secondary-bg);
+  text-align: center;
+}
+.outfit-card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
+.outfit-card__label { font-size: 12px; padding: var(--space-8) var(--space-4) var(--space-4); }
+.outfit-card__hint { font-size: 11px; color: var(--hint); padding: 0 var(--space-8) var(--space-8); }
+.outfit-card--active { border-color: var(--button); border-width: 2px; }
+.outfit-card--locked { cursor: default; }
+.outfit-card--locked img { filter: grayscale(1); opacity: 0.5; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border: none;
+  border-radius: 10px;
+  background: var(--button);
+  color: var(--button-text);
+  font-size: 14px;
+  font-weight: 500;
+  /* .btn бывает и ссылкой (например, «Написать в Телеграм» ведёт на t.me):
+     без этого она приезжает с подчёркиванием от глобального стиля ссылок. */
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn--ghost { background: var(--secondary-bg); color: var(--text); }
+.btn--danger { background: var(--danger); color: #fff; }
+.btn--block { width: 100%; }
+.btn--small { padding: var(--space-8) var(--space-12); font-size: 13px; }
+.btn--claim { background: #c9932f; color: #fff; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+/* Иконка-кнопка без текстового паддинга .btn — рядом с select в задаче
+   мероприятия (см. eventTasksModal) обычная .btn--small всё равно выезжала
+   за карточку на узких экранах. */
+.btn-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-icon--danger { background: var(--danger); color: #fff; }
+
+/* Строка задачи мероприятия — статус вынесен на всю ширину под заголовок,
+   иначе select с длинным текстом ("Отменена") плюс две кнопки не влезали
+   в одну строку рядом с названием задачи. */
+.task-row { padding: var(--space-12) 0; border-bottom: 1px solid var(--border); }
+.task-row:last-child { border-bottom: none; }
+.task-row .row { padding: 0; border-bottom: none; }
+.task-row .row__side { display: flex; gap: var(--space-8); }
+.task-row__status { margin-top: var(--space-8); }
+
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: var(--space-4); vertical-align: middle; }
+.dot--alert { background: #d64545; }
+
+.quest-bar { height: 6px; border-radius: 3px; background: var(--secondary-bg); overflow: hidden; margin: var(--space-4) 0; }
+.quest-bar__fill { height: 100%; background: var(--button); border-radius: 3px; transition: width .3s ease; }
+
+.reward-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-8);
+  border-radius: 999px;
+  background: #c9932f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.reward-badge--pending { background: var(--secondary-bg); color: var(--text); border: 1px solid var(--border); }
+.reward-skin { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); width: 48px; }
+.reward-skin img { width: 40px; height: 53px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--secondary-bg); }
+.reward-skin span { font-size: 10px; color: var(--hint); text-align: center; line-height: 1.1; }
+
+.ozon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-12); }
+.ozon-card {
+  display: block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: var(--space-12);
+  text-decoration: none;
+  color: var(--text);
+}
+.ozon-card__img {
+  position: relative;
+  aspect-ratio: 1/1;
+  border-radius: 10px;
+  background: var(--secondary-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  margin-bottom: var(--space-8);
+}
+.ozon-card__discount {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-8);
+  background: #d64545;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: var(--space-4) var(--space-8);
+  border-radius: 6px;
+}
+/* Плашка «образец» — не скидка: красный цвет тут обещал бы выгоду там, где
+   товара вовсе нет. Приглушённая, как и всё служебное. */
+.ozon-card__discount--sample {
+  background: var(--secondary-bg);
+  color: var(--hint);
+  border: 1px solid var(--border);
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+/* Снимок товара занимает весь квадрат карточки. cover, а не contain: у всех
+   трёх снимков вертикальный кадр, и в contain карточка наполовину пустая. */
+.ozon-card__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
+/* Карточка со снимками — не ссылка, а кнопка: открывает товар, а не магазин. */
+.ozon-card[data-merch], .ozon-card__img[data-token-photos] { cursor: pointer; }
+
+/* Снимки в карточке товара — лентой вбок, целиком, без обрезки. */
+.merch-shots {
+  display: flex;
+  gap: var(--space-8);
+  overflow-x: auto;
+  margin-bottom: var(--space-12);
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.merch-shots__img {
+  flex: none;
+  width: 78%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  scroll-snap-align: center;
+}
+
+.ozon-card__price { display: flex; align-items: baseline; gap: var(--space-8); }
+.ozon-card__price-now { font-size: 16px; font-weight: 700; color: var(--text); }
+.ozon-card__price-old { font-size: 12px; color: var(--hint); text-decoration: line-through; }
+.ozon-card__title { font-size: 13px; margin-top: var(--space-4); line-height: 1.3; }
+.ozon-card__rating { font-size: 11px; color: var(--hint); margin-top: var(--space-4); }
+.btn--claim .reward-badge { background: rgba(255,255,255,.25); }
+
+.btn-row { display: flex; gap: var(--space-8); flex-wrap: wrap; }
+
+input, select, textarea {
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  /* iOS зумит страницу при фокусе на поле с font-size < 16px — 15px и был
+     причиной "приближается экран, потом отдалять надо" при вводе. */
+  font-size: 16px;
+  font-family: inherit;
+}
+textarea { min-height: 90px; resize: vertical; }
+
+/* <select> без сброса appearance игнорирует часть padding под свою нативную
+   стрелку — высота выезжала относительно обычных <input> (особенно заметно
+   рядом, в одной форме, см. «Карточка человека»). Рисуем свою стрелку вместо
+   нативной — тогда select ведёт себя как input, с тем же box model. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: calc(var(--space-12) * 3);
+  background-repeat: no-repeat;
+  background-position: right var(--space-12) center;
+  background-size: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239c9082' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+[data-theme="light"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%237d7368' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+label { display: block; font-size: 12px; color: var(--hint); margin-bottom: var(--space-4); }
+.field { margin-bottom: var(--space-12); }
+
+/* Стрелки number-инпута у разных браузеров рисуются по-разному — глушим,
+   чтобы поле "Курс" не выбивалось стилем из остальной формы. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { appearance: textfield; }
+
+/* Нативное поле с датой на iOS не подчиняется width: у него своя минимальная
+   ширина под системный вид, и в узкой карточке оно вылезало за край. Сбрасываем
+   этот вид и снимаем минимум, а значение выравниваем по левому краю — иначе iOS
+   прижимает его вправо, не как в остальных полях.
+   Дату рождения ввели вручную (см. applyDateMask): её набрать быстрее, чем
+   листать календарь на двадцать лет назад. Здесь остались только даты
+   ближайших событий — проводка, мероприятие, срок задачи, — им календарь
+   как раз к месту. */
+input[type="date"] {
+  /* Только минимум, без сброса appearance: сброс заодно убирает кнопку-
+     календарик, а в настольном Chrome по самому полю пикер не открывается —
+     остались бы даты, которые можно только набрать руками. */
+  min-width: 0;
+}
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+
+.amount { font-variant-numeric: tabular-nums; font-weight: 600; }
+.amount--income { color: var(--success); }
+.amount--expense { color: var(--danger); }
+
+.badge {
+  display: inline-block;
+  padding: var(--space-4) var(--space-8);
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--border);
+  color: var(--text);
+  /* Слово внутри плашки не переносится: «Отменена» разрывалась на «Отменен»
+     и «а», и плашка превращалась в две строки поперёк. */
+  white-space: nowrap;
+}
+.badge--new { background: #e8f0fe; color: #1a56b8; }
+.badge--in_progress { background: #fff3cd; color: #8a6d00; }
+.badge--done { background: #d7f2e3; color: #1d6b45; }
+.badge--overdue { background: #fde2e0; color: #a02c22; }
+.badge--cancelled { background: var(--border); color: var(--hint); }
+
+.progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+  margin-top: var(--space-8);
+}
+.progress__bar { height: 100%; background: var(--button); }
+.progress__bar--over { background: var(--danger); }
+
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: var(--space-8) var(--space-8); border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--hint); font-weight: 500; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- Модальные окна ------------------------------------------------------ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+}
+.modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border-radius: 16px 16px 0 0;
+  /* По бокам просторнее, чем у обычного экрана: окно шире (до 560 точек), и
+     на этой ширине те же 16 читались как «текст прижат к краю». */
+  padding: var(--space-20) var(--space-20) var(--space-24);
+}
+/* Тело модалки — это просто конкатенированные строки HTML (см. app.js::modal),
+   не форма с общим gap: без этого правила соседние блоки вроде .card +
+   .btn--block + .btn-row шли впритык друг к другу, если сами не задавали себе
+   margin (см. eventTasksModal). Схлопывание margin делает это безопасным —
+   там, где элемент уже сам себе назначает отступ (.field и т.п.), отступы
+   не удваиваются, берётся больший. */
+.modal > * + * { margin-top: var(--space-12); }
+/* Отступы между блоками окна раздаёт правило выше, но оно достаёт только до
+   прямых детей .modal. Окна, которые перерисовывают себя целиком, держат
+   содержимое в одной обёртке — и внутри неё блоки слипались. */
+.stack > * + * { margin-top: var(--space-12); }
+.stack > .section-title + * { margin-top: var(--space-8); }
+.modal__title { font-weight: 600; font-size: 17px; margin-bottom: var(--space-12); }
+.modal__header {
+  position: sticky;
+  top: calc(var(--space-16) * -1);
+  z-index: 1;
+  margin: calc(var(--space-16) * -1) calc(var(--space-16) * -1) var(--space-12);
+  padding: var(--space-16) var(--space-16) var(--space-8);
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+.modal__header .modal__title { margin-bottom: 0; }
+.modal__close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--secondary-bg);
+  border-radius: 50%;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-20);
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  padding: var(--space-8) var(--space-16);
+  border-radius: 999px;
+  font-size: 13px;
+  z-index: 100;
+}
+
+.checklist { max-height: 45vh; overflow-y: auto; }
+.checklist label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: 15px;
+  color: var(--text);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+.checklist input[type="checkbox"] { width: 18px; height: 18px; }
+
+
+/* --- Полноэкранный просмотр фотографий ----------------------------------- */
+
+body.viewer-open { overflow: hidden; }
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.viewer__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  /* Не env() в одиночку: с тех пор как приложение всегда разворачивается на
+     весь экран, сверху стоит ещё и собственная панель Telegram («свернуть» и
+     «…»), и крестик налезал на неё. --top-inset считает обе величины. */
+  padding: calc(var(--space-12) + var(--top-inset)) var(--space-16) var(--space-12);
+  color: #fff;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .55), rgba(0, 0, 0, 0));
+}
+.viewer__counter { font-size: 14px; font-variant-numeric: tabular-nums; }
+.viewer__close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .16);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Лента кадров в один ряд: листание — сдвиг всей ленты, а не подмена кадра,
+   поэтому соседний снимок едет вместе с пальцем. */
+.viewer__track { display: flex; height: 100%; will-change: transform; }
+.viewer__slide {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+}
+.viewer__slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* --- Лента новостей в виде канала ---------------------------------------- */
+/* Посты идут снизу вверх по времени, как в Telegram-канале: альбом сверху,
+   текст «пузырём» под ним, ветка комментариев прячется под постом. */
+
+.feed { display: flex; flex-direction: column; gap: var(--space-16); }
+
+
+.post {
+  position: relative;
+  background: var(--secondary-bg);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.post__body { padding: var(--space-12); }
+.post__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.post__meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-top: var(--space-8);
+  font-size: 12px;
+  color: var(--hint);
+}
+.post__dot { opacity: .6; }
+.post__time { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* --- Альбом -------------------------------------------------------------- */
+/* Сетка повторяет раскладку Telegram: одна во всю ширину, две в ряд, три —
+   крупная слева, четыре и больше — квадрат с «+N» на последней. */
+
+.album { display: grid; gap: 2px; }
+.album--one { grid-template-columns: 1fr; }
+.album--two { grid-template-columns: 1fr 1fr; }
+.album--three { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.album--three .album__cell:first-child { grid-row: span 2; }
+.album--many { grid-template-columns: 1fr 1fr; }
+
+.album__cell {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: none;
+  background: var(--bg);
+  cursor: pointer;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+/* Одну фотографию показываем целиком и в её собственных пропорциях. Жёсткие
+   4:3 вместе с object-fit: cover срезали у вертикальных снимков верх и низ —
+   на групповом фото это отрезало головы. Предел по высоте оставляем, чтобы
+   очень длинный снимок не занял весь экран. */
+.album--one .album__cell { aspect-ratio: auto; }
+/* 80vh выбрано не на глаз: обычный портрет с телефона (9:16) в ширину
+   карточки укладывается примерно в 77vh — он проходит целиком, без полей по
+   бокам. Предел срабатывает только на совсем длинных снимках. */
+.album--one .album__cell img { height: auto; max-height: 80vh; object-fit: contain; }
+.album--three .album__cell:first-child { aspect-ratio: auto; }
+.album__cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.album__more {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 7, 6, .62);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* --- Комментарии --------------------------------------------------------- */
+
+/* Свёрнутый длинный пост: восемь строк и многоточие. Строками, а не
+   высотой в пикселях, — тогда обрез всегда приходится на границу строки, а
+   не режет буквы пополам. */
+.post__text--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.post__more {
+  margin-top: var(--space-4);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.post__comments { border-top: 1px solid var(--border); }
+.post__comments-toggle {
+  width: 100%;
+  padding: var(--space-12);
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.post__thread { padding: 0 var(--space-12) var(--space-12); }
+
+.comment__author { font-size: 12px; color: var(--accent); }
+.comment__time { margin-left: var(--space-8); color: var(--hint); }
+.comment__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment__del {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.comment-form { display: flex; gap: var(--space-8); }
+.news-comment-input { flex: 1 1 auto; width: auto; }
+
+
+
+
+/* --- Комментарии --------------------------------------------------------- */
+
+.post__thread { padding: 0 var(--space-12) var(--space-12); }
+
+.comment__author { font-size: 12px; color: var(--accent); }
+.comment__time { margin-left: var(--space-8); color: var(--hint); }
+.comment__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment__del {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.comment-form { display: flex; gap: var(--space-8); }
+.news-comment-input { flex: 1 1 auto; width: auto; }
+
+
+/* Подпись поста и «удалить» — одна строка: подпись слева, действие справа. */
+.post__meta { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-12); }
+
+/* --- Профиль человека ----------------------------------------------------- */
+/* Открывается из подписи поста и из комментария. */
+
+.author-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.post__meta .author-link { color: var(--hint); text-decoration: underline dotted; }
+.comment__author .author-link { color: var(--accent); }
+
+
+/* Тумблер: сам checkbox спрятан, видно дорожку с точкой. Правила привязаны
+   к своим классам, а не к родителю, — носит тумблер строка списка
+   (.row--switch), и переезд в другую разметку его не гасит. */
+.switch__track {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(156, 144, 130, 0.35);
+  transition: background 0.15s ease;
+}
+.switch__dot {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--hint);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+input:checked + .switch__track { background: var(--accent); }
+input:checked + .switch__track .switch__dot {
+  transform: translateX(18px);
+  background: var(--bg);
+}
+
+/* --- Шапка поста ---------------------------------------------------------- */
+/* Как в ленте ВК: круглый аватар и подпись сверху, действия под текстом. */
+
+.post__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-12) var(--space-8);
+}
+.post__author {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  flex: 1 1 auto;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+/* У поста от Братства или отделения профиля нет — курсор не обещает перехода. */
+.post__author--static { cursor: default; }
+.post__byline {
+  font-weight: 700;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.post__time { flex: none; font-size: 12px; color: var(--hint); font-variant-numeric: tabular-nums; }
+
+.avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg);
+  display: block;
+}
+.avatar--letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--border);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* --- Действия под постом -------------------------------------------------- */
+
+.post__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-8) var(--space-12) var(--space-12);
+}
+
+.act {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 32px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--hint);
+  font-family: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.act svg { width: 22px; height: 22px; flex: none; }
+.act--on { color: var(--danger); }
+.act--more { font-size: 14px; }
+.act--views { margin-left: auto; cursor: default; }
+.act--del { color: var(--hint); text-decoration: underline; font-size: 12px; }
+
+.react-picker { display: flex; gap: var(--space-8); flex-wrap: wrap; }
+.react-picker__item {
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--secondary-bg);
+  font-size: 26px;
+  cursor: pointer;
+}
+
+/* Комментарий — аватар слева, текст справа. */
+.comment {
+  position: relative;
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-32) var(--space-8) 0;
+  margin-bottom: var(--space-8);
+}
+.comment__avatar-link { border: none; background: none; padding: 0; cursor: pointer; flex: none; }
+.comment__avatar-link .avatar { width: 28px; height: 28px; }
+.comment__body { min-width: 0; flex: 1 1 auto; }
+
+/* Свой аватар в «Личной информации». */
+.avatar-edit { display: flex; align-items: center; gap: var(--space-12); }
+.avatar-edit .avatar { width: 64px; height: 64px; }
+
+/* Запас под плавающей кнопкой: без него она перекрывает отправку
+   комментария у последнего поста ленты. */
+.feed { padding-bottom: var(--space-16); }
+
+/* --- Шапка профиля -------------------------------------------------------- */
+/* Один и тот же вид у своего профиля и у чужого, открытого из ленты: иначе
+   один человек показан двумя разными способами. */
+
+.profile-top { display: flex; align-items: center; gap: var(--space-12); }
+.profile-top__main { min-width: 0; }
+.profile-top__name { display: flex; align-items: center; gap: var(--space-4); }
+.pf-name { font-family: "Playfair Display", Georgia, serif; font-size: 20px; line-height: 1.2; }
+
+.avatar--lg { width: 72px; height: 72px; font-size: 26px; }
+
+/* Герб Братства — кастомный эмодзи из набора academists. Носит его только
+   член Братства: это знак посвящения, а не должности. */
+.badge-member { width: 20px; height: 20px; flex: none; display: block; }
+
+/* Руководство — отдельной строкой: золото в кабинете редкое, поэтому
+   читается как отличие, а не как ещё одна подпись. */
+.role-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+.role-line svg { width: 15px; height: 15px; flex: none; }
+
+textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+/* --- Строка «Что нового?» -------------------------------------------------- */
+/* Заменила плавающую кнопку в углу: её замечают не все, а эта строка —
+   самый узнаваемый способ начать пост. */
+
+.compose {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-8) var(--space-12);
+  border: none;
+  border-radius: 14px;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.compose__hint { flex: 1 1 auto; color: var(--hint); }
+.compose__icon { width: 22px; height: 22px; flex: none; color: var(--accent); }
+
+/* Действия с постом — под троеточием в углу, а не словом в ряду счётчиков. */
+.post__menu {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--hint);
+  cursor: pointer;
+}
+.post__menu svg { width: 20px; height: 20px; }
+
+/* --- Страница человека ----------------------------------------------------- */
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.back-link svg { width: 20px; height: 20px; }
+
+/* --- Профиль: вкладки, счётчики, лента публикаций ------------------------- */
+/* Публикации стоят первой вкладкой: ради них в профиль и заходят, а счётчик
+   прочитавших — самый честный повод выложить следующий пост. */
+
+.ptabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+.ptab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 44px;
+  padding: 0 var(--space-8);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--hint);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ptab--on { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
+.ptab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(217, 181, 123, 0.18);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Содержимое вкладки — колонка с теми же промежутками, что и весь экран.
+   Без этого карточки внутри стояли вплотную (у .view отступ между детьми
+   есть, но #profileTabBody для него один ребёнок) и читались одной плитой. */
+.ptab-body { display: flex; flex-direction: column; gap: var(--space-16); }
+
+/* Раздел «О себе»: заголовок и его карточка держатся вместе, а между
+   разделами промежуток больше — так видно, где кончается одна тема. */
+.psection { display: flex; flex-direction: column; gap: var(--space-8); }
+
+/* Карточка-список: отступ по бокам есть, сверху и снизу его дают сами
+   строки, иначе первая и последняя строка отбиваются вдвое. */
+.card--rows { padding: 0 var(--space-12); }
+/* Пояснение к настройке — внутри её же карточки, а не отдельной строкой
+   под ней: оно объясняет тумблер, а не экран. */
+.card__note {
+  padding: 0 0 var(--space-12);
+  margin-top: calc(var(--space-4) * -1);
+  font-size: 12px;
+  color: var(--hint);
+}
+
+.pstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); }
+.pstat { text-align: center; }
+.pstat__num {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 20px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.pstat__label { font-size: 12px; color: var(--hint); }
+
+/* Карточка публикации — вариант «лента», а не сетка плиток: пост читается
+   целиком. Постов без фотографии у нас большинство, и плитка резала бы их
+   до цитаты. */
+.pcard { padding: 0; overflow: hidden; }
+.pcard__photo { width: 100%; height: 160px; object-fit: cover; display: block; cursor: pointer; }
+.pcard__body { padding: var(--space-12); }
+.pcard__text { margin-top: var(--space-4); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pcard__acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  margin-top: var(--space-12);
+  color: var(--hint);
+  font-size: 13px;
+}
+
+.pempty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+  padding: var(--space-24) var(--space-16);
+}
+.pempty .btn { margin-top: var(--space-8); }
+.pempty__icon { width: 32px; height: 32px; color: var(--accent); margin-bottom: var(--space-8); }
+.pempty__title { font-family: "Playfair Display", Georgia, serif; font-size: 17px; }
+
+.pabout { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Подсказка, которую нельзя не заметить: без ника человеку не напишут. */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(217, 181, 123, 0.10);
+  font-size: 13px;
+}
+.notice svg { width: 18px; height: 18px; flex: none; margin-top: 2px; color: var(--accent); }
+.notice .btn { margin-top: var(--space-8); }
+
+/* Тумблер, стоящий строкой списка: отступы и рамку задаёт .row, а название
+   с подписью должны идти друг под другом — .row__main здесь <span>, и без
+   block они склеились бы в одну строку. */
+.row--switch {
+  cursor: pointer;
+  /* Глобальное правило label (мелкая серая подпись над полем формы) здесь не
+     подходит: label носит целую строку списка, а не подписывает поле. */
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 0;
+}
+.row--switch input { position: absolute; opacity: 0; pointer-events: none; }
+.row--switch .row__main,
+.row--switch .row__title,
+.row--switch .row__sub { display: block; }
+
+.btn__icon { width: 17px; height: 17px; flex: none; }
+/* Кнопка, которой нечего делать: писать некуда, пока не указан ник. */
+.btn--off {
+  background: rgba(156, 144, 130, 0.16);
+  color: var(--hint);
+  cursor: default;
+}
+
+/* Должность региона отдельной строкой: подпись, кто её занимает, и кнопки.
+   Раньше обе должности были свалены в одну подпись, и снимать было нечего. */
+/* Отделение — карточкой, должности внутри неё одинаковыми строками. Раньше
+   всё это было одной строкой списка, где название, руководитель и координатор
+   стояли вплотную и на глаз не разделялись. */
+.region__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-4);
+}
+.region__name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+
+/* Должность — строка «кто занимает» с действиями. Класс называется duty,
+   а не post: .post уже занят карточкой новости, и совпадение имён
+   разложило её содержимое в строку. */
+.duty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+/* Отступ сверху был у каждой строки — он разделял руководителя и куратора в
+   карточке отделения. Но там, где строка одна (ячейка), он превращался в
+   перекос: сверху 12 + 8, снизу 12, и карточка выглядела съехавшей вниз.
+   Теперь разделяет промежуток между строками, а не отступ у каждой. */
+.duty + .duty { margin-top: var(--space-12); }
+.region__head + .duty { margin-top: var(--space-8); }
+.duty__icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.duty__icon svg { width: 15px; height: 15px; }
+.duty__body { min-width: 0; flex: 1 1 auto; }
+.duty__label { display: block; font-size: 12px; color: var(--hint); }
+.duty__name { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.duty__name--empty { color: var(--hint); }
+.duty__acts { display: flex; gap: var(--space-4); flex: none; }
+.duty__act {
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--hint);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+/* Назначение — действие, за которым сюда и приходят; снятие — редкое и
+   обратимое, ему хватает тихой кнопки. */
+.duty__act--go { border-color: transparent; background: var(--button); color: var(--button-text); font-weight: 500; }
+.duty__act--drop { color: var(--hint); }
+
+.btn--dashed {
+  border: 1px dashed rgba(217, 181, 123, .35);
+  background: none;
+  color: var(--accent);
+}
+.notice--warn { border-color: rgba(192, 57, 43, .4); color: var(--danger); }
+
+/* --- Федеральное бюро ------------------------------------------------------ */
+
+/* Имя в списке бюро ведёт в профиль — значит, должно выглядеть как ссылка, а
+   не как обычный текст. */
+.bureau__name {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.bureau__acts { display: flex; flex-direction: column; gap: var(--space-4); flex: none; }
+/* Свой стиль, а не одолженный у ленты: там кнопка живёт внутри строки
+   действий, которая уже сбросила фон и рамку, а здесь она сама по себе — без
+   сброса выходил белый прямоугольник. */
+.bureau__act {
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--hint);
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bureau__act--drop { color: var(--danger); border-color: rgba(192, 57, 43, .4); }
+
+/* Строка, которая куда-то ведёт: та же строка списка, но кликабельная. */
+.row--tap {
+  width: 100%;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.row__chev { color: var(--hint); }
+
+/* --- Форма новости --------------------------------------------------------
+   Подпись показана так, как она будет выглядеть в ленте, — с аватаром, а не
+   ярлыком «Опубликуется как». Поле для текста без рамки: в окне «Новость» и
+   так понятно, что писать, а рамка только сужала место. */
+
+.compose-as { display: flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-12); }
+.compose-as__text { min-width: 0; }
+.compose-as__name { display: block; font-weight: 700; font-size: 14px; }
+
+.compose-text {
+  width: 100%;
+  min-height: 96px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+.compose-sep { height: 1px; background: var(--border); margin: var(--space-12) 0; }
+.compose-actions { margin-top: var(--space-16); flex-wrap: nowrap; }
+/* Публикация занимает всю ширину: это единственное, ради чего окно открывали. */
+.compose-actions .btn:first-child { flex: 1 1 auto; }
+.compose-actions .btn--ghost { flex: none; }
+.compose-count { margin-top: var(--space-8); }
+
+/* Своя область вместо системного выбора файлов: тот нельзя ни покрасить, ни
+   перевести — в тёмном кабинете он белое пятно, — и он ничего не показывает
+   о выбранном. */
+.attach {
+  width: 100%;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--space-16);
+  border: 1px dashed rgba(217, 181, 123, .35);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--hint);
+  font: inherit;
+  cursor: pointer;
+}
+.attach__icon { width: 26px; height: 26px; color: var(--accent); }
+.attach__title { font-size: 14px; color: var(--text); }
+.attach__hint { font-size: 12px; }
+
+/* Выбранное видно сразу — миниатюрами, а не строчкой «файлы выбраны: 3».
+   Крестик на каждой убирает лишнюю, не начиная выбор заново. */
+.thumbs { display: flex; gap: var(--space-8); flex-wrap: wrap; }
+.thumb {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--secondary-bg);
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb__drop {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, .78);
+  color: var(--text);
+  cursor: pointer;
+}
+.thumb__drop svg { width: 12px; height: 12px; }
+.thumb--add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px dashed rgba(217, 181, 123, .35);
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.thumb--add svg { width: 22px; height: 22px; }
+
+
+/* --- Вузовские ячейки ------------------------------------------------------ */
+/* Строка списка была одна: руководитель, счётчик состава и ближайшее
+   мероприятие через «·», мелким серым. Теперь карточка с отдельными строками —
+   и сразу видно, если руководителя нет. */
+
+.cell {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  margin-bottom: var(--space-8);
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--text);
+  cursor: pointer;
+}
+.cell__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+.cell__name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.cell__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+.cell__chip {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cell__chip--empty { color: var(--hint); }
+.cell__icon { width: 14px; height: 14px; flex: none; }
+.cell__tabs { margin: var(--space-16) 0 var(--space-12); }
+
+
+/* --- Задания глазами руководителя ------------------------------------------ */
+/* Он не начисляет звёзды — отмечает выполнение, а забирает их сам человек в
+   «Академии». Экран об этом молчал: ни баланса, ни отклика на нажатие. */
+
+.stats2 { display: flex; gap: var(--space-8); }
+.stats2 .stat2 { flex: 1 1 0; }
+.stat2__value { font-size: 20px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat2__value--accent { color: var(--accent); }
+
+/* Полоска внутри строки задания — уже, чем в «Академии»: там она главный
+   предмет, здесь одна из трёх строк. */
+.quest .quest-bar { background: var(--border); margin: var(--space-8) 0 var(--space-4); }
+.quest-bar__fill--done { background: var(--success); }
+
+/* Что случилось от последнего нажатия — прямо в строке, а не молча. */
+.quest__note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+}
+.quest__note--good { color: var(--success); }
+
+/* Строка задания высокая — с полоской и подписями, — и .row__side ужимался
+   до ширины, при которой «Отметить» ломалось на два слога. */
+.quest .row__side { flex: none; align-self: flex-start; }
+.quest .row__side .btn { white-space: nowrap; }
+
+.notice--done { border-color: rgba(78, 139, 93, .4); background: rgba(78, 139, 93, .12); }
+.notice--done svg { color: var(--success); }
+
+
+/* --- Выбор из списка галочками --------------------------------------------- */
+/* Не тумблер: тумблер отвечает на «включить или нет» по одной настройке, а
+   здесь выбирают несколько строк из многих — для этого понятнее галочка.
+   Раньше строки были .row--switch без самого тумблера: чекбокс тот стиль
+   прячет, и выбранное от невыбранного не отличалось ничем. */
+.row--pick {
+  cursor: pointer;
+  gap: var(--space-12);
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 0;
+}
+.row--pick input { position: absolute; opacity: 0; pointer-events: none; }
+.row--pick .row__main, .row--pick .row__title, .row--pick .row__sub { display: block; }
+.pick__box {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(217, 181, 123, .35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+}
+.pick__box svg { width: 13px; height: 13px; }
+.row--pick-on .pick__box { background: var(--accent); border-color: var(--accent); color: var(--button-text); }
+/* Отмеченная строка читается целиком, а не одной галочкой на краю. */
+.row--pick-on .row__title { font-weight: 700; }
+
+/* Строка списка, оформленная кнопкой: .row задаёт раскладку и рамку, а
+   собственный вид кнопки надо погасить, иначе выходит светлый прямоугольник. */
+.card--rows button.row {
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--text);
+  text-align: left;
+}
+.card--rows button.row:last-child { border-bottom: none; }
+/* Внутри кнопки это span'ы: без display имя и подпись сливаются в одну строку. */
+.card--rows button.row .row__main,
+.card--rows button.row .row__title,
+.card--rows button.row .row__sub { display: block; }
+.row--off { cursor: default; }
+.row--off .row__title { color: var(--hint); }
+
+/* Ссылка и кнопка её правки стоят рядом в одной строке — вместо отдельного
+   экрана правки ради единственного поля. */
+.link-acts { display: flex; align-items: center; gap: var(--space-8); flex: none; }
+
+/* Смена раздела: короткое проявление со сдвигом на 6 точек. Ровно столько,
+   чтобы глаз понял, что экран сменился, и не столько, чтобы этого ждать.
+   prefers-reduced-motion уважаем: кому движение мешает, тот его не увидит. */
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+/* Экран приезжает с той стороны, где стоит его вкладка. Сдвиг небольшой (14
+   точек): это подсказка о направлении, а не проезд через весь экран. */
+@keyframes viewFromRight {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes viewFromLeft {
+  from { opacity: 0; transform: translateX(-14px); }
+  to { opacity: 1; transform: none; }
+}
+.view--enter { animation: viewEnter .14s ease-out; }
+.view--from-right { animation-name: viewFromRight; }
+.view--from-left { animation-name: viewFromLeft; }
+
+/* Полоска под активной вкладкой. Лежит поверх сетки кнопок, поэтому и
+   переезжает: сама сетка при смене раздела перерисовывается целиком. */
+.tabs__marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--accent);
+  transition: transform .18s ease, opacity .18s ease;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view--enter { animation: none; }
+  .tabs__marker { transition: none; }
+}
+
+/* Срок задачи в календаре — другим цветом, чем мероприятие: в клетке помещается
+   только точка, и по ней должно быть видно, что именно там ждёт. */
+.calendar__dot--task { background: var(--danger); }
