@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #d9b57b; } a:hover { color: #e8c68f; }
+  </style>
+</helmet>
+
+<div style="width: 860px; min-height: 720px; background: #141414; color: #ece6dc; font-family: 'PT Sans', -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 15px; line-height: 1.45; padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+
+  <div>
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 24px;">Нижняя панель</div>
+    <div style="font-size: 12px; color: #9c9082; margin-top: 4px;">Компоненты и токены взяты из webapp/styles.css без изменений</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 12px; color: #9c9082;">Сейчас — вкладки сверху, прокручиваются вбок</div>
+      <div style="width: 375px; background: #141414; border: 1px solid rgba(217,181,123,0.22); border-radius: 12px; overflow: hidden;">
+        <div style="border-bottom: 1px solid rgba(217,181,123,0.22); padding: 12px 12px 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div>
+              <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px;">Кабинет</div>
+              <div style="font-size: 12px; color: #9c9082;">Участник</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 4px; overflow: hidden; padding: 8px 0;">
+            <span style="flex: 0 0 auto; padding: 8px 12px; border-radius: 999px; border: 1px solid transparent; background: #d9b57b; color: #201a12; font-size: 13px; white-space: nowrap;">Лобби</span>
+            <span style="flex: 0 0 auto; padding: 8px 12px; border-radius: 999px; border: 1px solid transparent; background: #1e1b17; color: #ece6dc; font-size: 13px; white-space: nowrap;">Мероприятия</span>
+            <span style="flex: 0 0 auto; padding: 8px 12px; border-radius: 999px; border: 1px solid transparent; background: #1e1b17; color: #ece6dc; font-size: 13px; white-space: nowrap;">Магазин</span>
+            <span style="flex: 0 0 auto; padding: 8px 12px; border-radius: 999px; border: 1px solid transparent; background: #1e1b17; color: #ece6dc; font-size: 13px; white-space: nowrap;">Нов…</span>
+          </div>
+        </div>
+        <div style="height: 120px; background: #141414; display: flex; align-items: center; justify-content: center; color: #4a423a; font-size: 12px;">содержимое экрана</div>
+      </div>
+      <div style="font-size: 12px; color: #9c9082; max-width: 44ch;">Пятая вкладка «Личная информация» уезжает за край, до неё нужно домотать. Палец тянется к верху экрана.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 12px; color: #d9b57b;">Предложение — панель снизу, все пять видны сразу</div>
+      <div style="width: 375px; background: #141414; border: 1px solid rgba(217,181,123,0.22); border-radius: 12px; overflow: hidden;">
+        <div style="border-bottom: 1px solid rgba(217,181,123,0.22); padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px;">Иванов Василий</div>
+          <div style="font-size: 12px; color: #9c9082;">Участник · Санкт-Петербург</div>
+        </div>
+        <div style="height: 120px; background: #141414; display: flex; align-items: center; justify-content: center; color: #4a423a; font-size: 12px;">содержимое экрана</div>
+        <div style="border-top: 1px solid rgba(217,181,123,0.22); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));">
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #d9b57b;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path></svg>
+              <span style="font-size: 11px;">Главная</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+              <span style="font-size: 11px;">Мероприятия</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9V6z"></path></svg>
+              <span style="font-size: 11px;">Лобби</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>
+              <span style="font-size: 11px;">Магазин</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"></path></svg>
+              <span style="font-size: 11px;">Профиль</span>
+            </div>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: #9c9082; max-width: 44ch;">Пять постоянных мест, ничего не прячется. Панель в зоне большого пальца.</div>
+    </div>
+
+  </div>
+
+  <div style="height: 1px; background: rgba(217,181,123,0.22);"></div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Состояния пункта</div>
+      <div style="display: flex; gap: 12px;">
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1 1 0;">
+          <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #9c9082;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+            <span style="font-size: 11px;">Мероприятия</span>
+          </div>
+          <div style="font-size: 11px; color: #9c9082;">обычный</div>
+        </div>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1 1 0;">
+          <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #d9b57b;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+            <span style="font-size: 11px;">Мероприятия</span>
+          </div>
+          <div style="font-size: 11px; color: #d9b57b;">выбранный</div>
+        </div>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1 1 0;">
+          <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #9c9082; position: relative;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9V6z"></path></svg>
+            <span style="font-size: 11px;">Лобби</span>
+            <span style="position: absolute; top: 6px; left: 50%; margin-left: 4px; min-width: 17px; padding: 0 4px; border-radius: 999px; background: #c0392b; color: #fff; font-size: 11px; line-height: 17px; text-align: center;">2</span>
+          </div>
+          <div style="font-size: 11px; color: #9c9082;">со счётчиком</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Размеры и цвета</div>
+      <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+        <sc-for list="{{specs}}" as="s" hint-placeholder-count="6">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+            <div style="min-width: 0; flex: 1 1 auto; color: #9c9082; font-size: 13px;">{{s.k}}</div>
+            <div style="text-align: right; flex: 0 0 auto; font-size: 13px; font-variant-numeric: tabular-nums;">{{s.v}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="height: 1px; background: rgba(217,181,123,0.22);"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Кабинет руководителя — вкладок больше пяти</div>
+    <div style="font-size: 13px; color: #9c9082; max-width: 80ch;">В режиме региона вкладок девять: Сводка, Состав, Мероприятия, Финансы, Вузовские ячейки, Документы, Задачи, Отчёты, Новости. В панель вынесены четыре со счётчиками и ежедневной работой, остальные пять — под «Ещё». Задачи стоят в панели, а не Финансы: у задач есть счётчик непрочитанного, у финансов нет, и открывают их периодически.</div>
+    <div style="width: 375px; border: 1px solid rgba(217,181,123,0.22); border-radius: 12px; overflow: hidden;">
+      <div style="border-top: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));">
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #d9b57b;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>
+              <span style="font-size: 11px;">Сводка</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M16 5.5a3 3 0 0 1 0 5.8"></path><path d="M17.5 14.2c2 .8 3.5 2.7 3.5 5.3"></path></svg>
+              <span style="font-size: 11px;">Состав</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+              <span style="font-size: 11px;">Мероприятия</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h9M9 12h9M9 19h9"></path><path d="M4 5.5l1.2 1.2L7.5 4"></path><path d="M4 12.5l1.2 1.2L7.5 11"></path><path d="M4 19.5l1.2 1.2L7.5 18"></path></svg>
+              <span style="font-size: 11px;">Задачи</span>
+            </div>
+            <div style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; color: #9c9082;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="19" cy="12" r="1.4"></circle></svg>
+              <span style="font-size: 11px;">Ещё</span>
+            </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":860,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      specs: [
+        { k: 'Высота пункта', v: '64 px + safe-area' },
+        { k: 'Иконка', v: '24 px, обводка 1.5' },
+        { k: 'Подпись', v: 'PT Sans 11 px' },
+        { k: 'Выбранный', v: '#d9b57b' },
+        { k: 'Невыбранный', v: '#9c9082' },
+        { k: 'Счётчик', v: '#c0392b, 11 px' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

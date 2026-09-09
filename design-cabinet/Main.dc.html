@@ -1,0 +1,322 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #d9b57b; } a:hover { color: #e8c68f; }
+    .sb::-webkit-scrollbar { width: 0; height: 0; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; position: relative; overflow: hidden; background: #141414; color: #ece6dc; font-family: 'PT Sans', -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 15px; line-height: 1.45;">
+
+  <div style="position: absolute; top: 0; left: 0; right: 0; z-index: 3; background: #141414; border-bottom: 1px solid rgba(217,181,123,0.22); padding: 12px 12px 12px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div style="min-width: 0;">
+        <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; line-height: 1.2;">{{screenTitle}}</div>
+        <div style="font-size: 12px; color: #9c9082;">{{screenSubtitle}}</div>
+      </div>
+      <div style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(217,181,123,0.22); background: #1e1b17; display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d9b57b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb" style="position: absolute; top: 62px; bottom: 68px; left: 0; right: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+
+    <sc-if value="{{isHome}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
+            <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Ближайшее мероприятие</div>
+            <span style="padding: 4px 12px; border-radius: 999px; background: #141414; border: 1px solid rgba(217,181,123,0.22); font-size: 12px; color: #d9b57b; white-space: nowrap;">12 марта</span>
+          </div>
+          <div style="font-size: 15px; margin-bottom: 4px;">Съезд академистов Сибири</div>
+          <div style="font-size: 12px; color: #9c9082; margin-bottom: 12px;">Новосибирское отделение · 18:00</div>
+          <div style="display: flex; gap: 8px;">
+            <button style="flex: 1 1 0; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">Иду</button>
+            <button style="flex: 1 1 0; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #1e1b17; color: #ece6dc; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(217,181,123,0.22);">Не иду</button>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Новые задания</div>
+            <span style="min-width: 17px; padding: 0 4px; border-radius: 999px; background: #c0392b; color: #fff; font-size: 11px; text-align: center;">{{unread}}</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+            <div style="min-width: 0; flex: 1 1 auto;">
+              <div>Собрать список гостей</div>
+              <div style="font-size: 12px; color: #9c9082;">Съезд академистов Сибири</div>
+            </div>
+            <div style="text-align: right; white-space: nowrap; flex: 0 0 auto; color: #d9b57b;">+15 ⭐</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0;">
+            <div style="min-width: 0; flex: 1 1 auto;">
+              <div>Забрать печатные материалы</div>
+              <div style="font-size: 12px; color: #9c9082;">Бал Братства</div>
+            </div>
+            <div style="text-align: right; white-space: nowrap; flex: 0 0 auto; color: #d9b57b;">+10 ⭐</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Звёзды</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px;">⭐ 145</div>
+          </div>
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Мероприятий за год</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px;">8</div>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="margin-bottom: 8px;">
+            <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Новости</div>
+          </div>
+          <div style="font-size: 15px; margin-bottom: 4px;">Открыт сбор на весенний бал</div>
+          <div style="font-size: 12px; color: #9c9082;">Руководитель отделения · вчера</div>
+        </div>
+
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isEvents}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 12px;">
+            <button style="background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); color: #ece6dc; border-radius: 8px; width: 32px; height: 32px; font-size: 16px; cursor: pointer; font-family: inherit;">‹</button>
+            <div style="font-weight: 600; font-family: 'Playfair Display', Georgia, serif;">Март 2026</div>
+            <button style="background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); color: #ece6dc; border-radius: 8px; width: 32px; height: 32px; font-size: 16px; cursor: pointer; font-family: inherit;">›</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px;">
+            <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">пн</div>
+            <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">вт</div>
+            <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">ср</div>
+            <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">чт</div>
+            <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">пт</div>
+            <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">сб</div>
+            <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">вс</div>
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+              <div style="aspect-ratio: 1; border-radius: 8px; border: 1px solid rgba(217,181,123,0.22); background: #141414; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #ece6dc; font-variant-numeric: tabular-nums; opacity: {{d.dim}};">
+                <div style="font-size: 13px;">{{d.n}}</div>
+                <sc-if value="{{d.dot}}" hint-placeholder-val="{{ true }}">
+                  <div style="width: 5px; height: 5px; border-radius: 50%; background: #d9b57b;"></div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px; margin-bottom: 4px;">Ближайшие</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+            <div style="min-width: 0; flex: 1 1 auto;">
+              <div>Съезд академистов Сибири</div>
+              <div style="font-size: 12px; color: #9c9082;">Иду ✅</div>
+            </div>
+            <div style="text-align: right; white-space: nowrap; flex: 0 0 auto; color: #9c9082; font-variant-numeric: tabular-nums;">12 мар</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0;">
+            <div style="min-width: 0; flex: 1 1 auto;">
+              <div>Бал Братства</div>
+              <div style="font-size: 12px; color: #9c9082;">Ещё не отвечал</div>
+            </div>
+            <div style="text-align: right; white-space: nowrap; flex: 0 0 auto; color: #9c9082; font-variant-numeric: tabular-nums;">28 мар</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isLobby}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px; text-align: center;">
+          <div style="width: 180px; max-width: 100%; aspect-ratio: 3/4; margin: 0 auto; border-radius: 16px; overflow: hidden; background: #141414; border: 1px solid rgba(217,181,123,0.22); display: flex; align-items: center; justify-content: center;">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4a423a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"></path></svg>
+          </div>
+          <div style="font-size: 12px; color: #9c9082; margin-top: 8px;">Парадный образ · открыто 4 из 9</div>
+          <button style="margin-top: 12px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;">Сменить образ</button>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px; margin-bottom: 8px;">Качества</div>
+          <div style="display: flex; justify-content: center;">
+            <svg width="200" height="180" viewBox="0 0 200 180" fill="none">
+              <polygon points="100,20 169,60 169,140 100,180 31,140 31,60" stroke="rgba(217,181,123,0.22)" stroke-width="1" fill="none"></polygon>
+              <polygon points="100,60 134,80 134,120 100,140 66,120 66,80" stroke="rgba(217,181,123,0.22)" stroke-width="1" fill="none"></polygon>
+              <polygon points="100,34 155,68 148,132 100,158 52,124 45,72" fill="rgba(217,181,123,0.18)" stroke="#d9b57b" stroke-width="1.5"></polygon>
+            </svg>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Задания</div>
+          <div style="padding: 12px 0 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div>Побывать на трёх мероприятиях</div>
+              <div style="color: #d9b57b; white-space: nowrap;">2 / 3</div>
+            </div>
+            <div style="height: 6px; border-radius: 3px; background: #141414; overflow: hidden; margin: 4px 0;">
+              <div style="height: 100%; width: 66%; background: #d9b57b; border-radius: 3px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isShop}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px; text-align: center;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Баланс</div>
+          <div style="font-size: 22px; margin-top: 4px;">⭐ 145</div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <button style="padding: 4px 12px; border-radius: 999px; background: #d9b57b; border: 1px solid transparent; font-size: 12px; cursor: pointer; color: #201a12; font-family: inherit;">Скины</button>
+          <button style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px; cursor: pointer; color: #ece6dc; font-family: inherit;">Мерч</button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <sc-for list="{{shop}}" as="s" hint-placeholder-count="4">
+            <div style="display: block; background: #141414; border: 1px solid rgba(217,181,123,0.22); border-radius: 14px; padding: 12px; color: #ece6dc;">
+              <div style="position: relative; aspect-ratio: 1/1; border-radius: 10px; background: #1e1b17; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 8px;">{{s.icon}}</div>
+              <div style="font-size: 13px; margin-top: 4px; line-height: 1.3;">{{s.title}}</div>
+              <div style="font-size: 11px; color: #9c9082; margin-top: 4px;">{{s.sub}}</div>
+              <button style="margin-top: 8px; width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;">{{s.cta}}</button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isProfile}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+            <div style="min-width: 0; flex: 1 1 auto; color: #9c9082; font-size: 12px;">ФИО</div>
+            <div style="text-align: right; flex: 0 0 auto;">Иванов Василий</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+            <div style="min-width: 0; flex: 1 1 auto; color: #9c9082; font-size: 12px;">Отделение</div>
+            <div style="text-align: right; flex: 0 0 auto;">Санкт-Петербург</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+            <div style="min-width: 0; flex: 1 1 auto; color: #9c9082; font-size: 12px;">Вузовская ячейка</div>
+            <div style="text-align: right; flex: 0 0 auto;">СПбГУ</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0;">
+            <div style="min-width: 0; flex: 1 1 auto; color: #9c9082; font-size: 12px;">Телефон</div>
+            <div style="text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums;">+7 900 000-00-00</div>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div>Новости</div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9c9082" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"></path></svg>
+          </div>
+        </div>
+
+        <button style="min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 12px 16px; border: none; border-radius: 10px; background: #1e1b17; color: #ece6dc; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(217,181,123,0.22);">Редактировать данные</button>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; background: #141414; border-top: 1px solid rgba(217,181,123,0.22); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: 4px;">
+
+    <button onClick="{{pickHome}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{homeColor}};">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path></svg>
+      <span style="font-size: 11px;">Главная</span>
+    </button>
+
+    <button onClick="{{pickEvents}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{eventsColor}};">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+      <span style="font-size: 11px;">Мероприятия</span>
+    </button>
+
+    <button onClick="{{pickLobby}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{lobbyColor}}; position: relative;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9V6z"></path></svg>
+      <span style="font-size: 11px;">Лобби</span>
+      <sc-if value="{{hasUnread}}" hint-placeholder-val="{{ true }}">
+        <span style="position: absolute; top: 8px; left: 50%; margin-left: 4px; min-width: 17px; padding: 0 4px; border-radius: 999px; background: #c0392b; color: #fff; font-size: 11px; line-height: 17px; text-align: center;">{{unread}}</span>
+      </sc-if>
+    </button>
+
+    <button onClick="{{pickShop}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{shopColor}};">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>
+      <span style="font-size: 11px;">Магазин</span>
+    </button>
+
+    <button onClick="{{pickProfile}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{profileColor}};">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"></path></svg>
+      <span style="font-size: 11px;">Профиль</span>
+    </button>
+
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"unreadTasks":{"editor":"int","default":2,"min":0,"max":9,"section":"Состояние"},"$preview":{"width":375,"height":812}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'home' };
+  }
+  renderVals() {
+    const tab = this.state.tab;
+    const on = '#d9b57b';
+    const off = '#9c9082';
+    const unread = this.props.unreadTasks ?? 2;
+    const titles = {
+      home: ['Иванов Василий', 'Участник · Санкт-Петербург'],
+      events: ['Мероприятия', 'Ваше расписание'],
+      lobby: ['Лобби', 'Образ, качества и задания'],
+      shop: ['Магазин', 'Звёзды и мерч'],
+      profile: ['Профиль', 'Личная информация'],
+    };
+    const days = [];
+    for (let i = 1; i <= 28; i++) {
+      days.push({ n: i, dim: i < 3 ? '0.35' : '1', dot: i === 12 || i === 28 });
+    }
+    const shop = [
+      { icon: '🎓', title: 'Студенческий сюртук', sub: 'Скин образа', cta: 'Купить за 120 ⭐' },
+      { icon: '🎩', title: 'Парадный цилиндр', sub: 'Скин образа', cta: 'Купить за 90 ⭐' },
+      { icon: '🧥', title: 'Худи с шевроном', sub: '3 200 ₽ · 4 200 ₽', cta: 'Открыть' },
+      { icon: '📖', title: 'История Братства', sub: '950 ₽ · рейтинг 4.8', cta: 'Открыть' },
+    ];
+    return {
+      isHome: tab === 'home',
+      isEvents: tab === 'events',
+      isLobby: tab === 'lobby',
+      isShop: tab === 'shop',
+      isProfile: tab === 'profile',
+      screenTitle: titles[tab][0],
+      screenSubtitle: titles[tab][1],
+      homeColor: tab === 'home' ? on : off,
+      eventsColor: tab === 'events' ? on : off,
+      lobbyColor: tab === 'lobby' ? on : off,
+      shopColor: tab === 'shop' ? on : off,
+      profileColor: tab === 'profile' ? on : off,
+      pickHome: () => this.setState({ tab: 'home' }),
+      pickEvents: () => this.setState({ tab: 'events' }),
+      pickLobby: () => this.setState({ tab: 'lobby' }),
+      pickShop: () => this.setState({ tab: 'shop' }),
+      pickProfile: () => this.setState({ tab: 'profile' }),
+      unread: unread,
+      hasUnread: unread > 0,
+      days: days,
+      shop: shop,
+    };
+  }
+}
+</script>
+</body>
+</html>

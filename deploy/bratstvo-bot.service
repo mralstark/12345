@@ -1,0 +1,27 @@
+[Unit]
+Description=Личный кабинет Братства — Telegram-бот (aiogram)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bratstvo
+Group=bratstvo
+WorkingDirectory=/opt/bratstvo
+# .env читает сам python-dotenv из WorkingDirectory — EnvironmentFile не нужен.
+ExecStart=/opt/bratstvo/.venv/bin/python bot.py
+Restart=always
+RestartSec=5
+# Сервер может быть общим: предел памяти не даёт нам утащить за собой соседей.
+MemoryMax=350M
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/bratstvo
+
+[Install]
+WantedBy=multi-user.target

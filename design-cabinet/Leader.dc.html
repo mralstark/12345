@@ -1,0 +1,459 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #d9b57b; } a:hover { color: #e8c68f; }
+    .sb::-webkit-scrollbar { width: 0; height: 0; }
+  </style>
+</helmet>
+
+<div style="width: 375px; height: 812px; position: relative; overflow: hidden; background: #141414; color: #ece6dc; font-family: 'PT Sans', -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 15px; line-height: 1.45;">
+
+  <div style="position: absolute; top: 0; left: 0; right: 0; z-index: 3; background: #141414; border-bottom: 1px solid rgba(217,181,123,0.22); padding: 12px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div style="min-width: 0;">
+        <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; line-height: 1.2;">{{screenTitle}}</div>
+        <div style="font-size: 12px; color: #9c9082;">Руководитель отделения</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9px; border: 1px solid rgba(217,181,123,0.22); background: #141414; font-size: 13px; flex: 0 0 auto;">
+        <span>Санкт-Петербург</span>
+        <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="#9c9082" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb" style="position: absolute; top: 62px; bottom: 68px; left: 0; right: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+
+    <sc-if value="{{isDash}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Баланс региона</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums;">128 400 ₽</div>
+          </div>
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Состав</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px;">74</div>
+          </div>
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Доходы · март</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px; color: #4e8b5d; font-variant-numeric: tabular-nums;">42 000 ₽</div>
+          </div>
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Расходы · март</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px; color: #c0392b; font-variant-numeric: tabular-nums;">18 600 ₽</div>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Требует внимания</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0;">
+            <div style="min-width: 0; flex: 1 1 auto;">Новых задач</div>
+            <div style="text-align: right; white-space: nowrap; flex: 0 0 auto;">3</div>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Новости</div>
+            <button onClick="{{goNews}}" style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px; color: #d9b57b; cursor: pointer; font-family: inherit;">Все</button>
+          </div>
+          <div style="padding: 12px 0 0;">
+            <div style="font-weight: 500;">Сбор отчётов за первый квартал до 20 марта</div>
+            <div style="font-size: 12px; color: #9c9082;">Фёдоров Фёдор · 3 мар. 2026 г. · Всем участникам</div>
+          </div>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Состав по статусам</div>
+          <sc-for list="{{statuses}}" as="s" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="min-width: 0; flex: 1 1 auto; font-weight: 500;">{{s.label}}</div>
+              <div style="text-align: right; white-space: nowrap; flex: 0 0 auto;">{{s.count}}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Ближайшие мероприятия</div>
+          <sc-for list="{{upcoming}}" as="e" hint-placeholder-count="2">
+            <div style="padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="font-weight: 500;">{{e.title}}</div>
+              <div style="font-size: 12px; color: #9c9082;">{{e.when}}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Дни рождения</div>
+          <div style="padding: 12px 0;">
+            <div style="font-weight: 500;">Петров Алексей</div>
+            <div style="font-size: 12px; color: #9c9082;">14 мар. 2026 г. · 21 лет</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isMembers}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div>
+          <input placeholder="Поиск по ФИО" style="width: 100%; padding: 8px 12px; border-radius: 9px; border: 1px solid rgba(217,181,123,0.22); background: #141414; color: #ece6dc; font-size: 16px; font-family: inherit;">
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <sc-for list="{{memberChips}}" as="c" hint-placeholder-count="4">
+            <span style="padding: 4px 12px; border-radius: 999px; background: {{c.bg}}; border: 1px solid {{c.bd}}; font-size: 12px; color: {{c.fg}};">{{c.label}}</span>
+          </sc-for>
+        </div>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <sc-for list="{{members}}" as="m" hint-placeholder-count="4">
+            <div style="padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="font-weight: 500;">{{m.name}}<sc-if value="{{m.alert}}" hint-placeholder-val="{{ true }}"><span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 4px; vertical-align: middle; background: #d64545;"></span></sc-if></div>
+              <div style="font-size: 12px; color: #9c9082;">{{m.meta}}</div>
+              <div style="font-size: 12px; color: #9c9082;">{{m.edu}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isEvents}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">➕ Мероприятие</button>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 12px;">
+            <span style="background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); color: #ece6dc; border-radius: 8px; width: 32px; height: 32px; font-size: 16px; display: flex; align-items: center; justify-content: center;">‹</span>
+            <div style="font-weight: 600; font-family: 'Playfair Display', Georgia, serif;">Март 2026</div>
+            <span style="background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); color: #ece6dc; border-radius: 8px; width: 32px; height: 32px; font-size: 16px; display: flex; align-items: center; justify-content: center;">›</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px;">
+            <sc-for list="{{weekdays}}" as="w" hint-placeholder-count="7">
+              <div style="text-align: center; font-size: 11px; color: #9c9082; padding-bottom: 4px;">{{w}}</div>
+            </sc-for>
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+              <div style="aspect-ratio: 1; border-radius: 8px; border: 1px solid rgba(217,181,123,0.22); background: #141414; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #ece6dc; font-variant-numeric: tabular-nums; opacity: {{d.dim}};">
+                <div style="font-size: 13px;">{{d.n}}</div>
+                <sc-if value="{{d.dot}}" hint-placeholder-val="{{ true }}">
+                  <div style="width: 5px; height: 5px; border-radius: 50%; background: #d9b57b;"></div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Ближайшие</div>
+          <sc-for list="{{upcoming}}" as="e" hint-placeholder-count="2">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="min-width: 0; flex: 1 1 auto;">
+                <div style="font-weight: 500;">{{e.title}}</div>
+                <div style="font-size: 12px; color: #9c9082;">{{e.who}}</div>
+              </div>
+              <div style="text-align: right; white-space: nowrap; flex: 0 0 auto; color: #9c9082; font-variant-numeric: tabular-nums;">{{e.short}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isTasks}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <span style="padding: 4px 12px; border-radius: 999px; background: #d9b57b; border: 1px solid transparent; font-size: 12px; color: #201a12;">Мои задачи</span>
+          <span style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px; color: #ece6dc;">Поставленные мной</span>
+        </div>
+        <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">➕ Поставить задачу</button>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <sc-for list="{{tasks}}" as="t" hint-placeholder-count="4">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="min-width: 0; flex: 1 1 auto;">
+                <div style="font-weight: 500;">{{t.title}}</div>
+                <div style="font-size: 12px; color: #9c9082;">{{t.sub}}</div>
+              </div>
+              <div style="text-align: right; flex: 0 0 auto;">
+                <span style="display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 11px; background: {{t.bg}}; color: {{t.fg}};">{{t.status}}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isFin}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <span style="padding: 4px 12px; border-radius: 999px; background: #d9b57b; border: 1px solid transparent; font-size: 12px; color: #201a12;">Месяц</span>
+          <span style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px; color: #ece6dc;">Квартал</span>
+          <span style="padding: 4px 12px; border-radius: 999px; background: #1e1b17; border: 1px solid rgba(217,181,123,0.22); font-size: 12px; color: #ece6dc;">Год</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Баланс (всего)</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums;">128 400 ₽</div>
+          </div>
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">Итог периода</div>
+            <div style="font-size: 19px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums;">23 400 ₽</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button style="min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">➕ Операция</button>
+          <button style="min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #1e1b17; color: #ece6dc; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; box-shadow: inset 0 0 0 1px rgba(217,181,123,0.22);">📁 Категории</button>
+        </div>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Расходы по категориям</div>
+          <sc-for list="{{expenses}}" as="x" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="min-width: 0; flex: 1 1 auto;">
+                <div style="font-weight: 500;">{{x.name}}</div>
+                <div style="height: 6px; border-radius: 999px; background: rgba(217,181,123,0.22); overflow: hidden; margin-top: 8px;">
+                  <div style="height: 100%; background: #d9b57b; width: {{x.width}};"></div>
+                </div>
+              </div>
+              <div style="text-align: right; white-space: nowrap; flex: 0 0 auto; font-variant-numeric: tabular-nums;">
+                {{x.sum}}
+                <div style="font-size: 12px; color: #9c9082;">{{x.share}}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px;">Операции · март</div>
+          <sc-for list="{{txs}}" as="t" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="min-width: 0; flex: 1 1 auto;">
+                <div style="font-weight: 500;">{{t.cat}}</div>
+                <div style="font-size: 12px; color: #9c9082;">{{t.sub}}</div>
+              </div>
+              <div style="text-align: right; white-space: nowrap; flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; color: {{t.color}};">{{t.amount}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isCells}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">➕ Ячейка</button>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <sc-for list="{{cells}}" as="c" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="min-width: 0; flex: 1 1 auto;">
+                <div style="font-weight: 500;">{{c.name}}</div>
+                <div style="font-size: 12px; color: #9c9082;">{{c.sub}}</div>
+              </div>
+              <div style="text-align: right; white-space: nowrap; flex: 0 0 auto;">{{c.count}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isDocs}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">➕ Документ</button>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <sc-for list="{{docs}}" as="d" hint-placeholder-count="3">
+            <div style="padding: 12px 0; border-bottom: 1px solid rgba(217,181,123,0.22);">
+              <div style="font-weight: 500;">{{d.title}}</div>
+              <div style="font-size: 12px; color: #9c9082;">{{d.sub}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isReports}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px; margin-bottom: 8px;">Выгрузки</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #1e1b17; color: #ece6dc; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; box-shadow: inset 0 0 0 1px rgba(217,181,123,0.22);">⬇️ Состав отделения</button>
+            <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #1e1b17; color: #ece6dc; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; box-shadow: inset 0 0 0 1px rgba(217,181,123,0.22);">⬇️ Финансы за период</button>
+            <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #1e1b17; color: #ece6dc; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; box-shadow: inset 0 0 0 1px rgba(217,181,123,0.22);">⬇️ Посещаемость мероприятий</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+
+    <sc-if value="{{isNews}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button style="width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: none; border-radius: 10px; background: #d9b57b; color: #201a12; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">➕ Новость</button>
+        <div style="background: #1e1b17; border-radius: 12px; padding: 12px; border: 1px solid rgba(217,181,123,0.22);">
+          <div style="font-size: 12px; color: #9c9082;">Кому уйдёт ваша новость</div>
+          <div style="margin-top: 4px; color: #d9b57b;">Отделениям: Санкт-Петербург</div>
+        </div>
+        <sc-for list="{{news}}" as="n" hint-placeholder-count="3">
+          <div style="background: #1e1b17; border-radius: 12px; padding: 12px;">
+            <div style="font-size: 12px; color: #9c9082;">{{n.meta}}</div>
+            <div style="margin-top: 8px; white-space: pre-wrap;">{{n.text}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+  <sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; inset: 0; z-index: 5;">
+      <div onClick="{{closeSheet}}" style="position: absolute; inset: 0; background: rgba(8,7,6,0.66); cursor: pointer;"></div>
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; background: #1e1b17; border-top: 1px solid rgba(217,181,123,0.22); border-radius: 16px 16px 0 0; padding: 12px 12px 16px;">
+        <div style="width: 36px; height: 4px; border-radius: 999px; background: rgba(217,181,123,0.22); margin: 0 auto 12px;"></div>
+        <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 16px; margin-bottom: 4px;">Ещё</div>
+        <button onClick="{{goFin}}" style="width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 12px 4px; background: none; border: none; border-bottom: 1px solid rgba(217,181,123,0.22); color: #ece6dc; font-family: inherit; font-size: 15px; text-align: left; cursor: pointer;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9c9082" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path><circle cx="17" cy="14.5" r="1"></circle></svg>
+          <span style="flex: 1 1 auto;">Финансы</span>
+        </button>
+        <button onClick="{{goCells}}" style="width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 12px 4px; background: none; border: none; border-bottom: 1px solid rgba(217,181,123,0.22); color: #ece6dc; font-family: inherit; font-size: 15px; text-align: left; cursor: pointer;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9c9082" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"></path><path d="M9 20v-6h6v6"></path></svg>
+          <span style="flex: 1 1 auto;">Вузовские ячейки</span>
+        </button>
+        <button onClick="{{goDocs}}" style="width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 12px 4px; background: none; border: none; border-bottom: 1px solid rgba(217,181,123,0.22); color: #ece6dc; font-family: inherit; font-size: 15px; text-align: left; cursor: pointer;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9c9082" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7l5 5v13H6z"></path><path d="M13 3v5h5"></path></svg>
+          <span style="flex: 1 1 auto;">Документы</span>
+        </button>
+        <button onClick="{{goNews}}" style="width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 12px 4px; background: none; border: none; border-bottom: 1px solid rgba(217,181,123,0.22); color: #ece6dc; font-family: inherit; font-size: 15px; text-align: left; cursor: pointer;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9c9082" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H4z"></path><path d="M17 9h3v8a2 2 0 0 1-3 1.7"></path><path d="M7 9h7M7 13h7M7 16h4"></path></svg>
+          <span style="flex: 1 1 auto;">Новости</span>
+        </button>
+        <button onClick="{{goReports}}" style="width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 12px 4px; background: none; border: none; color: #ece6dc; font-family: inherit; font-size: 15px; text-align: left; cursor: pointer;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9c9082" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M4 20h16"></path></svg>
+          <span style="flex: 1 1 auto;">Отчёты</span>
+        </button>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: #141414; border-top: 1px solid rgba(217,181,123,0.22); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: 4px;">
+
+    <button onClick="{{goDash}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{dashColor}};">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>
+      <span style="font-size: 11px;">Сводка</span>
+    </button>
+
+    <button onClick="{{goMembers}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{membersColor}}; position: relative;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M16 5.5a3 3 0 0 1 0 5.8"></path><path d="M17.5 14.2c2 .8 3.5 2.7 3.5 5.3"></path></svg>
+      <span style="font-size: 11px;">Состав</span>
+      <span style="position: absolute; top: 10px; left: 50%; margin-left: 6px; width: 7px; height: 7px; border-radius: 50%; background: #d64545;"></span>
+    </button>
+
+    <button onClick="{{goEvents}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{eventsColor}};">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+      <span style="font-size: 11px;">Мероприятия</span>
+    </button>
+
+    <button onClick="{{goTasks}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{tasksColor}}; position: relative;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h9M9 12h9M9 19h9"></path><path d="M4 5.5l1.2 1.2L7.5 4"></path><path d="M4 12.5l1.2 1.2L7.5 11"></path><path d="M4 19.5l1.2 1.2L7.5 18"></path></svg>
+      <span style="font-size: 11px;">Задачи</span>
+      <span style="position: absolute; top: 8px; left: 50%; margin-left: 4px; min-width: 17px; padding: 0 4px; border-radius: 999px; background: #c0392b; color: #fff; font-size: 11px; line-height: 17px; text-align: center;">3</span>
+    </button>
+
+    <button onClick="{{toggleSheet}}" style="min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: inherit; padding: 8px 4px; color: {{moreColor}};">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="19" cy="12" r="1.4"></circle></svg>
+      <span style="font-size: 11px;">Ещё</span>
+    </button>
+
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":375,"height":812}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'dash', sheet: false };
+  }
+  renderVals() {
+    const tab = this.state.tab;
+    const on = '#d9b57b';
+    const off = '#9c9082';
+    const overflow = ['fin', 'cells', 'docs', 'reports', 'news'];
+    const go = (t) => () => this.setState({ tab: t, sheet: false });
+    const titles = {
+      dash: 'Сводка', members: 'Состав', events: 'Мероприятия', tasks: 'Задачи',
+      fin: 'Финансы', cells: 'Вузовские ячейки', docs: 'Документы', reports: 'Отчёты',
+      news: 'Новости',
+    };
+    const days = [];
+    for (let i = 1; i <= 28; i++) days.push({ n: i, dim: i < 3 ? '0.35' : '1', dot: i === 12 || i === 28 });
+    const chip = (label, active) => ({
+      label: label,
+      bg: active ? '#d9b57b' : '#1e1b17',
+      fg: active ? '#201a12' : '#ece6dc',
+      bd: active ? 'transparent' : 'rgba(217,181,123,0.22)',
+    });
+    return {
+      isDash: tab === 'dash', isMembers: tab === 'members', isEvents: tab === 'events',
+      isTasks: tab === 'tasks', isFin: tab === 'fin', isCells: tab === 'cells',
+      isDocs: tab === 'docs', isReports: tab === 'reports', isNews: tab === 'news',
+      screenTitle: titles[tab],
+      dashColor: tab === 'dash' ? on : off,
+      membersColor: tab === 'members' ? on : off,
+      eventsColor: tab === 'events' ? on : off,
+      tasksColor: tab === 'tasks' ? on : off,
+      moreColor: (this.state.sheet || overflow.indexOf(tab) !== -1) ? on : off,
+      sheetOpen: this.state.sheet,
+      goDash: go('dash'), goMembers: go('members'), goEvents: go('events'), goTasks: go('tasks'),
+      goFin: go('fin'), goCells: go('cells'), goDocs: go('docs'), goReports: go('reports'),
+      goNews: go('news'),
+      toggleSheet: () => this.setState({ sheet: !this.state.sheet }),
+      closeSheet: () => this.setState({ sheet: false }),
+      weekdays: ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'],
+      days: days,
+      statuses: [
+        { label: 'Действующий', count: 58 },
+        { label: 'Кандидат', count: 11 },
+        { label: 'Приостановлен', count: 5 },
+      ],
+      upcoming: [
+        { title: 'Съезд академистов Сибири', when: '12 мар. 2026 г., 18:00', who: 'Отделение', short: '12 мар' },
+        { title: 'Бал Братства', when: '28 мар. 2026 г., 19:00', who: 'Ячейка СПбГУ', short: '28 мар' },
+      ],
+      memberChips: [chip('Все · 74', true), chip('Действующий · 58', false), chip('Кандидат · 11', false), chip('Приостановлен · 5', false)],
+      members: [
+        { name: 'Петров Алексей', alert: true, meta: 'Действующий · +7 900 000-00-00 · 14 мар. 2005 г.', edu: 'СПбГУ · Юридический' },
+        { name: 'Соколова Мария', alert: false, meta: 'Действующий · +7 900 000-00-01 · 2 июн. 2004 г.', edu: 'СПбПУ · Физико-механический' },
+        { name: 'Кузнецов Илья', alert: false, meta: 'Кандидат · +7 900 000-00-02', edu: 'ИТМО · Программная инженерия' },
+      ],
+      tasks: [
+        { title: 'Собрать отчёт за квартал', sub: 'от Федеральный координатор · до 20 мар. 2026 г.', status: 'Новая', bg: '#e8f0fe', fg: '#1a56b8' },
+        { title: 'Согласовать смету бала', sub: 'от Координатор регионов · до 15 мар. 2026 г.', status: 'В работе', bg: '#fff3cd', fg: '#8a6d00' },
+        { title: 'Обновить состав ячейки ИТМО', sub: 'от Федеральный координатор · до 1 мар. 2026 г.', status: 'Просрочена', bg: '#fde2e0', fg: '#a02c22' },
+        { title: 'Отправить список гостей', sub: 'от Руководитель ячейки · до 8 мар. 2026 г.', status: 'Выполнена', bg: '#d7f2e3', fg: '#1d6b45' },
+      ],
+      expenses: [
+        { name: '🎪 Мероприятия', sum: '9 800 ₽', share: '53%', width: '53%' },
+        { name: '🖨 Печать', sum: '5 400 ₽', share: '29%', width: '29%' },
+        { name: '🎁 Мерч', sum: '3 400 ₽', share: '18%', width: '18%' },
+      ],
+      txs: [
+        { cat: 'Взносы', sub: '3 мар. 2026 г. · Петров А.', amount: '+12 000 ₽', color: '#4e8b5d' },
+        { cat: '🎪 Мероприятия', sub: '5 мар. 2026 г. · Бал Братства', amount: '−9 800 ₽', color: '#c0392b' },
+        { cat: '🖨 Печать', sub: '7 мар. 2026 г. · афиши', amount: '−5 400 ₽', color: '#c0392b' },
+      ],
+      cells: [
+        { name: 'СПбГУ', sub: 'Руководитель: Соколова М.', count: 24 },
+        { name: 'СПбПУ', sub: 'Руководитель: Кузнецов И.', count: 12 },
+        { name: 'ИТМО', sub: 'Руководитель не назначен', count: 9 },
+      ],
+      news: [
+        { meta: 'Фёдоров Фёдор · 3 мар. 2026 г. · Всем участникам', text: 'Сбор отчётов за первый квартал до 20 марта.' },
+        { meta: 'Иванов Василий · 6 мар. 2026 г. · Отделениям: Санкт-Петербург', text: 'Сбор на весенний бал открыт, записываемся до 15 марта.' },
+      ],
+      docs: [
+        { title: 'Устав Братства', sub: 'PDF · 2 мар. 2026 г.' },
+        { title: 'Смета весеннего бала', sub: 'XLSX · 6 мар. 2026 г.' },
+        { title: 'Протокол собрания', sub: 'PDF · 9 мар. 2026 г.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

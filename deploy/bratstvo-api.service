@@ -1,0 +1,31 @@
+[Unit]
+Description=Личный кабинет Братства — бэкенд Mini App (FastAPI/uvicorn)
+After=network-online.target postgresql.service bratstvo-api.socket
+Wants=network-online.target
+# Порт открывает сокет-юнит и передаёт готовым — см. bratstvo-api.socket,
+# там же объяснено зачем.
+Requires=bratstvo-api.socket
+
+[Service]
+Type=simple
+User=bratstvo
+Group=bratstvo
+WorkingDirectory=/opt/bratstvo
+# Порт не открываем сами, а принимаем от systemd готовым (дескриптор 3):
+# так перезапуск не рвёт соединения. Адрес и порт заданы в bratstvo-api.socket.
+ExecStart=/opt/bratstvo/.venv/bin/python -m uvicorn api.main:app --fd 3
+Restart=always
+RestartSec=5
+# Сервер может быть общим: предел памяти не даёт нам утащить за собой соседей.
+MemoryMax=350M
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/bratstvo
+
+[Install]
+WantedBy=multi-user.target
