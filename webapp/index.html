@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Кабинет Братства Академистов</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=PT+Sans:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div id="intro" class="intro">
+    <div id="introBg" class="intro__bg"></div>
+    <div class="intro__scrim"></div>
+    <div id="introGreetingWrap" class="intro__greeting">
+      <img class="intro__mark" src="/static/emblem-white.png" alt="" />
+      <div class="intro__greeting-text" id="introGreeting"></div>
+    </div>
+    <div id="introCaptionWrap" class="intro__caption">
+      <div class="intro__caption-quote" id="introQuote"></div>
+      <div class="intro__caption-author" id="introAuthor"></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="impersonation-banner" id="impersonationBanner" hidden>
+      <span>👁 Вы смотрите как: <b id="impersonationName"></b></span>
+      <button id="impersonationExit" class="btn btn--small btn--ghost" type="button">Выйти</button>
+    </div>
+    <div class="topbar__row">
+      <div>
+        <div class="topbar__title" id="userName">Кабинет</div>
+        <div class="topbar__subtitle" id="userRole">загрузка…</div>
+      </div>
+      <button type="button" id="cabinetSwitch" class="cabinet" hidden></button>
+      <!-- Светлая тема временно отключена (см. app.js::initTheme) — кнопка
+           спрятана, а не удалена, чтобы переключение легко вернуть. -->
+      <button id="themeToggle" class="theme-toggle" type="button" title="Светлая/тёмная тема" hidden>🌙</button>
+    </div>
+  </header>
+
+  <main id="view" class="view">
+    <div class="loader">Загрузка кабинета…</div>
+  </main>
+
+  <nav class="bottom-nav" id="tabs" aria-label="Разделы кабинета"></nav>
+
+  <div id="modalRoot"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
