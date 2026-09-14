@@ -214,8 +214,10 @@ else
     fi
     echo "    $APP_DIR/.env уже был — обновил DATABASE_URL, WEBAPP_URL и API_BASE_URL"
 fi
-chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
-chmod 600 "$APP_DIR/.env"
+# Процессы входят в группу bratstvo и могут читать секреты, но не менять их.
+# Это сохраняет конфигурацию даже при компрометации самого приложения.
+chown root:"$APP_USER" "$APP_DIR/.env"
+chmod 640 "$APP_DIR/.env"
 
 echo "==> Миграции безопасности"
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_security_constraints)
