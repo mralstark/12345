@@ -1,4 +1,4 @@
-aiogram>=3.20,<4.0
+aiogram>=3.31.0,<4.0
 SQLAlchemy>=2.0
 # Явно, не полагаясь на автоподтяжку SQLAlchemy: на Apple Silicon (macOS
 # arm64) её platform-маркер не срабатывает (там платформа "arm64", а не
