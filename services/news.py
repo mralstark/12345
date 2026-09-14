@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import BOT_TOKEN, MAX_UPLOAD_BYTES, MEDIA_SIGNING_KEY, STORAGE_DIR
@@ -490,6 +490,7 @@ PHOTO_URL_TTL_SECONDS = 2 * 60
 # стабилен внутри короткой корзины, а максимальная жизнь bearer-ссылки остаётся
 # меньше трёх минут.
 TOKEN_BUCKET_SECONDS = 30
+_MEDIA_TOKEN_RE = re.compile(r"^([0-9]{1,12})\.([0-9a-f]{32})$")
 
 
 def _token_expiry(ttl: int) -> int:
@@ -504,6 +505,21 @@ def _photo_secret() -> bytes:
     return hmac.new(b"news-photo", secret.encode(), hashlib.sha256).digest()
 
 
+def _media_token_parts(token: str) -> tuple[str, str] | None:
+    """Parse only the fixed-size token shape we issue.
+
+    Checking the length before converting the expiry prevents a deliberately
+    huge decimal string from consuming excessive CPU or raising ValueError.
+    """
+    match = _MEDIA_TOKEN_RE.fullmatch(token or "")
+    if match is None:
+        return None
+    expires_raw, signature = match.groups()
+    if int(expires_raw) < time.time():
+        return None
+    return expires_raw, signature
+
+
 def photo_token(photo_id: int, ttl: int = PHOTO_URL_TTL_SECONDS) -> str:
     expires = _token_expiry(ttl)
     signature = hmac.new(
@@ -513,11 +529,10 @@ def photo_token(photo_id: int, ttl: int = PHOTO_URL_TTL_SECONDS) -> str:
 
 
 def photo_token_valid(photo_id: int, token: str) -> bool:
-    expires_raw, _, signature = (token or "").partition(".")
-    if not signature or not expires_raw.isdigit():
+    parts = _media_token_parts(token)
+    if parts is None:
         return False
-    if int(expires_raw) < time.time():
-        return False
+    expires_raw, signature = parts
     expected = hmac.new(
         _photo_secret(), f"{photo_id}:{expires_raw}".encode(), hashlib.sha256
     ).hexdigest()[:32]
@@ -559,15 +574,23 @@ async def toggle_reaction(session: AsyncSession, user: User, post_id: int, emoji
 
 async def reactions_for(session: AsyncSession, post_id: int, user: User) -> list[dict]:
     """Сводка по реакциям поста в порядке NEWS_REACTIONS, без нулевых."""
-    rows = (
-        await session.execute(select(NewsReaction).where(NewsReaction.post_id == post_id))
-    ).scalars().all()
-    counts: dict[str, int] = {}
-    mine = None
-    for row in rows:
-        counts[row.emoji] = counts.get(row.emoji, 0) + 1
-        if row.user_id == user.id:
-            mine = row.emoji
+    counts = dict(
+        (
+            await session.execute(
+                select(NewsReaction.emoji, func.count(NewsReaction.id))
+                .where(NewsReaction.post_id == post_id)
+                .group_by(NewsReaction.emoji)
+            )
+        ).all()
+    )
+    mine = (
+        await session.execute(
+            select(NewsReaction.emoji).where(
+                NewsReaction.post_id == post_id,
+                NewsReaction.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
     return [
         {"emoji": emoji, "count": counts[emoji], "mine": emoji == mine}
         for emoji in NEWS_REACTIONS
@@ -601,11 +624,9 @@ async def mark_viewed(session: AsyncSession, user: User, post_ids: list[int]) ->
 
 
 async def views_count(session: AsyncSession, post_id: int) -> int:
-    from sqlalchemy import func as sa_func
-
     return (
         await session.execute(
-            select(sa_func.count(NewsView.id)).where(NewsView.post_id == post_id)
+            select(func.count(NewsView.id)).where(NewsView.post_id == post_id)
         )
     ).scalar() or 0
 
@@ -658,9 +679,10 @@ def avatar_token(member_id: int, ttl: int = PHOTO_URL_TTL_SECONDS) -> str:
 
 
 def avatar_token_valid(member_id: int, token: str) -> bool:
-    expires_raw, _, signature = (token or "").partition(".")
-    if not signature or not expires_raw.isdigit() or int(expires_raw) < time.time():
+    parts = _media_token_parts(token)
+    if parts is None:
         return False
+    expires_raw, signature = parts
     expected = hmac.new(
         _photo_secret(), f"avatar:{member_id}:{expires_raw}".encode(), hashlib.sha256
     ).hexdigest()[:32]

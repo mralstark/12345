@@ -3,7 +3,7 @@
 import asyncio
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
@@ -24,9 +24,9 @@ def _content_disposition(filename: str) -> str:
 @router.get("/region")
 async def region_report(
     region_id: int,
-    format: str = "xlsx",
-    period: str = "year",
-    offset: int = 0,
+    format: str = Query(default="xlsx", max_length=8),
+    period: str = Query(default="year", max_length=16),
+    offset: int = Query(default=0, ge=-1200, le=1200),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> Response:

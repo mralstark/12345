@@ -25,6 +25,19 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 if ($Bootstrap -and [string]::IsNullOrWhiteSpace($Email)) {
     throw "-Bootstrap требует -Email: на этот адрес Let's Encrypt пришлёт предупреждение о непродлённом сертификате."
 }
+if ($Server -notmatch '^([A-Za-z0-9][A-Za-z0-9._-]*@)?[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$' -or $Server.Contains('..')) {
+    throw "Некорректный -Server"
+}
+if ($Port -lt 1 -or $Port -gt 65535) { throw "Некорректный -Port" }
+if ($AppDir -notmatch '^/[A-Za-z0-9._/-]+$' -or $AppDir -match '/\.\.?(/|$)') {
+    throw "Некорректный -AppDir"
+}
+if ($Email -and $Email -notmatch '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$') {
+    throw "Некорректный -Email"
+}
+if ($Domain -and $Domain -notmatch '^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$') {
+    throw "Некорректный -Domain"
+}
 
 # На Google Cloud под root не заходят — там обычный пользователь с passwordless sudo.
 $remotePrefix = "sudo "
@@ -65,7 +78,7 @@ if ($Bootstrap) {
 }
 else {
     Write-Host "==> Обновление зависимостей и перезапуск" -ForegroundColor Cyan
-    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; if [ -f $AppDir/requirements.lock ]; then sudo -u bratstvo $AppDir/.venv/bin/pip install --quiet --require-hashes -r $AppDir/requirements.lock; else sudo -u bratstvo $AppDir/.venv/bin/pip install --quiet -r $AppDir/requirements.txt; fi; cd $AppDir; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
+    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; test -f $AppDir/requirements.lock; sudo -u bratstvo $AppDir/.venv/bin/pip install --quiet --require-hashes -r $AppDir/requirements.lock; cd $AppDir; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
 }
 
 Remove-Item $archive -Force

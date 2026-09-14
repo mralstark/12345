@@ -2,6 +2,7 @@
 баланс и статистика по календарным периодам, CSV-экспорт."""
 
 from datetime import date as date_
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -29,11 +30,13 @@ from utils.period import resolve_period
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
+KeywordText = Annotated[str, Field(max_length=64)]
+
 
 class TransactionIn(BaseModel):
     region_id: int
-    amount: int = Field(gt=0, description="Сумма в копейках")
-    type: str
+    amount: int = Field(gt=0, le=2_147_483_647, description="Сумма в копейках")
+    type: str = Field(max_length=16)
     date: date_ | None = None
     category_id: int | None = None
     event_id: int | None = None
@@ -42,8 +45,8 @@ class TransactionIn(BaseModel):
 
 
 class TransactionPatch(BaseModel):
-    amount: int | None = Field(default=None, gt=0)
-    type: str | None = None
+    amount: int | None = Field(default=None, gt=0, le=2_147_483_647)
+    type: str | None = Field(default=None, max_length=16)
     date: date_ | None = None
     category_id: int | None = None
     event_id: int | None = None
@@ -54,15 +57,15 @@ class TransactionPatch(BaseModel):
 class CategoryIn(BaseModel):
     region_id: int
     name: str = Field(min_length=1, max_length=64)
-    type: str
+    type: str = Field(max_length=16)
     emoji: str | None = Field(default=None, max_length=8)
-    keywords: list[str] = Field(default_factory=list, max_length=50)
+    keywords: list[KeywordText] = Field(default_factory=list, max_length=50)
 
 
 class CategoryPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
     emoji: str | None = Field(default=None, max_length=8)
-    keywords: list[str] | None = Field(default=None, max_length=50)
+    keywords: list[KeywordText] | None = Field(default=None, max_length=50)
 
 
 async def _check_category(session: AsyncSession, category_id: int | None, region_id: int) -> None:
@@ -92,8 +95,8 @@ async def _check_cell(session: AsyncSession, cell_id: int | None, region_id: int
 @router.get("/overview")
 async def overview(
     region_id: int,
-    period: str = "month",
-    offset: int = 0,
+    period: str = Query(default="month", max_length=16),
+    offset: int = Query(default=0, ge=-1200, le=1200),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -175,9 +178,9 @@ async def _transaction_rows(
 @router.get("/transactions")
 async def list_transactions(
     region_id: int,
-    period: str = "month",
-    offset: int = 0,
-    type: str | None = None,
+    period: str = Query(default="month", max_length=16),
+    offset: int = Query(default=0, ge=-1200, le=1200),
+    type: str | None = Query(default=None, max_length=16),
     category_id: int | None = None,
     event_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=200),
@@ -399,8 +402,8 @@ async def delete_category(
 @router.get("/export.csv")
 async def export_csv(
     region_id: int,
-    period: str = "year",
-    offset: int = 0,
+    period: str = Query(default="year", max_length=16),
+    offset: int = Query(default=0, ge=-1200, le=1200),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> Response:

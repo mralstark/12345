@@ -18,7 +18,6 @@ from api.serializers import task_dict, user_brief
 from database.models import (
     EVENT_STATUS_CANCELLED,
     EVENT_STATUS_DONE,
-    EVENT_STATUS_LABELS,
     EVENT_STATUS_PLANNED,
     EVENT_TASK_STATUS_LABELS,
     TASK_STATUS_LABELS,
@@ -37,12 +36,14 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 class TaskIn(BaseModel):
     to_user_id: int
     title: str = Field(min_length=2, max_length=255)
-    text: str | None = Field(default=None, max_length=4000)
+    # Карточка целиком должна помещаться в одно сообщение Telegram вместе с
+    # заголовком, исполнителем и кнопками.
+    text: str | None = Field(default=None, max_length=3000)
     deadline: date | None = None
 
 
 class StatusIn(BaseModel):
-    status: str
+    status: str = Field(max_length=16)
 
 
 @router.get("/assignees")

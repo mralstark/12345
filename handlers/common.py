@@ -1,6 +1,7 @@
 """Общее для всех хендлеров бота: получение пользователя и отрисовка главного меню."""
 
-from aiogram.types import CallbackQuery, Message as TgMessage
+from aiogram.types import CallbackQuery
+from aiogram.types import Message as TgMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import ROLE_LEADER, SUPERVISOR_ROLES, User
@@ -10,6 +11,7 @@ from utils.counters import (
     new_tasks_count,
     pending_applications_count,
 )
+from utils.notify import escape_telegram_html
 from utils.roles import role_label
 
 NO_ACCESS_TEXT = (
@@ -31,16 +33,17 @@ async def menu_text(session: AsyncSession, user: User) -> str:
 
     impersonated_by = getattr(user, "_impersonated_by", None)
     if impersonated_by is not None:
-        lines.append(f"👁 Вы ({impersonated_by.full_name}) смотрите как:")
+        lines.append(f"👁 Вы ({escape_telegram_html(impersonated_by.full_name)}) смотрите как:")
 
-    lines.append(f"{user.full_name}")
+    lines.append(escape_telegram_html(user.full_name))
     # У участника роли нет — role_label вернёт None, и строки не будет вовсе.
     role = await role_label(session, user)
     if role:
-        lines.append(f"Роль: {role}")
+        lines.append(f"Роль: {escape_telegram_html(role)}")
 
     if user.role == ROLE_LEADER:
-        lines.append(f"Регион: {regions[0].name if regions else '— не назначен —'}")
+        region_name = regions[0].name if regions else "— не назначен —"
+        lines.append(f"Регион: {escape_telegram_html(region_name)}")
     elif user.role in SUPERVISOR_ROLES:
         lines.append(f"Регионов в ведении: {len(regions)}")
 

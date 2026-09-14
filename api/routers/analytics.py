@@ -1,6 +1,6 @@
 """Сводная аналитика по доступным регионам (ТЗ §12)."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,8 +23,8 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/regions")
 async def regions_dashboard(
-    period: str = "month",
-    offset: int = 0,
+    period: str = Query(default="month", max_length=16),
+    offset: int = Query(default=0, ge=-1200, le=1200),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:

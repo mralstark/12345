@@ -36,6 +36,10 @@ if [[ -z "$EMAIL" ]]; then
     echo "Нужен --email — на него Let's Encrypt пришлёт предупреждение, если сертификат перестанет продлеваться." >&2
     exit 1
 fi
+if [[ ! "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$ ]]; then
+    echo "Некорректный --email" >&2
+    exit 1
+fi
 
 if [[ -z "$DOMAIN" ]]; then
     IP=$(curl -fsS --max-time 10 https://api.ipify.org || hostname -I | awk '{print $1}')
@@ -43,6 +47,10 @@ if [[ -z "$DOMAIN" ]]; then
     # sslip.io резолвит любой поддомен вида что-угодно.1-2-3-4.sslip.io в тот же IP.
     DOMAIN="lk.${IP//./-}.sslip.io"
     echo "Домен не задан — использую $DOMAIN (sslip.io резолвится в $IP)."
+fi
+if [[ ! "$DOMAIN" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]]; then
+    echo "Некорректный --domain: нужен обычный DNS-домен без пути и служебных символов" >&2
+    exit 1
 fi
 
 # Сервер может быть общим с другими проектами — занимать чужой порт нельзя.
@@ -52,6 +60,10 @@ if [[ -z "$PORT" ]]; then
         PORT=$((PORT + 1))
         [[ $PORT -gt 8020 ]] && { echo "Не нашёл свободный порт в диапазоне 8000-8020" >&2; exit 1; }
     done
+fi
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+    echo "Некорректный --port: ожидается число от 1 до 65535" >&2
+    exit 1
 fi
 echo "Порт бэкенда: $PORT"
 
@@ -96,15 +108,13 @@ echo "==> Виртуальное окружение и зависимости"
 chown -R "$APP_USER:$APP_USER" "$VENV"
 sudo -u "$APP_USER" "$VENV/bin/pip" install --quiet --upgrade pip
 REQUIREMENTS="$APP_DIR/requirements.lock"
-[[ -f "$REQUIREMENTS" ]] || REQUIREMENTS="$APP_DIR/requirements.txt"
+[[ -f "$REQUIREMENTS" ]] || { echo "Нет обязательного requirements.lock" >&2; exit 1; }
 # На ARM (Oracle Ampere) готовое колесо есть не для каждой версии пакета —
 # тогда его надо собрать, а для этого нужен компилятор.
-PIP_HASH_ARGS=()
-[[ "$REQUIREMENTS" == *.lock ]] && PIP_HASH_ARGS=(--require-hashes)
-if ! sudo -u "$APP_USER" "$VENV/bin/pip" install --quiet "${PIP_HASH_ARGS[@]}" -r "$REQUIREMENTS"; then
+if ! sudo -u "$APP_USER" "$VENV/bin/pip" install --quiet --require-hashes -r "$REQUIREMENTS"; then
     echo "    не хватило готовых пакетов ($(uname -m)) — ставлю инструменты сборки"
     apt-get install -y -qq build-essential python3-dev libffi-dev
-    sudo -u "$APP_USER" "$VENV/bin/pip" install "${PIP_HASH_ARGS[@]}" -r "$REQUIREMENTS"
+    sudo -u "$APP_USER" "$VENV/bin/pip" install --require-hashes -r "$REQUIREMENTS"
 fi
 
 echo "==> PostgreSQL"

@@ -5,7 +5,7 @@ Telegram ID. Текущий production запускает один процес�
 хранилище или отдельный сервис для счётчиков не требуется.
 """
 
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from time import monotonic
 
 from fastapi import HTTPException, status
@@ -13,13 +13,20 @@ from fastapi import HTTPException, status
 
 class SlidingWindowLimiter:
     def __init__(self, max_keys: int = 20_000) -> None:
-        self._events: dict[tuple[str, int], deque[float]] = defaultdict(deque)
+        if max_keys < 1:
+            raise ValueError("max_keys должен быть положительным")
+        self._events: OrderedDict[tuple[str, int], deque[float]] = OrderedDict()
         self._max_keys = max_keys
 
     def check(self, scope: str, subject: int, limit: int, window_seconds: int) -> int | None:
         now = monotonic()
         key = (scope, subject)
-        events = self._events[key]
+        events = self._events.get(key)
+        if events is None:
+            events = deque()
+            self._events[key] = events
+        else:
+            self._events.move_to_end(key)
         cutoff = now - window_seconds
         while events and events[0] <= cutoff:
             events.popleft()
@@ -27,11 +34,11 @@ class SlidingWindowLimiter:
             return max(1, int(events[0] + window_seconds - now) + 1)
         events.append(now)
 
-        # Не даём словарю бесконечно расти при потоке новых аккаунтов.
+        # Жёсткая граница важнее идеальной точности при распределённой атаке:
+        # поток новых аккаунтов не должен раздувать память процесса. Сначала
+        # удаляем давно неактивные ключи, затем самый старый оставшийся.
         if len(self._events) > self._max_keys:
-            stale = [stored_key for stored_key, values in self._events.items() if not values or values[-1] <= cutoff]
-            for stored_key in stale:
-                self._events.pop(stored_key, None)
+            self._events.popitem(last=False)
         return None
 
 
@@ -58,6 +65,12 @@ def enforce_user_rate_limit(telegram_id: int, method: str, path: str) -> None:
         retry_after = _limiter.check("registration-global", 0, 60, 60)
     if retry_after is None and scope == "upload":
         retry_after = _limiter.check("upload-global", 0, 60, 60)
+    if retry_after is None and scope == "export":
+        retry_after = _limiter.check("export-global", 0, 120, 60)
+    if retry_after is None and scope == "read":
+        retry_after = _limiter.check("read-global", 0, 3_000, 60)
+    if retry_after is None and scope == "write":
+        retry_after = _limiter.check("write-global", 0, 1_200, 60)
     if retry_after is not None:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,

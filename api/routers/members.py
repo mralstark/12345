@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,13 @@ from database.models import (
 )
 from services.admin_actions import exclude_member
 from services.education import academic_year
-from utils.access import accessible_region_ids, actor_cell, require_edit, require_same_cell, require_view
+from utils.access import (
+    accessible_region_ids,
+    actor_cell,
+    require_edit,
+    require_same_cell,
+    require_view,
+)
 from utils.parser import normalize_telegram_username
 from utils.tz import today as tz_today
 from utils.university_cells import resolve_member_cell
@@ -114,7 +120,7 @@ async def _university_name(session: AsyncSession, university_id: int | None) -> 
 
 @router.get("/search")
 async def search_members(
-    q: str,
+    q: str = Query(min_length=1, max_length=128),
     region_id: int | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
@@ -156,8 +162,8 @@ async def search_members(
 @router.get("")
 async def list_members(
     region_id: int,
-    q: str | None = None,
-    status: str | None = None,
+    q: str | None = Query(default=None, max_length=128),
+    status: str | None = Query(default=None, max_length=16),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -175,7 +181,7 @@ async def list_members(
     if status:
         stmt = stmt.where(Member.status == _validate_status(status))
 
-    result = await session.execute(stmt.order_by(Member.full_name))
+    result = await session.execute(stmt.order_by(Member.full_name).limit(1_000))
     rows = list(result.all())
 
     if q:

@@ -3,7 +3,7 @@
 
 import unicodedata
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -22,7 +22,7 @@ def _university_dict(university: University) -> dict:
 
 @router.get("")
 async def search_universities(
-    q: str = "",
+    q: str = Query(default="", max_length=255),
     region_id: int | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
@@ -35,7 +35,7 @@ async def search_universities(
     stmt = select(University).order_by(University.name)
     if region_id is not None:
         stmt = stmt.where(University.region_id == region_id)
-    result = await session.execute(stmt)
+    result = await session.execute(stmt.limit(5_000))
     items = list(result.scalars().all())
 
     # Регистронезависимый поиск считаем в Python: lower() в SQLite не

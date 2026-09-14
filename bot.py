@@ -8,10 +8,16 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import MenuButtonWebApp, WebAppInfo
 
-from config import BOT_PROXY_URL, WEBAPP_URL, require_bot_token, validate_security_config
+from config import (
+    BOT_PROXY_URL,
+    WEBAPP_URL,
+    require_bot_token,
+    validate_security_config,
+)
 from database.db import init_db
 from handlers import apply, fallback, impersonate, start, tasks
 from services.notifier import notifier_loop
+from utils.bot_rate_limit import BotRateLimitMiddleware
 
 
 async def main() -> None:
@@ -30,6 +36,9 @@ async def main() -> None:
     session = AiohttpSession(proxy=BOT_PROXY_URL) if BOT_PROXY_URL else None
     bot = Bot(token=token, session=session)
     dp = Dispatcher()
+    rate_limit = BotRateLimitMiddleware()
+    dp.message.outer_middleware(rate_limit)
+    dp.callback_query.outer_middleware(rate_limit)
 
     # Список команд (/help, /menu и т.п.) — убран совсем, ими не пользовались:
     # то же самое доступно кнопками внутри кабинета. Пустой список явно

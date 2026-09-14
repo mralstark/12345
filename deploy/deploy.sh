@@ -56,6 +56,21 @@ if $BOOTSTRAP && [[ -z "$EMAIL" ]]; then
   echo "--bootstrap требует --email: на этот адрес Let's Encrypt пришлёт предупреждение о непродлённом сертификате."
   exit 1
 fi
+if [[ ! "$SERVER" =~ ^([A-Za-z0-9][A-Za-z0-9._-]*@)?[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ || "$SERVER" == *..* ]]; then
+  echo "Некорректный --server" >&2; exit 1
+fi
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "Некорректный --port" >&2; exit 1
+fi
+if [[ ! "$APP_DIR" =~ ^/[A-Za-z0-9._/-]+$ || "$APP_DIR" =~ /\.\.?(/|$) ]]; then
+  echo "Некорректный --app-dir" >&2; exit 1
+fi
+if [[ -n "$EMAIL" && ! "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$ ]]; then
+  echo "Некорректный --email" >&2; exit 1
+fi
+if [[ -n "$DOMAIN" && ! "$DOMAIN" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]]; then
+  echo "Некорректный --domain" >&2; exit 1
+fi
 
 # На Google Cloud под root не заходят — там обычный пользователь с passwordless sudo.
 REMOTE_PREFIX="sudo "
@@ -154,7 +169,7 @@ if $BOOTSTRAP; then
   remote "bash $APP_DIR/deploy/setup_server.sh $ARGS"
 else
   echo "==> Обновление зависимостей и перезапуск"
-  remote "chown -R bratstvo:bratstvo $APP_DIR; if test -f $APP_DIR/requirements.lock; then sudo -u bratstvo $APP_DIR/.venv/bin/pip install --quiet --require-hashes -r $APP_DIR/requirements.lock; else sudo -u bratstvo $APP_DIR/.venv/bin/pip install --quiet -r $APP_DIR/requirements.txt; fi; cd $APP_DIR; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
+  remote "chown -R bratstvo:bratstvo $APP_DIR; test -f $APP_DIR/requirements.lock; sudo -u bratstvo $APP_DIR/.venv/bin/pip install --quiet --require-hashes -r $APP_DIR/requirements.lock; cd $APP_DIR; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
 fi
 
 echo "Готово."

@@ -59,7 +59,7 @@ class BureauIn(BaseModel):
 
 class BureauPatch(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=120)
-    sort_order: int | None = None
+    sort_order: int | None = Field(default=None, ge=-2_147_483_648, le=2_147_483_647)
 
 
 async def _row_dict(session: AsyncSession, row: BureauMember) -> dict:

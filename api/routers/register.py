@@ -10,7 +10,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -67,14 +67,14 @@ def _university_dict(university: University) -> dict:
 @router.get("/universities")
 async def register_universities(
     region_id: int,
-    q: str = "",
+    q: str = Query(default="", max_length=255),
     identity: TelegramIdentity = Depends(get_telegram_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Строго внутри выбранного отделения — до выбора региона список вузов не
     отдаём вовсе (план §3): человек из Новосибирска не должен увидеть МГИМО."""
     stmt = select(University).where(University.region_id == region_id).order_by(University.name)
-    items = list((await session.execute(stmt)).scalars().all())
+    items = list((await session.execute(stmt.limit(5_000))).scalars().all())
     needle = q.strip().lower()
     if needle:
         items = [u for u in items if needle in u.name.lower()]
@@ -123,11 +123,11 @@ class RegisterSubmit(BaseModel):
     workplace: str | None = Field(default=None, max_length=255)
     # Обязательно, только если НЕ «Окончил» — раз человек больше не учится,
     # уровень обучения теряет смысл (webapp/app.js скрывает поле в этом случае).
-    education_level: str | None = None
+    education_level: str | None = Field(default=None, max_length=32)
     # Человек выбирает сам, в самом конце анкеты — раньше руководитель
     # выставлял «активиста» по умолчанию при одобрении, это изменено:
     # от статуса зависят вкладки личного кабинета на будущих этапах.
-    status: str
+    status: str = Field(max_length=16)
 
 
 @router.post("/submit")

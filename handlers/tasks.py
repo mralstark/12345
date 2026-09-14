@@ -4,7 +4,12 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from sqlalchemy import select
 
 from database.db import async_session
@@ -17,8 +22,15 @@ from database.models import (
 )
 from handlers.common import NO_ACCESS_TEXT, show_main_menu
 from keyboards.main_menu import back_to_menu_keyboard
-from services.tasks import change_status, create_task, delete_task, effective_status, mark_read
+from services.tasks import (
+    change_status,
+    create_task,
+    delete_task,
+    effective_status,
+    mark_read,
+)
 from utils.access import AccessDenied, correspondents
+from utils.notify import escape_telegram_html
 from utils.parser import format_date_ru, parse_deadline
 from utils.tz import today
 from utils.users import resolve_user
@@ -139,16 +151,16 @@ async def task_open(callback: CallbackQuery) -> None:
 
     status = effective_status(task)
     lines = [
-        f"{STATUS_ICONS.get(status, '•')} <b>{task.title}</b>",
+        f"{STATUS_ICONS.get(status, '•')} <b>{escape_telegram_html(task.title)}</b>",
         "",
-        f"Постановщик: {author.full_name if author else '—'}",
-        f"Исполнитель: {assignee.full_name if assignee else '—'}",
+        f"Постановщик: {escape_telegram_html(author.full_name if author else '—')}",
+        f"Исполнитель: {escape_telegram_html(assignee.full_name if assignee else '—')}",
         f"Статус: <b>{TASK_STATUS_LABELS[status]}</b>",
     ]
     if task.deadline:
         lines.append(f"Срок: {format_date_ru(task.deadline)}")
     if task.text:
-        lines.extend(["", task.text])
+        lines.extend(["", escape_telegram_html(task.text)])
 
     buttons: list[list[InlineKeyboardButton]] = []
     if task.to_user_id == user.id and task.status in ("new", "in_progress"):
@@ -283,7 +295,7 @@ async def task_take_title(message: Message, state: FSMContext) -> None:
         await message.answer("Название пустое — напишите текст задачи.")
         return
 
-    await state.update_data(title=lines[0].strip()[:255], body="\n".join(lines[1:]).strip())
+    await state.update_data(title=lines[0].strip()[:255], body="\n".join(lines[1:]).strip()[:3000])
     await state.set_state(TaskStates.waiting_deadline)
     await message.answer(
         "🗓 Укажите срок: <code>31.12</code>, <code>31.12.2026</code> или <code>завтра</code>.\n"

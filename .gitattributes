@@ -1,0 +1,9 @@
+* text=auto
+
+# Сценарии отправляются на Linux прямо из рабочей копии Windows. CRLF ломает
+# shebang и отдельные конструкции Bash, поэтому их окончание строк фиксировано.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ps1 text eol=crlf
+requirements*.lock text eol=lf

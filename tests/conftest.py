@@ -15,6 +15,9 @@ if TEST_DB.exists():
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB.as_posix()}"
 os.environ["BOT_TOKEN"] = "123456:TEST-TOKEN-FOR-TESTS"
 os.environ["STORAGE_DIR"] = str(Path(tempfile.gettempdir()) / "bratstvo_test_storage")
+# Проверки квоты тестируются отдельно. Общий набор не должен зависеть от того,
+# сколько свободного места осталось на диске, где ОС хранит временные файлы.
+os.environ["MIN_FREE_STORAGE_MB"] = "0"
 os.environ["SUPERUSER_TELEGRAM_IDS"] = ""
 os.environ["AUTO_FEDERAL_TELEGRAM_IDS"] = ""
 os.environ.pop("DEV_TELEGRAM_ID", None)
@@ -23,7 +26,11 @@ import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
-from api.auth import TelegramIdentity, get_current_user, get_telegram_identity  # noqa: E402
+from api.auth import (  # noqa: E402
+    TelegramIdentity,
+    get_current_user,
+    get_telegram_identity,
+)
 from api.main import app  # noqa: E402
 from database.db import async_session, engine  # noqa: E402
 from database.models import (  # noqa: E402

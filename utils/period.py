@@ -28,6 +28,8 @@ def semester_bounds(year: int, semester: int) -> tuple[date, date]:
 def resolve_period(kind: str, offset: int = 0, today: date | None = None) -> tuple[date, date, str]:
     """Границы отчётного периода и его человекочитаемое название.
     offset — смещение назад в периодах: 0 — текущий, -1 — предыдущий."""
+    if offset < -1200 or offset > 1200:
+        raise ValueError("Смещение периода должно быть от -1200 до 1200")
     today = today or tz_today()
 
     if kind == "month":

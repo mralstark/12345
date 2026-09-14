@@ -46,15 +46,15 @@ class EventTaskIn(BaseModel):
     # быть несколько, и было непонятно, с кого спрашивать; в боевой базе,
     # впрочем, ни у одной задачи двоих так и не оказалось.
     assignee_member_id: int | None = None
-    position: int = 0
+    position: int = Field(default=0, ge=-2_147_483_648, le=2_147_483_647)
 
 
 class EventTaskPatch(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=255)
     due_date: date_ | None = None
-    status: str | None = None
+    status: str | None = Field(default=None, max_length=16)
     assignee_member_id: int | None = None
-    position: int | None = None
+    position: int | None = Field(default=None, ge=-2_147_483_648, le=2_147_483_647)
 
 
 async def _get_event(session: AsyncSession, event_id: int) -> Event:

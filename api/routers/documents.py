@@ -128,7 +128,7 @@ async def list_documents(
     if event_id is not None:
         stmt = stmt.where(Document.event_id == event_id)
 
-    result = await session.execute(stmt.order_by(Document.created_at.desc()))
+    result = await session.execute(stmt.order_by(Document.created_at.desc()).limit(1_000))
     return {
         "items": [
             document_dict(document, author_name=author, event_title=event_title)
@@ -140,8 +140,8 @@ async def list_documents(
 @router.post("")
 async def upload_document(
     region_id: int = Form(...),
-    title: str = Form(...),
-    doc_type: str | None = Form(default=None),
+    title: str = Form(..., min_length=1, max_length=255),
+    doc_type: str | None = Form(default=None, max_length=32),
     event_id: int | None = Form(default=None),
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),

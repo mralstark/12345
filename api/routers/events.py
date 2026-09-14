@@ -3,7 +3,7 @@
 from datetime import date as date_
 from datetime import time as time_
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,10 +41,10 @@ class EventIn(BaseModel):
     time: time_ | None = None
     description: str = Field(min_length=1, max_length=4000)
     responsible_member_id: int | None = None
-    status: str = "planned"
-    planned_budget: int | None = Field(default=None, ge=0, description="Копейки")
+    status: str = Field(default="planned", max_length=16)
+    planned_budget: int | None = Field(default=None, ge=0, le=2_147_483_647, description="Копейки")
     is_recurring: bool = False
-    recurrence_rule: str | None = None
+    recurrence_rule: str | None = Field(default=None, max_length=16)
     recurrence_until: date_ | None = None
 
 
@@ -55,10 +55,10 @@ class EventPatch(BaseModel):
     time: time_ | None = None
     description: str | None = Field(default=None, max_length=4000)
     responsible_member_id: int | None = None
-    status: str | None = None
-    planned_budget: int | None = Field(default=None, ge=0)
+    status: str | None = Field(default=None, max_length=16)
+    planned_budget: int | None = Field(default=None, ge=0, le=2_147_483_647)
     is_recurring: bool | None = None
-    recurrence_rule: str | None = None
+    recurrence_rule: str | None = Field(default=None, max_length=16)
     recurrence_until: date_ | None = None
 
 
@@ -104,8 +104,8 @@ def _scope_filter(stmt, scope: str, today: date_):
 @router.get("")
 async def list_events(
     region_id: int,
-    scope: str = "upcoming",
-    status: str | None = None,
+    scope: str = Query(default="upcoming", max_length=16),
+    status: str | None = Query(default=None, max_length=16),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -133,7 +133,7 @@ async def list_events(
 
 @router.get("/mine")
 async def list_my_events(
-    scope: str = "upcoming",
+    scope: str = Query(default="upcoming", max_length=16),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:

@@ -97,11 +97,17 @@ async def list_news(
                 select(NewsPhoto).where(NewsPhoto.post_id == post.id).order_by(NewsPhoto.sort_order, NewsPhoto.id)
             )
         ).scalars().all()
-        comments = (
-            await session.execute(
-                select(NewsComment).where(NewsComment.post_id == post.id).order_by(NewsComment.created_at, NewsComment.id)
-            )
-        ).scalars().all()
+        comments = []
+        if COMMENTS_OPEN:
+            newest_comments = (
+                await session.execute(
+                    select(NewsComment)
+                    .where(NewsComment.post_id == post.id)
+                    .order_by(NewsComment.created_at.desc(), NewsComment.id.desc())
+                    .limit(100)
+                )
+            ).scalars().all()
+            comments = list(reversed(newest_comments))
 
         comment_items = []
         for comment in comments:

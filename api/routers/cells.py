@@ -40,7 +40,7 @@ class CellPatch(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=128)
     genitive_name: str | None = Field(default=None, max_length=128)
     vk_url: str | None = Field(default=None, max_length=255)
-    allocated_budget: int | None = Field(default=None, ge=0)
+    allocated_budget: int | None = Field(default=None, ge=0, le=2_147_483_647)
 
     @field_validator("vk_url")
     @classmethod
@@ -243,7 +243,7 @@ async def assign_cell_leader(
     """Назначает руководителя ячейки — доступно руководителю региона (и
     superuser на переходный период), не координатору/федеральному: та же
     граница, что раньше проверялась в handlers/create_account.py."""
-    cell = await _cell_leader_target(session, user, cell_id)
+    await _cell_leader_target(session, user, cell_id)
 
     try:
         target = await create_cell_leader(session, cell_id, member_id=payload.member_id)
