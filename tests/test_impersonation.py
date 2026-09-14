@@ -1,5 +1,4 @@
-"""«Войти как» (utils/users.py) — доступно и superuser, и federal
-(IMPERSONATOR_ROLES, план «Убираем технического superuser»). Проверяем ровно
+"""«Войти как» (utils/users.py) — диагностический режим superuser. Проверяем
 то, что легко сломать незаметно: подмену идентичности через единую точку
 входа resolve_user, запреты (нельзя войти как другой superuser/
 несуществующего/отключённого), и что выход по-настоящему сохраняется, а не
@@ -44,14 +43,9 @@ async def test_stop_impersonation_restores_own_identity(session, world):
     assert getattr(resolved, "_impersonated_by", None) is None
 
 
-async def test_federal_can_also_impersonate(session, world):
-    federal = world["federal"]
-    target = await start_impersonation(session, federal, world["leader_tula"].id)
-    assert target.id == world["leader_tula"].id
-
-    resolved = await resolve_user(session, federal.telegram_id)
-    assert resolved.id == world["leader_tula"].id
-    assert resolved._impersonated_by.id == federal.id
+async def test_federal_cannot_impersonate(session, world):
+    with pytest.raises(ValueError, match="superuser"):
+        await start_impersonation(session, world["federal"], world["leader_tula"].id)
 
 
 async def test_cannot_impersonate_another_superuser(session, world):
@@ -97,7 +91,7 @@ async def test_impersonation_candidates_group_participants_by_status(session, wo
     assert context == world["moscow"].name
 
 
-async def test_federal_can_impersonate_ordinary_participant(session, world):
+async def test_superuser_can_impersonate_ordinary_participant(session, world):
     member = Member(region_id=world["moscow"].id, full_name="Участник Обычный", status=MEMBER_STATUS_ACTIVIST)
     session.add(member)
     await session.flush()
@@ -105,11 +99,11 @@ async def test_federal_can_impersonate_ordinary_participant(session, world):
     session.add(participant)
     await session.commit()
 
-    federal = world["federal"]
-    target = await start_impersonation(session, federal, participant.id)
+    superuser = world["superuser"]
+    target = await start_impersonation(session, superuser, participant.id)
     assert target.id == participant.id
 
-    resolved = await resolve_user(session, federal.telegram_id)
+    resolved = await resolve_user(session, superuser.telegram_id)
     assert resolved.id == participant.id
 
 

@@ -7,7 +7,6 @@ from config import SUPERUSER_TELEGRAM_IDS
 from database.models import (
     ROLE_CELL_LEADER,
     ROLE_COORDINATOR,
-    ROLE_FEDERAL,
     ROLE_LEADER,
     ROLE_PARTICIPANT,
     ROLE_SUPERUSER,
@@ -19,10 +18,10 @@ from database.models import (
 )
 from utils.tz import now
 
-# Кто вправе «войти как» — раньше только технический superuser, теперь и
-# федеральные координаторы (план «Убираем технического superuser», админ-
-# доступ отдаётся конкретным доверенным людям вместо одного техаккаунта).
-IMPERSONATOR_ROLES = (ROLE_SUPERUSER, ROLE_FEDERAL)
+# «Войти как» — диагностическая возможность технического superuser. Federal
+# имеет широкий обзор, но не права записи; подмена его объектом руководителя
+# незаметно повышала полномочия до роли цели.
+IMPERSONATOR_ROLES = (ROLE_SUPERUSER,)
 
 
 async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | None:
@@ -146,6 +145,8 @@ async def start_impersonation(session: AsyncSession, superuser: User, target_use
     """Включает режим «войти как». Возвращает цель — или бросает ValueError,
     если id не существует / неактивен / указывает на другого superuser'а
     (входить «как superuser» бессмысленно — им и так является сам вызывающий)."""
+    if superuser.role not in IMPERSONATOR_ROLES:
+        raise ValueError("Режим «Войти как» доступен только техническому superuser")
     target = await session.get(User, target_user_id)
     if target is None or not target.is_active:
         raise ValueError("Пользователь не найден или отключён")

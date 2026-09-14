@@ -315,7 +315,7 @@ async def photo(
         path,
         media_type=item.content_type or "image/jpeg",
         filename=item.original_name,
-        headers={"Cache-Control": "private, max-age=3600"},
+        headers={"Cache-Control": "private, max-age=900", "X-Content-Type-Options": "nosniff"},
     )
 
 

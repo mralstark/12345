@@ -226,11 +226,10 @@ async def test_submit_rejects_when_already_has_account(client, session, world):
     assert response.status_code == 409
 
 
-async def test_submit_auto_approves_and_promotes_allowlisted_name(client, session, world, monkeypatch):
-    """Доверенные люди-администраторы (config.AUTO_FEDERAL_FULL_NAMES, план
-    «Убираем технического superuser») — анкету подтверждает сама регистрация,
-    без ожидания руководителя, и сразу выдаёт роль federal."""
-    monkeypatch.setattr(register_module, "AUTO_FEDERAL_FULL_NAMES", {"тестов админ админович"})
+async def test_submit_auto_approves_and_promotes_allowlisted_telegram_id(client, session, world, monkeypatch):
+    """Админское доверие связано с Telegram ID из подписанного initData,
+    а не с ФИО, которое заявитель заполняет самостоятельно."""
+    monkeypatch.setattr(register_module, "AUTO_FEDERAL_TELEGRAM_IDS", {999010})
     university = await _moscow_university(session, world)
 
     login_as_identity(999010, "Тестов Админ Админович")
@@ -260,3 +259,55 @@ async def test_submit_auto_approves_and_promotes_allowlisted_name(client, sessio
     ).scalar_one()
     assert application.state == APPLICATION_STATE_APPROVED
     assert application.reviewed_by_user_id is None
+
+
+async def test_trusted_name_does_not_grant_federal_role(client, session, world, monkeypatch):
+    monkeypatch.setattr(register_module, "AUTO_FEDERAL_TELEGRAM_IDS", {777777})
+    university = await _moscow_university(session, world)
+    login_as_identity(999011, "Тестов Админ Админович")
+
+    response = await client.post(
+        "/api/register/submit",
+        json={
+            "full_name": "Тестов Админ Админович",
+            "birth_date": "01.01.1990",
+            "phone": "+7 900",
+            "telegram_username": "@admin2",
+            "region_id": world["moscow"].id,
+            "university_id": university.id,
+            "faculty": "Юридический",
+            "course": 1,
+            "education_level": "bachelor",
+            "status": "activist",
+        },
+    )
+    assert response.status_code == 200
+    application = (
+        await session.execute(select(MembershipApplication).where(MembershipApplication.telegram_id == 999011))
+    ).scalar_one()
+    assert application.state == APPLICATION_STATE_PENDING
+
+
+async def test_submit_rejects_university_from_another_region(client, session, world):
+    university = University(name="Тульский вуз", region_id=world["tula"].id)
+    session.add(university)
+    await session.commit()
+    login_as_identity(999012)
+
+    response = await client.post(
+        "/api/register/submit",
+        json={
+            "full_name": "Проверяемый Пользователь",
+            "birth_date": "01.01.2000",
+            "phone": "+7 900",
+            "telegram_username": "@checked",
+            "region_id": world["moscow"].id,
+            "university_id": university.id,
+            "faculty": "Юридический",
+            "course": 1,
+            "education_level": "bachelor",
+            "status": "activist",
+        },
+    )
+    assert response.status_code == 400
+    assert "не принадлежит" in response.json()["detail"]

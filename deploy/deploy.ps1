@@ -63,7 +63,7 @@ if ($Bootstrap) {
 }
 else {
     Write-Host "==> Обновление зависимостей и перезапуск" -ForegroundColor Cyan
-    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; $AppDir/.venv/bin/pip install --quiet -r $AppDir/requirements.txt; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
+    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; if [ -f $AppDir/requirements.lock ]; then req=$AppDir/requirements.lock; else req=$AppDir/requirements.txt; fi; $AppDir/.venv/bin/pip install --quiet -r `$req; cd $AppDir; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
 }
 
 Remove-Item $archive -Force

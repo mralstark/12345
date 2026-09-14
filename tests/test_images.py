@@ -10,7 +10,7 @@ import io
 import pytest
 from PIL import Image
 
-from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, shrink, suffix_for
+from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, InvalidImageError, shrink, suffix_for
 from services.news import PHOTO_LIMIT
 from tests.conftest import login
 
@@ -140,14 +140,10 @@ def test_real_animation_is_left_alone():
     assert content_type == "image/gif"
 
 
-def test_broken_file_is_stored_as_is():
-    """Непонятный файл — не повод уронить публикацию: лучше тяжёлая
-    фотография, чем несохранённая."""
+def test_broken_file_is_rejected():
     broken = b"\x00\x01 not an image at all"
-    out, content_type = shrink(broken, PHOTO_MAX_SIDE)
-
-    assert out == broken
-    assert content_type == ""
+    with pytest.raises(InvalidImageError):
+        shrink(broken, PHOTO_MAX_SIDE)
 
 
 @pytest.mark.parametrize(

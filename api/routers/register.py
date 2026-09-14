@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import TelegramIdentity, get_db, get_telegram_identity
-from config import AUTO_FEDERAL_FULL_NAMES, PRIMARY_REVIEWER_FULL_NAME
+from config import AUTO_FEDERAL_TELEGRAM_IDS, PRIMARY_REVIEWER_FULL_NAME
 from database.models import (
     APPLICATION_STATE_PENDING,
     EDUCATION_LEVEL_LABELS,
@@ -151,6 +151,9 @@ async def register_submit(
     region = await session.get(Region, payload.region_id)
     if region is None or not region.is_active:
         raise HTTPException(400, "Отделение не найдено")
+    university = await session.get(University, payload.university_id)
+    if university is None or university.region_id != region.id:
+        raise HTTPException(400, "ВУЗ не принадлежит выбранному отделению")
 
     # Строго ДД.ММ.ГГГГ с годом — в отличие от utils/parser.py::parse_date_hint
     # (тот для быстрого ввода в чате и год не требует), у формальной анкеты
@@ -207,9 +210,9 @@ async def register_submit(
     await session.commit()
     await session.refresh(application)
 
-    if payload.full_name.strip().lower() in AUTO_FEDERAL_FULL_NAMES:
+    if identity.telegram_id in AUTO_FEDERAL_TELEGRAM_IDS:
         # Доверенные люди-администраторы (план «Убираем технического
-        # superuser», config.AUTO_FEDERAL_FULL_NAMES) — анкету подтверждает
+        # superuser», config.AUTO_FEDERAL_TELEGRAM_IDS) — анкету подтверждает
         # не руководитель, а сама регистрация, и сразу выдаёт роль federal
         # (member_id уже проставлен approve_application — _resolve_or_promote
         # повышает роль на месте, не создавая второй аккаунт).
@@ -223,7 +226,6 @@ async def register_submit(
         )
         return {"ok": True}
 
-    university = await session.get(University, payload.university_id)
     summary_lines = [
         f"ФИО: {application.full_name}",
         f"Телефон: {application.phone}",

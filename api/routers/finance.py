@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
 from api.serializers import category_dict, transaction_dict
-from database.models import Category, Event, Keyword, Transaction, User
+from database.models import Category, Event, Keyword, Transaction, UniversityCell, User
 from services.finance import create_transaction, ensure_default_categories, region_categories
 from utils.access import actor_cell, require_edit, require_same_cell, require_view
 from utils.balance_calc import get_balance, get_category_breakdown, get_cell_totals, get_totals
@@ -70,6 +70,14 @@ async def _check_event(session: AsyncSession, event_id: int | None, region_id: i
     event = await session.get(Event, event_id)
     if event is None or event.region_id != region_id:
         raise HTTPException(400, "Мероприятие не принадлежит этому региону")
+
+
+async def _check_cell(session: AsyncSession, cell_id: int | None, region_id: int) -> None:
+    if cell_id is None:
+        return
+    cell = await session.get(UniversityCell, cell_id)
+    if cell is None or cell.region_id != region_id or not cell.is_active:
+        raise HTTPException(400, "Ячейка не принадлежит этому региону")
 
 
 @router.get("/overview")
@@ -207,6 +215,7 @@ async def add_transaction(
     cell = await actor_cell(session, user)
     # Сервер не доверяет cell_id от клиента, если пишет руководитель ячейки.
     cell_id = cell.id if cell is not None else payload.cell_id
+    await _check_cell(session, cell_id, payload.region_id)
 
     transaction = await create_transaction(
         session,
@@ -246,6 +255,8 @@ async def edit_transaction(
         await _check_category(session, data["category_id"], transaction.region_id)
     if "event_id" in data:
         await _check_event(session, data["event_id"], transaction.region_id)
+    if "cell_id" in data:
+        await _check_cell(session, data["cell_id"], transaction.region_id)
 
     for field, value in data.items():
         setattr(transaction, field, value)

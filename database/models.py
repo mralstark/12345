@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    CheckConstraint,
     ForeignKey,
     Integer,
     String,
@@ -273,6 +274,7 @@ class Member(Base):
     своего telegram_id и входа в кабинет у него в волне 1 нет (ТЗ §18)."""
 
     __tablename__ = "members"
+    __table_args__ = (CheckConstraint("stars >= 0", name="ck_members_stars_nonnegative"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)
@@ -883,6 +885,7 @@ class ShopPurchase(Base):
     отдают очно, fulfilled выставляет руководитель после выдачи."""
 
     __tablename__ = "shop_purchases"
+    __table_args__ = (UniqueConstraint("member_id", "item_id", name="uq_shop_purchase_member_item"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id"), index=True)

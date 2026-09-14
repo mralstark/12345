@@ -1,7 +1,10 @@
 """Сквозные проверки API Mini App: каждый модуль ТЗ по разу, плюс отказы в доступе."""
 
+import io
+import zipfile
 from datetime import timedelta
 
+from PIL import Image
 from sqlalchemy import select
 
 from config import STORAGE_DIR
@@ -16,6 +19,36 @@ from database.models import (
 from services.images import PHOTO_MAX_SIDE
 from tests.conftest import login
 from utils.tz import today as tz_today
+
+
+def _tiny_jpeg() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (16, 16), "white").save(buffer, "JPEG")
+    return buffer.getvalue()
+
+
+def _docx(extra_name: str | None = None, extra_payload: bytes = b"") -> bytes:
+    buffer = io.BytesIO()
+    mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", f'<Types><Override ContentType="{mime}"/></Types>')
+        archive.writestr("word/document.xml", "<document/>")
+        if extra_name:
+            archive.writestr(extra_name, extra_payload)
+    return buffer.getvalue()
+
+
+async def test_security_headers_are_applied(client):
+    response = await client.get("/healthz")
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert "default-src 'self'" in response.headers["content-security-policy"]
+
+
+async def test_untrusted_host_is_rejected(client):
+    response = await client.get("/healthz", headers={"Host": "attacker.example"})
+    assert response.status_code == 400
 
 
 async def test_me_lists_only_accessible_regions(client, world):
@@ -150,6 +183,25 @@ async def test_finance_flow_and_balance(client, world):
     assert "Бумага" in csv.content.decode("utf-8")
 
 
+async def test_finance_rejects_cell_from_another_region(client, session, world):
+    foreign_cell = UniversityCell(region_id=world["tula"].id, name="Тульская ячейка")
+    session.add(foreign_cell)
+    await session.commit()
+    await session.refresh(foreign_cell)
+
+    login(world["leader_moscow"])
+    response = await client.post(
+        "/api/finance/transactions",
+        json={
+            "region_id": world["moscow"].id,
+            "amount": 1000,
+            "type": "income",
+            "cell_id": foreign_cell.id,
+        },
+    )
+    assert response.status_code == 400
+
+
 async def test_coordinator_sees_finance_read_only(client, world):
     login(world["leader_moscow"])
     region_id = world["moscow"].id
@@ -253,6 +305,45 @@ async def test_documents_upload_and_download(client, world):
     login(world["coordinator"])
     assert (await client.get(f"/api/documents?region_id={region_id}")).status_code == 200
     assert (await client.delete(f"/api/documents/{document_id}")).status_code == 403
+
+
+async def test_documents_reject_spoofed_or_executable_upload(client, world):
+    login(world["leader_moscow"])
+    region_id = world["moscow"].id
+
+    fake_pdf = await client.post(
+        "/api/documents",
+        data={"region_id": str(region_id), "title": "Не PDF"},
+        files={"file": ("report.pdf", b"MZ executable", "application/pdf")},
+    )
+    assert fake_pdf.status_code == 400
+
+    executable = await client.post(
+        "/api/documents",
+        data={"region_id": str(region_id), "title": "Программа"},
+        files={"file": ("run.exe", b"MZ executable", "application/octet-stream")},
+    )
+    assert executable.status_code == 400
+
+
+async def test_documents_reject_active_office_content(client, world):
+    login(world["leader_moscow"])
+    data = {"region_id": str(world["moscow"].id), "title": "Опасный документ"}
+
+    macro = await client.post(
+        "/api/documents",
+        data=data,
+        files={"file": ("report.docx", _docx("word/vbaProject.bin", b"macro"), "application/octet-stream")},
+    )
+    assert macro.status_code == 400
+
+    relation = b'<Relationships><Relationship TargetMode="External" Target="https://example.test"/></Relationships>'
+    external = await client.post(
+        "/api/documents",
+        data=data,
+        files={"file": ("report.docx", _docx("word/_rels/document.xml.rels", relation), "application/octet-stream")},
+    )
+    assert external.status_code == 400
 
 
 async def test_task_lifecycle(client, world):
@@ -456,7 +547,7 @@ async def test_news_photo_needs_signed_link(client, world, session):
     created = await client.post(
         "/api/news",
         data={"text": "Снимки со сбора"},
-        files=[("files", ("photo.jpg", b"\xff\xd8\xff-fake-jpeg", "image/jpeg"))],
+        files=[("files", ("photo.jpg", _tiny_jpeg(), "image/jpeg"))],
     )
     assert created.json()["photos"] == 1
 
@@ -478,7 +569,7 @@ async def test_photo_link_is_stable_between_renders(client, world, session):
     await client.post(
         "/api/news",
         data={"text": "Снимки со сбора"},
-        files=[("files", ("photo.jpg", b"\xff\xd8\xff-fake-jpeg", "image/jpeg"))],
+        files=[("files", ("photo.jpg", _tiny_jpeg(), "image/jpeg"))],
     )
 
     first = (await client.get("/api/news")).json()["items"][0]
@@ -555,7 +646,7 @@ async def test_slow_photo_processing_does_not_block_other_requests(client, world
     upload = _asyncio.ensure_future(client.post(
         "/api/news",
         data={"text": "Снимок"},
-        files=[("files", ("photo.jpg", b"\xff\xd8\xff-fake-jpeg", "image/jpeg"))],
+        files=[("files", ("photo.jpg", _tiny_jpeg(), "image/jpeg"))],
     ))
     await _asyncio.wait_for(ping_until(upload), timeout=10)
     response = await upload
@@ -572,6 +663,16 @@ async def test_news_rejects_non_image_upload(client, world):
         "/api/news",
         data={"text": "С документом"},
         files=[("files", ("smeta.pdf", b"%PDF-1.4 fake", "application/pdf"))],
+    )
+    assert resp.status_code == 400
+
+
+async def test_news_rejects_spoofed_image_content_type(client, world):
+    login(world["leader_moscow"])
+    resp = await client.post(
+        "/api/news",
+        data={"text": "Замаскированный файл"},
+        files=[("files", ("photo.jpg", b"%PDF-1.4 fake", "image/jpeg"))],
     )
     assert resp.status_code == 400
     assert "изображени" in resp.json()["detail"]
@@ -870,7 +971,7 @@ async def test_own_avatar_is_signed_and_shows_in_profile(client, world, session)
 
     uploaded = await client.post(
         "/api/profile/me/avatar",
-        files={"file": ("me.jpg", b"\xff\xd8\xff-fake-jpeg", "image/jpeg")},
+        files={"file": ("me.jpg", _tiny_jpeg(), "image/jpeg")},
     )
     assert uploaded.status_code == 200
     assert "?t=" in uploaded.json()["avatar"]

@@ -97,10 +97,13 @@ _OUTFIT_BY_QUEST_TITLE = {
 }
 
 
-async def _own_member(user: User, session: AsyncSession) -> Member:
+async def _own_member(user: User, session: AsyncSession, *, lock: bool = False) -> Member:
     if user.member_id is None:
         raise HTTPException(404, "У этого аккаунта нет личного кабинета — он не привязан к «Составу»")
-    member = await session.get(Member, user.member_id)
+    stmt = select(Member).where(Member.id == user.member_id)
+    if lock:
+        stmt = stmt.with_for_update()
+    member = (await session.execute(stmt)).scalar_one_or_none()
     if member is None:
         raise HTTPException(404, "Запись в составе не найдена")
     return member
@@ -274,7 +277,7 @@ async def update_avatar(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    member = await _own_member(user, session)
+    member = await _own_member(user, session, lock=True)
     if payload.outfit not in _ALL_OUTFIT_IDS:
         raise HTTPException(400, "Неизвестный образ")
 
@@ -294,7 +297,7 @@ async def claim_quest_stars(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    member = await _own_member(user, session)
+    member = await _own_member(user, session, lock=True)
     quest = await session.get(Quest, quest_id)
     if quest is None:
         raise HTTPException(404, "Задание не найдено")
@@ -305,7 +308,7 @@ async def claim_quest_stars(
         await session.execute(
             select(MemberQuestProgress).where(
                 MemberQuestProgress.member_id == member.id, MemberQuestProgress.quest_id == quest_id
-            )
+            ).with_for_update()
         )
     ).scalar_one_or_none()
     if row is None:

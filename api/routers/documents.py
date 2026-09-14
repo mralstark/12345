@@ -2,6 +2,8 @@
 
 import re
 import uuid
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -18,6 +20,17 @@ from utils.access import require_edit, require_view
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 _SAFE_NAME_RE = re.compile(r"[^\w.\- ]", re.UNICODE)
+_CHUNK_SIZE = 1024 * 1024
+_ZIP_MAX_FILES = 2_000
+_ZIP_MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+_OFFICE_TYPES = {
+    ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "word/"),
+    ".xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xl/"),
+    ".pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "ppt/"),
+}
+_TEXT_TYPES = {".txt": "text/plain", ".csv": "text/csv"}
+_OFFICE_ACTIVE_PARTS = ("vbaproject.bin", "/embeddings/", "/activex/", "/externallinks/")
+_EXTERNAL_RELATION_RE = re.compile(rb"\bTargetMode\s*=\s*['\"]External['\"]", re.IGNORECASE)
 
 
 def _safe_original_name(name: str) -> str:
@@ -25,6 +38,75 @@ def _safe_original_name(name: str) -> str:
     выйти из каталога хранения. Само хранимое имя всё равно генерируется заново."""
     cleaned = _SAFE_NAME_RE.sub("_", Path(name).name).strip()
     return cleaned[:255] or "file"
+
+
+async def _read_limited(upload: UploadFile) -> bytes:
+    chunks: list[bytes] = []
+    size = 0
+    while chunk := await upload.read(_CHUNK_SIZE):
+        size += len(chunk)
+        if size > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, f"Файл больше допустимых {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ")
+        chunks.append(chunk)
+    if not chunks:
+        raise HTTPException(400, "Пустой файл")
+    return b"".join(chunks)
+
+
+def _validated_document(payload: bytes, original_name: str) -> tuple[str, str]:
+    """Возвращает серверный MIME и каноническое расширение. Content-Type от
+    клиента не используется: его может указать атакующий."""
+    suffix = Path(original_name).suffix.lower()
+    if suffix == ".pdf":
+        if not payload.startswith(b"%PDF-") or b"%%EOF" not in payload[-4096:]:
+            raise HTTPException(400, "Файл не является корректным PDF")
+        return "application/pdf", suffix
+
+    if suffix in _TEXT_TYPES:
+        if b"\x00" in payload:
+            raise HTTPException(400, "Текстовый файл содержит двоичные данные")
+        try:
+            payload.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                payload.decode("cp1251")
+            except UnicodeDecodeError as exc:
+                raise HTTPException(400, "Не удалось определить кодировку текста") from exc
+        return _TEXT_TYPES[suffix], suffix
+
+    if suffix in _OFFICE_TYPES:
+        try:
+            with zipfile.ZipFile(BytesIO(payload)) as archive:
+                entries = archive.infolist()
+                if len(entries) > _ZIP_MAX_FILES:
+                    raise HTTPException(400, "Слишком много файлов внутри документа")
+                if sum(item.file_size for item in entries) > _ZIP_MAX_UNCOMPRESSED_BYTES:
+                    raise HTTPException(400, "Слишком большой распакованный документ")
+                if any(item.flag_bits & 1 for item in entries):
+                    raise HTTPException(400, "Зашифрованные Office-документы не поддерживаются")
+                names = {item.filename.replace("\\", "/") for item in entries}
+                lowered_names = {name.lower() for name in names}
+                if any("\\" in item.filename for item in entries) or any(
+                    name.startswith("/") or "../" in f"/{name}" for name in names
+                ):
+                    raise HTTPException(400, "Некорректные пути внутри Office-документа")
+                if any(part in name for name in lowered_names for part in _OFFICE_ACTIVE_PARTS):
+                    raise HTTPException(400, "Office-документы с активным содержимым не поддерживаются")
+                if "[Content_Types].xml" not in names:
+                    raise HTTPException(400, "Некорректная структура Office-документа")
+                expected_mime, required_prefix = _OFFICE_TYPES[suffix]
+                if not any(name.startswith(required_prefix) for name in names):
+                    raise HTTPException(400, "Расширение не соответствует содержимому документа")
+                if expected_mime.encode() not in archive.read("[Content_Types].xml"):
+                    raise HTTPException(400, "Расширение не соответствует типу Office-документа")
+                for name in names:
+                    if name.lower().endswith(".rels") and _EXTERNAL_RELATION_RE.search(archive.read(name)):
+                        raise HTTPException(400, "Внешние связи в Office-документах не поддерживаются")
+        except (zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+            raise HTTPException(400, "Файл не является корректным Office-документом") from exc
+        return _OFFICE_TYPES[suffix][0], suffix
+
+    raise HTTPException(400, "Разрешены PDF, DOCX, XLSX, PPTX, TXT и CSV")
 
 
 @router.get("")
@@ -71,14 +153,12 @@ async def upload_document(
         if event is None or event.region_id != region_id:
             raise HTTPException(400, "Мероприятие не принадлежит этому региону")
 
-    payload = await file.read()
-    if len(payload) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"Файл больше допустимых {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ")
-    if not payload:
-        raise HTTPException(400, "Пустой файл")
-
     original_name = _safe_original_name(file.filename or "file")
-    suffix = Path(original_name).suffix[:16]
+    payload = await _read_limited(file)
+    content_type, suffix = _validated_document(payload, original_name)
+    clean_doc_type = (doc_type or "").strip()
+    if len(clean_doc_type) > 32:
+        raise HTTPException(422, "Тип документа длиннее 32 символов")
     stored_name = f"{uuid.uuid4().hex}{suffix}"
     relative_path = Path(str(region_id)) / stored_name
 
@@ -92,9 +172,9 @@ async def upload_document(
         title=title.strip()[:255] or original_name,
         stored_path=relative_path.as_posix(),
         original_name=original_name,
-        content_type=file.content_type,
+        content_type=content_type,
         size_bytes=len(payload),
-        doc_type=(doc_type or "").strip() or None,
+        doc_type=clean_doc_type or None,
         author_id=user.id,
     )
     session.add(document)

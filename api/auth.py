@@ -12,9 +12,10 @@ import os
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.rate_limit import enforce_user_rate_limit
 from config import BOT_TOKEN
 from database.db import async_session
 from database.models import User
@@ -22,8 +23,12 @@ from utils.users import resolve_user
 
 logger = logging.getLogger(__name__)
 
-# initData считается протухшей через сутки — столько же живёт открытая вкладка Mini App.
-MAX_AUTH_AGE_SECONDS = 24 * 60 * 60
+# Подписанные данные Telegram — краткоживущая учётная информация, а не
+# бессрочный bearer-токен. Часа достаточно для обычной сессии Mini App.
+MAX_AUTH_AGE_SECONDS = 60 * 60
+MAX_FUTURE_SKEW_SECONDS = 60
+MAX_INIT_DATA_BYTES = 8 * 1024
+MAX_INIT_DATA_FIELDS = 64
 
 # Только для локальной разработки интерфейса без Telegram: подставляет указанный
 # telegram_id вместо проверки подписи. В проде переменная должна быть пустой.
@@ -40,8 +45,20 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = MAX_AUTH_A
     подпись = HMAC(secret, строка «ключ=значение», отсортированная по ключу)."""
     if not init_data:
         raise InitDataError("Пустые initData")
+    if len(init_data.encode("utf-8")) > MAX_INIT_DATA_BYTES:
+        raise InitDataError("initData слишком велики")
 
-    pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+    try:
+        parsed_pairs = parse_qsl(
+            init_data,
+            keep_blank_values=True,
+            max_num_fields=MAX_INIT_DATA_FIELDS,
+        )
+    except ValueError as exc:
+        raise InitDataError("Некорректные initData") from exc
+    pairs = dict(parsed_pairs)
+    if len(pairs) != len(parsed_pairs):
+        raise InitDataError("initData содержат повторяющиеся поля")
     received_hash = pairs.pop("hash", None)
     if not received_hash:
         raise InitDataError("В initData нет подписи")
@@ -53,8 +70,16 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = MAX_AUTH_A
     if not hmac.compare_digest(computed, received_hash):
         raise InitDataError("Подпись initData не сходится")
 
-    auth_date = int(pairs.get("auth_date", "0"))
-    if max_age and (time.time() - auth_date) > max_age:
+    try:
+        auth_date = int(pairs.get("auth_date", ""))
+    except (TypeError, ValueError) as exc:
+        raise InitDataError("Некорректная дата авторизации") from exc
+    now = time.time()
+    if auth_date <= 0:
+        raise InitDataError("В initData нет даты авторизации")
+    if auth_date > now + MAX_FUTURE_SKEW_SECONDS:
+        raise InitDataError("Дата авторизации находится в будущем")
+    if max_age and (now - auth_date) > max_age:
         raise InitDataError("initData устарели, переоткройте кабинет")
 
     return pairs
@@ -64,12 +89,37 @@ def _parse_user_field(raw_user: str) -> dict:
     import json
 
     try:
-        return json.loads(raw_user)
+        value = json.loads(raw_user)
     except (ValueError, TypeError) as exc:
         raise InitDataError("Не удалось разобрать поле user") from exc
+    if not isinstance(value, dict):
+        raise InitDataError("Поле user должно быть объектом")
+    return value
 
 
-async def get_current_user(authorization: str = Header(default="")) -> User:
+def _telegram_id(user_field: dict) -> int:
+    try:
+        telegram_id = int(user_field.get("id", 0))
+    except (TypeError, ValueError) as exc:
+        raise InitDataError("Некорректный Telegram ID") from exc
+    if telegram_id <= 0:
+        raise InitDataError("В initData нет Telegram ID")
+    return telegram_id
+
+
+def ensure_impersonation_read_only(user: User, method: str, path: str) -> None:
+    """«Войти как» предназначен для диагностики интерфейса и не даёт права
+    менять данные от имени цели. Выход из режима остаётся единственным POST."""
+    if getattr(user, "_impersonated_by", None) is None:
+        return
+    if method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return
+    if path == "/api/me/stop-impersonation":
+        return
+    raise HTTPException(status.HTTP_403_FORBIDDEN, "Режим «Войти как» доступен только для просмотра")
+
+
+async def get_current_user(request: Request, authorization: str = Header(default="")) -> User:
     """Пользователь Mini App. Регионы и права дальше считает utils/access.py."""
     telegram_id: int
     full_name = ""
@@ -90,11 +140,12 @@ async def get_current_user(authorization: str = Header(default="")) -> User:
         except InitDataError as exc:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
-        telegram_id = int(user_field.get("id", 0))
+        telegram_id = _telegram_id(user_field)
         full_name = " ".join(
             part for part in (user_field.get("first_name"), user_field.get("last_name")) if part
         )
 
+    enforce_user_rate_limit(telegram_id, request.method, request.url.path)
     async with async_session() as session:
         user = await resolve_user(session, telegram_id, full_name)
         if user is None or not user.is_active:
@@ -103,6 +154,7 @@ async def get_current_user(authorization: str = Header(default="")) -> User:
                 "Доступ не открыт. Напишите боту /start — там либо ссылка на подачу заявки, "
                 "либо создание личного кабинета, если вы уже приняты.",
             )
+        ensure_impersonation_read_only(user, request.method, request.url.path)
         session.expunge(user)
         return user
 
@@ -117,7 +169,7 @@ class TelegramIdentity:
         self.full_name = full_name
 
 
-async def get_telegram_identity(authorization: str = Header(default="")) -> TelegramIdentity:
+async def get_telegram_identity(request: Request, authorization: str = Header(default="")) -> TelegramIdentity:
     if DEV_TELEGRAM_ID:
         return TelegramIdentity(int(DEV_TELEGRAM_ID), "")
 
@@ -133,7 +185,8 @@ async def get_telegram_identity(authorization: str = Header(default="")) -> Tele
     except InitDataError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
-    telegram_id = int(user_field.get("id", 0))
+    telegram_id = _telegram_id(user_field)
+    enforce_user_rate_limit(telegram_id, request.method, request.url.path)
     full_name = " ".join(
         part for part in (user_field.get("first_name"), user_field.get("last_name")) if part
     )

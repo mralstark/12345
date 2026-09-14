@@ -81,6 +81,7 @@ powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1 -Server ЛОГИН@IP
 - поставит Python, PostgreSQL, nginx, certbot и шрифты для PDF-отчётов;
 - заведёт системного пользователя `bratstvo` и базу с случайным паролем;
 - создаст `/opt/bratstvo/.env` с готовыми `DATABASE_URL`, `STORAGE_DIR`, `WEBAPP_URL`;
+- создаст отдельный ключ подписи закрытых медиа и применит миграции целостности;
 - поставит два systemd-юнита — `bratstvo-bot` и `bratstvo-api`;
 - настроит nginx и выпустит HTTPS-сертификат.
 
@@ -148,10 +149,10 @@ ssh ЛОГИН@IP_СЕРВЕРА "cd /opt/bratstvo && sudo -u bratstvo .venv/bin
 powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1 -Server ЛОГИН@IP_СЕРВЕРА
 ```
 
-Зальёт изменения, доставит новые зависимости и перезапустит оба сервиса.
-Схема БД дополняется на старте сама (`init_db` создаёт недостающие таблицы);
-изменение существующих таблиц create_all не умеет — это делается миграцией
-в `scripts/`.
+Зальёт изменения, установит зависимости из `requirements.lock`, применит
+идемпотентные миграции и только после этого перезапустит оба сервиса. Новые
+таблицы по-прежнему создаёт `init_db`; изменения существующих таблиц выполняют
+скрипты в `scripts/`.
 
 ## 7. Бэкапы
 

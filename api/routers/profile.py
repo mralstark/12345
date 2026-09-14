@@ -297,7 +297,10 @@ async def avatar(
     path = (STORAGE_DIR / member.avatar_path).resolve()
     if not path.is_file() or STORAGE_DIR.resolve() not in path.parents:
         raise HTTPException(404, "Файл не найден")
-    return FileResponse(path, headers={"Cache-Control": "private, max-age=3600"})
+    return FileResponse(
+        path,
+        headers={"Cache-Control": "private, max-age=900", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.get("/{user_id}")

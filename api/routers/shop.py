@@ -47,10 +47,13 @@ SHOP_ITEMS = [
 SHOP_ITEMS_BY_ID = {i["id"]: i for i in SHOP_ITEMS}
 
 
-async def _own_member(user: User, session: AsyncSession) -> Member:
+async def _own_member(user: User, session: AsyncSession, *, lock: bool = False) -> Member:
     if user.member_id is None:
         raise HTTPException(404, "У этого аккаунта нет личного кабинета — он не привязан к «Составу»")
-    member = await session.get(Member, user.member_id)
+    stmt = select(Member).where(Member.id == user.member_id)
+    if lock:
+        stmt = stmt.with_for_update()
+    member = (await session.execute(stmt)).scalar_one_or_none()
     if member is None:
         raise HTTPException(404, "Запись в составе не найдена")
     return member
@@ -135,7 +138,9 @@ async def buy_item(
 ) -> dict:
     if not PURCHASES_OPEN:
         raise AccessDenied(PURCHASES_CLOSED_HINT)
-    member = await _own_member(user, session)
+    # Блокировка строки сериализует параллельные покупки и получение наград:
+    # баланс нельзя проверить и списать двумя запросами одновременно.
+    member = await _own_member(user, session, lock=True)
     item = SHOP_ITEMS_BY_ID.get(item_id)
     if item is None:
         raise HTTPException(404, "Товар не найден")

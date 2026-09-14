@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from api.routers import (
     analytics,
@@ -26,14 +27,21 @@ from api.routers import (
     news,
     profile,
     quests,
-    register,
     regions,
+    register,
     reports,
     shop,
     tasks,
     universities,
 )
-from config import BASE_DIR, STORAGE_DIR
+from config import (
+    ALLOWED_HOSTS,
+    BASE_DIR,
+    CORS_ALLOWED_ORIGINS,
+    IS_PRODUCTION,
+    STORAGE_DIR,
+    validate_security_config,
+)
 from database.db import init_db
 from utils.access import AccessDenied
 from utils.notify import close_notifier_bot
@@ -46,22 +54,65 @@ LANDING_DIR = BASE_DIR / "landing"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_security_config()
     await init_db()
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     yield
     await close_notifier_bot()
 
 
-app = FastAPI(title="Личный кабинет Братства Академистов", lifespan=lifespan)
-
-# Mini App грузится с того же хоста, но при отладке через туннель источник может
-# отличаться — заголовок Authorization всё равно проверяется подписью Telegram.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+app = FastAPI(
+    title="Личный кабинет Братства Академистов",
+    lifespan=lifespan,
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
+
+if ALLOWED_HOSTS:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(ALLOWED_HOSTS))
+
+# По умолчанию Mini App и API находятся на одном origin и CORS не требуется.
+# Для туннеля разработчик перечисляет точные origin явно.
+if CORS_ALLOWED_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(CORS_ALLOWED_ORIGINS),
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+
+
+_CONTENT_SECURITY_POLICY = "; ".join(
+    (
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
+        "script-src 'self' https://telegram.org 'sha256-riitXBKGtl5y5ccA7GF6ccqJuwEVP5tm8j0ff/fbw9U='",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: blob:",
+        "media-src 'self'",
+        "connect-src 'self'",
+    )
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("Content-Security-Policy", _CONTENT_SECURITY_POLICY)
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    if IS_PRODUCTION:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response
 
 
 @app.exception_handler(AccessDenied)

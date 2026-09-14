@@ -16,6 +16,7 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB.as_posix()}"
 os.environ["BOT_TOKEN"] = "123456:TEST-TOKEN-FOR-TESTS"
 os.environ["STORAGE_DIR"] = str(Path(tempfile.gettempdir()) / "bratstvo_test_storage")
 os.environ["SUPERUSER_TELEGRAM_IDS"] = ""
+os.environ["AUTO_FEDERAL_TELEGRAM_IDS"] = ""
 os.environ.pop("DEV_TELEGRAM_ID", None)
 
 import pytest  # noqa: E402

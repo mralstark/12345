@@ -7,8 +7,10 @@ POST /{cell_id}/leader ниже) — руководитель региона в�
 (handlers/create_account.py, удалён при переходе на самостоятельную
 регистрацию, план «Снизу вверх», §4)."""
 
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +41,23 @@ class CellPatch(BaseModel):
     genitive_name: str | None = Field(default=None, max_length=128)
     vk_url: str | None = Field(default=None, max_length=255)
     allocated_budget: int | None = Field(default=None, ge=0)
+
+    @field_validator("vk_url")
+    @classmethod
+    def validate_vk_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return value
+        value = value.strip()
+        parsed = urlparse(value)
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        if (
+            parsed.scheme != "https"
+            or parsed.username is not None
+            or parsed.password is not None
+            or not (hostname == "vk.com" or hostname.endswith(".vk.com"))
+        ):
+            raise ValueError("Ссылка должна вести на HTTPS-страницу vk.com")
+        return value
 
 
 def _require_region_leader(user: User) -> None:

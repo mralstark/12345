@@ -133,6 +133,29 @@ async def test_cell_leader_correspondents_and_region_leader_sees_cell_down(sessi
     assert world["cell_leader"].full_name in {p.full_name for p in leader_people}
 
 
+async def test_cell_vk_url_accepts_only_https_vk(client, world):
+    login(world["leader_moscow"])
+
+    spoofed = await client.patch(
+        f"/api/cells/{world['mgimo'].id}",
+        json={"vk_url": "https://vk.com.evil.example/community"},
+    )
+    assert spoofed.status_code == 422
+
+    insecure = await client.patch(
+        f"/api/cells/{world['mgimo'].id}",
+        json={"vk_url": "http://vk.com/community"},
+    )
+    assert insecure.status_code == 422
+
+    valid = await client.patch(
+        f"/api/cells/{world['mgimo'].id}",
+        json={"vk_url": "https://vk.com/community"},
+    )
+    assert valid.status_code == 200
+    assert valid.json()["vk_url"] == "https://vk.com/community"
+
+
 # --- Назначение руководителя ячейки (POST /cells/{id}/leader) --------------
 # Перенесено из бывших кнопок бота (handlers/create_account.py, удалён) в
 # саму вкладку «Вузовские ячейки» — руководитель региона назначает прямо

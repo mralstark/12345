@@ -8,7 +8,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import MenuButtonWebApp, WebAppInfo
 
-from config import BOT_PROXY_URL, WEBAPP_URL, require_bot_token
+from config import BOT_PROXY_URL, WEBAPP_URL, require_bot_token, validate_security_config
 from database.db import init_db
 from handlers import apply, fallback, impersonate, start, tasks
 from services.notifier import notifier_loop
@@ -17,11 +17,13 @@ from services.notifier import notifier_loop
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+    validate_security_config()
     token = require_bot_token()
     await init_db()
 
     if BOT_PROXY_URL:
-        logging.info("Используется прокси: %s", BOT_PROXY_URL)
+        # URL прокси может содержать логин и пароль — в journald они попадать не должны.
+        logging.info("Для Telegram настроен прокси")
     if not WEBAPP_URL:
         logging.warning("WEBAPP_URL не задан — кнопка «Открыть кабинет» в меню бота не появится.")
 

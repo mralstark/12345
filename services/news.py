@@ -17,7 +17,7 @@ from pathlib import Path
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import BOT_TOKEN, MAX_UPLOAD_BYTES, STORAGE_DIR
+from config import BOT_TOKEN, MAX_UPLOAD_BYTES, MEDIA_SIGNING_KEY, STORAGE_DIR
 from database.models import (
     NEWS_REACTIONS,
     ROLE_CELL_LEADER,
@@ -367,11 +367,6 @@ PHOTO_DIR = "news"
 PHOTO_LIMIT = 10
 
 
-def _safe_suffix(filename: str) -> str:
-    suffix = Path(filename or "").suffix[:16]
-    return suffix if re.fullmatch(r"\.[A-Za-z0-9]{1,15}", suffix or "") else ""
-
-
 async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> int:
     """Сохраняет файлы на диск и привязывает их к новости. Возвращает число
     добавленных. Порядок в галерее — порядок, в котором их прислали."""
@@ -399,8 +394,7 @@ async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> i
         # им пользовался. Ядро на сервере одно, подхватить некому. Теперь
         # цикл событий свободен и обслуживает остальных, пока идёт сжатие.
         payload, content_type = await asyncio.to_thread(shrink, payload, PHOTO_MAX_SIDE)
-        content_type = content_type or upload.content_type
-        suffix = suffix_for(content_type) or _safe_suffix(upload.filename)
+        suffix = suffix_for(content_type)
 
         stored_name = f"{uuid.uuid4().hex}{suffix}"
         relative = Path(PHOTO_DIR) / str(post.id) / stored_name
@@ -487,7 +481,7 @@ async def delete_comment(
 #
 # Плата за это: пока подпись жива, файл откроет любой, у кого есть ссылка.
 # Отсюда короткий срок жизни и привязка подписи к конкретной фотографии.
-PHOTO_URL_TTL_SECONDS = 6 * 60 * 60
+PHOTO_URL_TTL_SECONDS = 15 * 60
 
 # Срок годности в подписи считается не от текущей секунды, а от начала часа.
 # Иначе каждая отрисовка ленты давала фотографии новый адрес, а браузер хранит
@@ -495,7 +489,7 @@ PHOTO_URL_TTL_SECONDS = 6 * 60 * 60
 # Cache-Control на них стоит. Теперь в течение часа адрес один и тот же и кэш
 # наконец срабатывает. Плата — подпись живёт от ttl до ttl+час вместо ровно
 # ttl; для ссылки на картинку это безразлично.
-TOKEN_BUCKET_SECONDS = 60 * 60
+TOKEN_BUCKET_SECONDS = 5 * 60
 
 
 def _token_expiry(ttl: int) -> int:
@@ -504,7 +498,10 @@ def _token_expiry(ttl: int) -> int:
 
 
 def _photo_secret() -> bytes:
-    return hmac.new(b"news-photo", (BOT_TOKEN or "dev").encode(), hashlib.sha256).digest()
+    secret = MEDIA_SIGNING_KEY or BOT_TOKEN
+    if not secret:
+        raise RuntimeError("Не задан ключ подписи медиа")
+    return hmac.new(b"news-photo", secret.encode(), hashlib.sha256).digest()
 
 
 def photo_token(photo_id: int, ttl: int = PHOTO_URL_TTL_SECONDS) -> str:
@@ -632,7 +629,7 @@ async def save_avatar(session: AsyncSession, member: Member, upload) -> str:
 
     # В отдельном потоке — по той же причине, что и фотографии в attach_photos.
     payload, content_type = await asyncio.to_thread(shrink, payload, AVATAR_MAX_SIDE)
-    suffix = suffix_for(content_type) or _safe_suffix(upload.filename)
+    suffix = suffix_for(content_type)
 
     previous = member.avatar_path
     stored_name = f"{uuid.uuid4().hex}{suffix}"

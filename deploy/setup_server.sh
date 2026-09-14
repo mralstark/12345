@@ -94,12 +94,14 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR" "$DATA_DIR"
 echo "==> Виртуальное окружение и зависимости"
 [[ -d "$VENV" ]] || python3 -m venv "$VENV"
 "$VENV/bin/pip" install --quiet --upgrade pip
+REQUIREMENTS="$APP_DIR/requirements.lock"
+[[ -f "$REQUIREMENTS" ]] || REQUIREMENTS="$APP_DIR/requirements.txt"
 # На ARM (Oracle Ampere) готовое колесо есть не для каждой версии пакета —
 # тогда его надо собрать, а для этого нужен компилятор.
-if ! "$VENV/bin/pip" install --quiet -r "$APP_DIR/requirements.txt"; then
+if ! "$VENV/bin/pip" install --quiet -r "$REQUIREMENTS"; then
     echo "    не хватило готовых пакетов ($(uname -m)) — ставлю инструменты сборки"
     apt-get install -y -qq build-essential python3-dev libffi-dev
-    "$VENV/bin/pip" install -r "$APP_DIR/requirements.txt"
+    "$VENV/bin/pip" install -r "$REQUIREMENTS"
 fi
 chown -R "$APP_USER:$APP_USER" "$VENV"
 
@@ -133,6 +135,15 @@ sudo -u postgres psql -qc "ALTER ROLE bratstvo PASSWORD '$DB_PASS'"
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='bratstvo'" | grep -q 1 \
     || sudo -u postgres createdb -O bratstvo bratstvo
 
+MEDIA_KEY_FILE=/root/.bratstvo_media_signing_key
+if [[ -f "$MEDIA_KEY_FILE" ]]; then
+    MEDIA_SIGNING_KEY=$(cat "$MEDIA_KEY_FILE")
+else
+    MEDIA_SIGNING_KEY=$(head -c 32 /dev/urandom | base64 | tr -d '\n')
+    printf '%s' "$MEDIA_SIGNING_KEY" > "$MEDIA_KEY_FILE"
+    chmod 600 "$MEDIA_KEY_FILE"
+fi
+
 echo "==> .env"
 # Токен и superuser'ы дописываются руками — здесь только то, что знает сервер.
 if [[ ! -f "$APP_DIR/.env" ]]; then
@@ -141,11 +152,16 @@ if [[ ! -f "$APP_DIR/.env" ]]; then
 #   systemctl restart bratstvo-bot bratstvo-api
 BOT_TOKEN=
 SUPERUSER_TELEGRAM_IDS=
+AUTO_FEDERAL_TELEGRAM_IDS=
+MEDIA_SIGNING_KEY=$MEDIA_SIGNING_KEY
+APP_ENV=production
 
 # На сервере вне РФ прокси не нужен — оставить пустым.
 BOT_PROXY_URL=
 
 WEBAPP_URL=https://$DOMAIN
+ALLOWED_HOSTS=$DOMAIN
+CORS_ALLOWED_ORIGINS=
 DATABASE_URL=postgresql+asyncpg://bratstvo:$DB_PASS@localhost:5432/bratstvo
 APP_TIMEZONE=Europe/Moscow
 STORAGE_DIR=$DATA_DIR/storage
@@ -161,10 +177,29 @@ else
     sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql+asyncpg://bratstvo:$DB_PASS@localhost:5432/bratstvo|" "$APP_DIR/.env"
     sed -i "s|^WEBAPP_URL=.*|WEBAPP_URL=https://$DOMAIN|" "$APP_DIR/.env"
     sed -i "s|^API_BASE_URL=.*|API_BASE_URL=http://127.0.0.1:$PORT|" "$APP_DIR/.env"
+    set_env() {
+        local key="$1" value="$2"
+        if grep -q "^${key}=" "$APP_DIR/.env"; then
+            sed -i "s|^${key}=.*|${key}=${value}|" "$APP_DIR/.env"
+        else
+            printf '\n%s=%s\n' "$key" "$value" >> "$APP_DIR/.env"
+        fi
+    }
+    set_env APP_ENV production
+    set_env MEDIA_SIGNING_KEY "$MEDIA_SIGNING_KEY"
+    set_env ALLOWED_HOSTS "$DOMAIN"
+    grep -q '^AUTO_FEDERAL_TELEGRAM_IDS=' "$APP_DIR/.env" || printf '\nAUTO_FEDERAL_TELEGRAM_IDS=\n' >> "$APP_DIR/.env"
+    if grep -q '^AUTO_FEDERAL_FULL_NAMES=.' "$APP_DIR/.env"; then
+        sed -i '/^AUTO_FEDERAL_FULL_NAMES=/d' "$APP_DIR/.env"
+        echo "    удалён небезопасный AUTO_FEDERAL_FULL_NAMES — перенесите доверенных людей по Telegram ID"
+    fi
     echo "    $APP_DIR/.env уже был — обновил DATABASE_URL, WEBAPP_URL и API_BASE_URL"
 fi
 chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
 chmod 600 "$APP_DIR/.env"
+
+echo "==> Миграции безопасности"
+(cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_security_constraints)
 
 echo "==> systemd"
 install -m 644 "$APP_DIR/deploy/bratstvo-bot.service" /etc/systemd/system/bratstvo-bot.service

@@ -154,7 +154,7 @@ if $BOOTSTRAP; then
   remote "bash $APP_DIR/deploy/setup_server.sh $ARGS"
 else
   echo "==> Обновление зависимостей и перезапуск"
-  remote "chown -R bratstvo:bratstvo $APP_DIR; $APP_DIR/.venv/bin/pip install --quiet -r $APP_DIR/requirements.txt; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
+  remote "chown -R bratstvo:bratstvo $APP_DIR; REQ=$APP_DIR/requirements.lock; test -f \$REQ || REQ=$APP_DIR/requirements.txt; $APP_DIR/.venv/bin/pip install --quiet -r \$REQ; cd $APP_DIR; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
 fi
 
 echo "Готово."
