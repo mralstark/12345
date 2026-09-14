@@ -7,12 +7,22 @@
 """
 
 import asyncio
+import html
 import logging
 
 from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramNetworkError
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramBadRequest,
+    TelegramNetworkError,
+)
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    WebAppInfo,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import BOT_PROXY_URL, BOT_TOKEN, WEBAPP_URL
@@ -27,6 +37,11 @@ _bot: Bot | None = None
 # TelegramForbiddenError/BadRequest и т.п. повтором не лечатся.
 _NETWORK_RETRIES = 2
 _NETWORK_RETRY_DELAY = 2.0
+
+
+def escape_telegram_html(value: object) -> str:
+    """Экранирует любое внешнее значение перед вставкой в HTML Telegram."""
+    return html.escape(str(value), quote=True)
 
 
 def get_notifier_bot() -> Bot | None:
@@ -54,6 +69,7 @@ async def notify_telegram(
     retries: int = _NETWORK_RETRIES,
     retry_delay: float = _NETWORK_RETRY_DELAY,
     fallback_text: str | None = None,
+    parse_mode: str | None = "HTML",
 ) -> Message | None:
     """Пытается доставить уведомление. Молча переживает блокировку бота
     пользователем: недоставленное уведомление не должно ронять операцию,
@@ -86,7 +102,7 @@ async def notify_telegram(
 
     for attempt in range(retries + 1):
         try:
-            return await bot.send_message(telegram_id, text, parse_mode="HTML", reply_markup=reply_markup)
+            return await bot.send_message(telegram_id, text, parse_mode=parse_mode, reply_markup=reply_markup)
         except TelegramNetworkError as exc:
             if attempt < retries:
                 logger.warning(
@@ -107,7 +123,16 @@ async def notify_telegram(
                 )
                 return await notify_telegram(
                     telegram_id, fallback_text, bot=bot, reply_markup=reply_markup,
-                    retries=retries, retry_delay=retry_delay,
+                    retries=retries, retry_delay=retry_delay, parse_mode=None,
+                )
+            if parse_mode is not None:
+                logger.warning(
+                    "Telegram не принял HTML-сообщение для %s (%s) — шлю его как обычный текст",
+                    telegram_id, exc,
+                )
+                return await notify_telegram(
+                    telegram_id, text, bot=bot, reply_markup=reply_markup,
+                    retries=retries, retry_delay=retry_delay, parse_mode=None,
                 )
             logger.warning("Не удалось отправить уведомление %s: %s", telegram_id, exc)
             return None
@@ -133,7 +158,7 @@ async def send_cabinet_welcome(user: User, bot: Bot | None = None) -> None:
     greeting = first_and_patronymic(user.full_name)
     await notify_telegram(
         user.telegram_id,
-        f"✅ <b>{greeting}, добро пожаловать в Братство Академистов!</b>\n\nВаш личный кабинет создан.",
+        f"✅ <b>{escape_telegram_html(greeting)}, добро пожаловать в Братство Академистов!</b>\n\nВаш личный кабинет создан.",
         bot=bot,
     )
     if not WEBAPP_URL:
@@ -154,7 +179,7 @@ async def send_role_assigned_notice(user: User, role: str, bot: Bot | None = Non
     label = ROLE_LABELS.get(role, role)
     await notify_telegram(
         user.telegram_id,
-        f"🎉 <b>{greeting}, Вы назначены на должность: {label}</b>\n\nТеперь вам доступен кабинет руководителя.",
+        f"🎉 <b>{escape_telegram_html(greeting)}, Вы назначены на должность: {escape_telegram_html(label)}</b>\n\nТеперь вам доступен кабинет руководителя.",
         bot=bot,
     )
 
@@ -166,7 +191,7 @@ async def send_role_removed_notice(user: User, bot: Bot | None = None) -> None:
     greeting = first_and_patronymic(user.full_name)
     await notify_telegram(
         user.telegram_id,
-        f"{greeting}, с Вас снята управленческая должность.\n\n"
+        f"{escape_telegram_html(greeting)}, с Вас снята управленческая должность.\n\n"
         "Личный кабинет остаётся при Вас — новости, мероприятия, лобби и магазин "
         "работают как прежде.",
         bot=bot,

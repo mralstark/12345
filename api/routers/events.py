@@ -26,7 +26,7 @@ from database.models import (
 from services.recurring_events import RECURRENCE_RULES, materialize_event
 from utils.access import actor_cell, require_edit, require_same_cell, require_view
 from utils.balance_calc import get_event_fact, get_event_income
-from utils.notify import notify_telegram
+from utils.notify import escape_telegram_html, notify_telegram
 from utils.parser import format_date_ru
 from utils.tz import today as tz_today
 
@@ -39,7 +39,7 @@ class EventIn(BaseModel):
     title: str = Field(min_length=2, max_length=128)
     date: date_
     time: time_ | None = None
-    description: str = Field(min_length=1)
+    description: str = Field(min_length=1, max_length=4000)
     responsible_member_id: int | None = None
     status: str = "planned"
     planned_budget: int | None = Field(default=None, ge=0, description="Копейки")
@@ -53,7 +53,7 @@ class EventPatch(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=128)
     date: date_ | None = None
     time: time_ | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=4000)
     responsible_member_id: int | None = None
     status: str | None = None
     planned_budget: int | None = Field(default=None, ge=0)
@@ -63,7 +63,7 @@ class EventPatch(BaseModel):
 
 
 class AttendanceIn(BaseModel):
-    member_ids: list[int]
+    member_ids: list[int] = Field(max_length=500)
 
 
 class RsvpIn(BaseModel):
@@ -452,7 +452,7 @@ async def set_rsvp(
     if payload.going is True:
         await notify_telegram(
             user.telegram_id,
-            f"✅ Вы записались на «{event.title}» — {format_date_ru(event.date)}.",
+            f"✅ Вы записались на «{escape_telegram_html(event.title)}» — {format_date_ru(event.date)}.",
         )
 
     return {"ok": True, "going": payload.going}

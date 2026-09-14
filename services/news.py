@@ -25,20 +25,20 @@ from database.models import (
     ROLE_FEDERAL,
     ROLE_LEADER,
     ROLE_SUPERUSER,
+    Member,
     NewsComment,
     NewsNotification,
     NewsPhoto,
     NewsPost,
     NewsReaction,
     NewsView,
-    Member,
     Region,
     User,
 )
 from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, shrink, suffix_for
 from services.moderation import check as check_text
 from utils.access import AccessDenied, accessible_region_ids, actor_cell
-
+from utils.storage import ensure_storage_capacity
 
 # За сколько секунд повтор того же текста считается вторым нажатием, а не
 # второй новостью. С запасом: наблюдавшийся случай уложился в 32 секунды.
@@ -394,6 +394,7 @@ async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> i
         # им пользовался. Ядро на сервере одно, подхватить некому. Теперь
         # цикл событий свободен и обслуживает остальных, пока идёт сжатие.
         payload, content_type = await asyncio.to_thread(shrink, payload, PHOTO_MAX_SIDE)
+        ensure_storage_capacity(len(payload))
         suffix = suffix_for(content_type)
 
         stored_name = f"{uuid.uuid4().hex}{suffix}"
@@ -481,15 +482,14 @@ async def delete_comment(
 #
 # Плата за это: пока подпись жива, файл откроет любой, у кого есть ссылка.
 # Отсюда короткий срок жизни и привязка подписи к конкретной фотографии.
-PHOTO_URL_TTL_SECONDS = 15 * 60
+PHOTO_URL_TTL_SECONDS = 2 * 60
 
-# Срок годности в подписи считается не от текущей секунды, а от начала часа.
+# Срок годности в подписи считается короткими 30-секундными корзинами.
 # Иначе каждая отрисовка ленты давала фотографии новый адрес, а браузер хранит
-# кэш по адресу — и каждое открытие ленты качало все фотографии заново, хотя
-# Cache-Control на них стоит. Теперь в течение часа адрес один и тот же и кэш
-# наконец срабатывает. Плата — подпись живёт от ttl до ttl+час вместо ровно
-# ttl; для ссылки на картинку это безразлично.
-TOKEN_BUCKET_SECONDS = 5 * 60
+# кэш по адресу — и каждое открытие ленты качало все фотографии заново. Адрес
+# стабилен внутри короткой корзины, а максимальная жизнь bearer-ссылки остаётся
+# меньше трёх минут.
+TOKEN_BUCKET_SECONDS = 30
 
 
 def _token_expiry(ttl: int) -> int:
@@ -629,6 +629,7 @@ async def save_avatar(session: AsyncSession, member: Member, upload) -> str:
 
     # В отдельном потоке — по той же причине, что и фотографии в attach_photos.
     payload, content_type = await asyncio.to_thread(shrink, payload, AVATAR_MAX_SIDE)
+    ensure_storage_capacity(len(payload))
     suffix = suffix_for(content_type)
 
     previous = member.avatar_path

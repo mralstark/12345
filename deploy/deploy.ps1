@@ -35,7 +35,9 @@ function Invoke-Remote([string]$command) {
     if ($LASTEXITCODE -ne 0) { throw "Команда на сервере вернула $LASTEXITCODE : $command" }
 }
 
-$archive = Join-Path $env:TEMP "bratstvo_deploy.tar.gz"
+$nonce = [guid]::NewGuid().ToString("N")
+$archive = Join-Path $env:TEMP "bratstvo_deploy_$nonce.tar.gz"
+$remoteArchive = "/tmp/bratstvo_deploy_$nonce.tar.gz"
 if (Test-Path $archive) { Remove-Item $archive -Force }
 
 Write-Host "==> Упаковка кода" -ForegroundColor Cyan
@@ -49,11 +51,11 @@ $sizeMb = [math]::Round((Get-Item $archive).Length / 1MB, 2)
 Write-Host "    архив: $sizeMb МБ"
 
 Write-Host "==> Загрузка на сервер" -ForegroundColor Cyan
-scp -P $Port $archive "${Server}:/tmp/bratstvo_deploy.tar.gz"
+scp -P $Port $archive "${Server}:$remoteArchive"
 if ($LASTEXITCODE -ne 0) { throw "scp завершился с кодом $LASTEXITCODE" }
 
 Write-Host "==> Распаковка" -ForegroundColor Cyan
-Invoke-Remote "mkdir -p $AppDir; tar xzf /tmp/bratstvo_deploy.tar.gz -C $AppDir; rm -f /tmp/bratstvo_deploy.tar.gz; chmod +x $AppDir/deploy/*.sh"
+Invoke-Remote "mkdir -p $AppDir; test -f $remoteArchive; tar xzf $remoteArchive -C $AppDir; rm -f $remoteArchive; chmod +x $AppDir/deploy/*.sh"
 
 if ($Bootstrap) {
     Write-Host "==> Первичная настройка сервера (пакеты, PostgreSQL, systemd, nginx, HTTPS)" -ForegroundColor Cyan
@@ -63,7 +65,7 @@ if ($Bootstrap) {
 }
 else {
     Write-Host "==> Обновление зависимостей и перезапуск" -ForegroundColor Cyan
-    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; if [ -f $AppDir/requirements.lock ]; then req=$AppDir/requirements.lock; else req=$AppDir/requirements.txt; fi; $AppDir/.venv/bin/pip install --quiet -r `$req; cd $AppDir; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
+    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; if [ -f $AppDir/requirements.lock ]; then sudo -u bratstvo $AppDir/.venv/bin/pip install --quiet --require-hashes -r $AppDir/requirements.lock; else sudo -u bratstvo $AppDir/.venv/bin/pip install --quiet -r $AppDir/requirements.txt; fi; cd $AppDir; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_security_constraints; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
 }
 
 Remove-Item $archive -Force

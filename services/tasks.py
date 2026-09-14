@@ -14,7 +14,7 @@ from database.models import (
     User,
 )
 from utils.access import AccessDenied, can_message
-from utils.notify import notify_telegram
+from utils.notify import escape_telegram_html, notify_telegram
 from utils.parser import format_date_ru
 from utils.tz import now, today
 
@@ -52,11 +52,12 @@ async def create_task(
 
     assignee = await session.get(User, assignee_id)
     deadline_line = f"\nСрок: <b>{format_date_ru(deadline)}</b>" if deadline else ""
-    body = f"\n\n{task.text}" if task.text else ""
+    body = f"\n\n{escape_telegram_html(task.text)}" if task.text else ""
     if assignee is not None:
         await notify_telegram(
             assignee.telegram_id,
-            f"✅ <b>Новая задача</b>\nОт: {author.full_name}{deadline_line}\n\n<b>{task.title}</b>{body}",
+            f"✅ <b>Новая задача</b>\nОт: {escape_telegram_html(author.full_name)}{deadline_line}\n\n"
+            f"<b>{escape_telegram_html(task.title)}</b>{body}",
         )
     return task
 
@@ -90,8 +91,9 @@ async def change_status(session: AsyncSession, task: Task, actor: User, new_stat
     if counterpart is not None and counterpart_id != actor.id:
         await notify_telegram(
             counterpart.telegram_id,
-            f"🔄 <b>Задача «{task.title}»</b>\n"
-            f"{actor.full_name} → статус: <b>{TASK_STATUS_LABELS[new_status]}</b>",
+            f"🔄 <b>Задача «{escape_telegram_html(task.title)}»</b>\n"
+            f"{escape_telegram_html(actor.full_name)} → статус: "
+            f"<b>{escape_telegram_html(TASK_STATUS_LABELS[new_status])}</b>",
         )
     return task
 
@@ -118,7 +120,8 @@ async def delete_task(session: AsyncSession, task: Task, actor: User) -> None:
     if assignee is not None and assignee_id != actor.id:
         await notify_telegram(
             assignee.telegram_id,
-            f"🗑 <b>Задача снята</b>\n{actor.full_name} убрал(а) задачу «{title}»",
+            f"🗑 <b>Задача снята</b>\n{escape_telegram_html(actor.full_name)} "
+            f"убрал(а) задачу «{escape_telegram_html(title)}»",
         )
 
 

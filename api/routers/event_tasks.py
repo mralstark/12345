@@ -34,7 +34,7 @@ from database.models import (
     User,
 )
 from utils.access import actor_cell, require_edit, require_same_cell, require_view
-from utils.notify import notify_telegram
+from utils.notify import escape_telegram_html, notify_telegram
 from utils.parser import format_date_ru
 
 router = APIRouter(prefix="/events/{event_id}/tasks", tags=["event_tasks"])
@@ -120,8 +120,8 @@ async def _send_task_assignment_notifications(
         return
     text = (
         "📋 Вам поставлена новая задача\n\n"
-        f"Мероприятие: «{event_title}»\n"
-        f"Задача: «{task_title}»\n"
+        f"Мероприятие: «{escape_telegram_html(event_title)}»\n"
+        f"Задача: «{escape_telegram_html(task_title)}»\n"
         f"Срок: {format_date_ru(due_date)}"
     )
     async with async_session() as session:
@@ -153,7 +153,7 @@ async def _send_task_completion_notifications(event_title: str, task_title: str,
         return
     text = (
         "✅ Задача выполнена\n\n"
-        f"«{task_title}» — {event_title}\n"
+        f"«{escape_telegram_html(task_title)}» — {escape_telegram_html(event_title)}\n"
         "Руководитель отметил её выполненной."
     )
     async with async_session() as session:

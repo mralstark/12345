@@ -148,11 +148,8 @@ async def test_coordinator_cannot_delete_region(client, world):
     assert response.status_code == 403
 
 
-async def test_federal_deletes_region_and_all_its_data(client, session, world):
-    """«Удалить регион» — полное необратимое удаление (план, кабинет
-    федерального): состав (включая человека с личным кабинетом), финансы,
-    мероприятия, документы, ячейки, заявки — всё должно уйти без FK-ошибок,
-    а общий каталог вузов остаться, просто отвязанным от региона."""
+async def test_federal_archives_region_without_destroying_its_data(client, session, world):
+    """Опасное действие в UI закрывает доступ, но оставляет данные для восстановления."""
     region = Region(name="Регион на удаление", application_code="DELXXXXXXXXX")
     session.add(region)
     await session.flush()
@@ -192,14 +189,17 @@ async def test_federal_deletes_region_and_all_its_data(client, session, world):
     assert response.status_code == 200, response.text
 
     session.expire_all()
-    assert await session.get(Region, region_id) is None
-    assert await session.get(Member, member_id) is None
-    assert await session.get(User, member_user_id) is None
+    archived = await session.get(Region, region_id)
+    assert archived is not None
+    assert archived.is_active is False
+    assert archived.application_code is None
+    assert await session.get(Member, member_id) is not None
+    assert await session.get(User, member_user_id) is not None
 
-    # Каталог вузов общий — сам вуз остаётся, просто без региона.
+    # Все связанные записи остаются на месте.
     university_after = await session.get(University, university_id)
     assert university_after is not None
-    assert university_after.region_id is None
+    assert university_after.region_id == region_id
 
 
 # --- Снятие с должности -------------------------------------------------------

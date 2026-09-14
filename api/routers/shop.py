@@ -15,8 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user, get_db
 from database.db import async_session
 from database.models import Member, Region, ShopPurchase, UniversityCell, User
-from utils.access import AccessDenied, actor_cell, require_edit, require_same_cell, require_view
-from utils.notify import notify_telegram
+from utils.access import (
+    AccessDenied,
+    actor_cell,
+    require_edit,
+    require_same_cell,
+    require_view,
+)
+from utils.notify import escape_telegram_html, notify_telegram
 
 router = APIRouter(tags=["shop"])
 
@@ -103,7 +109,10 @@ async def _send_purchase_notification(member_name: str, item_label: str, price: 
     """Фоновая задача (см. BackgroundTasks в buy_item) — своя сессия, т.к.
     сессия запроса к моменту выполнения уже закрыта (см. тот же приём в
     api/routers/event_tasks.py::_send_task_assignment_notifications)."""
-    text = f"🛍 <b>{member_name}</b> купил(а) в магазине «{item_label}» за {price} ⭐"
+    text = (
+        f"🛍 <b>{escape_telegram_html(member_name)}</b> купил(а) в магазине "
+        f"«{escape_telegram_html(item_label)}» за {price} ⭐"
+    )
     async with async_session() as session:
         telegram_ids: set[int] = set()
         region = await session.get(Region, region_id)

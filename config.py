@@ -83,6 +83,8 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 # Максимальный размер загружаемого документа (модуль «Документы»).
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "25")) * 1024 * 1024
+MAX_STORAGE_BYTES = int(os.getenv("MAX_STORAGE_MB", "5120")) * 1024 * 1024
+MIN_FREE_STORAGE_BYTES = int(os.getenv("MIN_FREE_STORAGE_MB", "512")) * 1024 * 1024
 
 
 def validate_security_config() -> None:
@@ -108,6 +110,10 @@ def validate_security_config() -> None:
         raise RuntimeError("WEBAPP_URL в production должен быть корректным HTTPS origin")
     if not ALLOWED_HOSTS:
         raise RuntimeError("ALLOWED_HOSTS не определён: задайте WEBAPP_URL или ALLOWED_HOSTS")
+    if MAX_STORAGE_BYTES <= MAX_UPLOAD_BYTES:
+        raise RuntimeError("MAX_STORAGE_MB должен быть больше MAX_UPLOAD_MB")
+    if MIN_FREE_STORAGE_BYTES < MAX_UPLOAD_BYTES:
+        raise RuntimeError("MIN_FREE_STORAGE_MB должен быть не меньше MAX_UPLOAD_MB")
     if any(host == "*" or host.startswith("*.") or "://" in host for host in ALLOWED_HOSTS):
         raise RuntimeError("ALLOWED_HOSTS в production должен содержать только точные имена хостов")
     for origin in CORS_ALLOWED_ORIGINS:

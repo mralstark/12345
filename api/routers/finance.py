@@ -3,7 +3,7 @@
 
 from datetime import date as date_
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user, get_db
 from api.serializers import category_dict, transaction_dict
 from database.models import Category, Event, Keyword, Transaction, UniversityCell, User
-from services.finance import create_transaction, ensure_default_categories, region_categories
+from services.finance import (
+    create_transaction,
+    ensure_default_categories,
+    region_categories,
+)
 from utils.access import actor_cell, require_edit, require_same_cell, require_view
-from utils.balance_calc import get_balance, get_category_breakdown, get_cell_totals, get_totals
+from utils.balance_calc import (
+    get_balance,
+    get_category_breakdown,
+    get_cell_totals,
+    get_totals,
+)
 from utils.csv_export import build_transactions_csv
 from utils.parser import normalize_keyword
 from utils.period import resolve_period
@@ -47,13 +56,13 @@ class CategoryIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     type: str
     emoji: str | None = Field(default=None, max_length=8)
-    keywords: list[str] = []
+    keywords: list[str] = Field(default_factory=list, max_length=50)
 
 
 class CategoryPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
     emoji: str | None = Field(default=None, max_length=8)
-    keywords: list[str] | None = None
+    keywords: list[str] | None = Field(default=None, max_length=50)
 
 
 async def _check_category(session: AsyncSession, category_id: int | None, region_id: int) -> None:
@@ -171,8 +180,8 @@ async def list_transactions(
     type: str | None = None,
     category_id: int | None = None,
     event_id: int | None = None,
-    limit: int = 100,
-    skip: int = 0,
+    limit: int = Query(default=100, ge=1, le=200),
+    skip: int = Query(default=0, ge=0, le=1_000_000),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:

@@ -12,14 +12,21 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
 from api.serializers import application_dict
-from database.models import APPLICATION_STATE_PENDING, ROLE_SUPERUSER, MembershipApplication, Region, University, User
+from database.models import (
+    APPLICATION_STATE_PENDING,
+    ROLE_SUPERUSER,
+    MembershipApplication,
+    Region,
+    University,
+    User,
+)
 from services.applications import approve_application as svc_approve_application
 from services.applications import reject_application as svc_reject_application
 from utils.notify import notify_telegram, send_cabinet_welcome
@@ -39,6 +46,8 @@ class ApplicationPatch(BaseModel):
 
 @router.get("/pending")
 async def list_pending_applications(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -50,6 +59,8 @@ async def list_pending_applications(
             select(MembershipApplication)
             .where(MembershipApplication.state == APPLICATION_STATE_PENDING)
             .order_by(MembershipApplication.created_at)
+            .offset(offset)
+            .limit(limit)
         )
     ).scalars().all()
 

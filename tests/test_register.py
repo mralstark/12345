@@ -5,7 +5,13 @@
 from sqlalchemy import select
 
 import api.routers.register as register_module
-from database.models import APPLICATION_STATE_APPROVED, APPLICATION_STATE_PENDING, MembershipApplication, University, User
+from database.models import (
+    APPLICATION_STATE_APPROVED,
+    APPLICATION_STATE_PENDING,
+    MembershipApplication,
+    University,
+    User,
+)
 from tests.conftest import login_as_identity
 
 
@@ -45,14 +51,16 @@ async def test_universities_scoped_to_chosen_region(client, session, world):
     assert names == ["МГУ им. М.В. Ломоносова"]
 
 
-async def test_universities_post_creates_with_region(client, session, world):
+async def test_public_registration_cannot_modify_university_catalog(client, session, world):
     login_as_identity(999004)
     response = await client.post(
         "/api/register/universities", json={"name": "Новый Институт", "region_id": world["moscow"].id}
     )
-    assert response.status_code == 200, response.text
-    university = await session.get(University, response.json()["id"])
-    assert university.region_id == world["moscow"].id
+    assert response.status_code == 403, response.text
+    university = (
+        await session.execute(select(University).where(University.name == "Новый Институт"))
+    ).scalar_one_or_none()
+    assert university is None
 
 
 async def _moscow_university(session, world) -> University:

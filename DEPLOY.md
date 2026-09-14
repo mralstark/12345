@@ -81,7 +81,8 @@ powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1 -Server ЛОГИН@IP
 - поставит Python, PostgreSQL, nginx, certbot и шрифты для PDF-отчётов;
 - заведёт системного пользователя `bratstvo` и базу с случайным паролем;
 - создаст `/opt/bratstvo/.env` с готовыми `DATABASE_URL`, `STORAGE_DIR`, `WEBAPP_URL`;
-- создаст отдельный ключ подписи закрытых медиа и применит миграции целостности;
+- создаст отдельные ключи подписи закрытых медиа и шифрования резервных копий,
+  применит миграции целостности;
 - поставит два systemd-юнита — `bratstvo-bot` и `bratstvo-api`;
 - настроит nginx и выпустит HTTPS-сертификат.
 
@@ -149,7 +150,8 @@ ssh ЛОГИН@IP_СЕРВЕРА "cd /opt/bratstvo && sudo -u bratstvo .venv/bin
 powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1 -Server ЛОГИН@IP_СЕРВЕРА
 ```
 
-Зальёт изменения, установит зависимости из `requirements.lock`, применит
+Зальёт изменения, установит зависимости из `requirements.lock` с обязательной
+проверкой hashes от пользователя `bratstvo`, применит
 идемпотентные миграции и только после этого перезапустит оба сервиса. Новые
 таблицы по-прежнему создаёт `init_db`; изменения существующих таблиц выполняют
 скрипты в `scripts/`.
@@ -160,8 +162,34 @@ powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1 -Server ЛОГИН@IP
 ssh ЛОГИН@IP_СЕРВЕРА "printf '30 3 * * * root /opt/bratstvo/deploy/backup.sh\n' | sudo tee /etc/cron.d/bratstvo-backup"
 ```
 
-Каждую ночь: дамп базы и архив документов в `/var/backups/bratstvo`, хранение 14 дней.
-Восстановление базы: `pg_restore -d bratstvo --clean db-ГГГГ-ММ-ДД.dump`.
+Каждую ночь создаётся один зашифрованный AES-256 архив в
+`/var/backups/bratstvo`, срок хранения — 14 дней. Ключ находится отдельно в
+`/root/.bratstvo_backup_key`. Скопируйте его в защищённое хранилище секретов:
+без него восстановление невозможно.
+
+Для второй копии на отдельном диске задайте `BACKUP_REMOTE_DIR` в cron:
+
+```bash
+BACKUP_REMOTE_DIR=/mnt/offsite /opt/bratstvo/deploy/backup.sh
+```
+
+Проверка и распаковка перед восстановлением:
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 \
+  -pass file:/root/.bratstvo_backup_key \
+  -in bratstvo-ДАТА.tar.gz.enc | tar xzf -
+pg_restore -d bratstvo --clean database.dump
+```
+
+Если deploy остановился из-за несовпадения nginx, перенесите изменения шаблона
+в `/etc/nginx/sites-available/bratstvo`, проверьте `nginx -t`, перезагрузите
+nginx и подтвердите применённую версию:
+
+```bash
+sha256sum /opt/bratstvo/deploy/nginx-bratstvo.conf | cut -d' ' -f1 \
+  | sudo tee /etc/nginx/.bratstvo-template.sha256
+```
 
 ## 8. Если что-то не работает
 

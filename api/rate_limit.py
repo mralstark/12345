@@ -45,13 +45,19 @@ def enforce_user_rate_limit(telegram_id: int, method: str, path: str) -> None:
     elif method in {"GET", "HEAD", "OPTIONS"}:
         scope, limit, window = "read", 240, 60
     elif path.startswith("/api/register/"):
-        scope, limit, window = "registration", 10, 60
+        scope, limit, window = "registration", 5, 60
     elif path == "/api/documents" or path.endswith("/avatar") or path == "/api/news":
         scope, limit, window = "upload", 12, 60
     else:
         scope, limit, window = "write", 60, 60
 
     retry_after = _limiter.check(scope, telegram_id, limit, window)
+    if retry_after is None and scope == "registration":
+        # Ограничивает поток заявок с множества Telegram-аккаунтов. Production
+        # использует один API-процесс, поэтому счётчик охватывает весь сервис.
+        retry_after = _limiter.check("registration-global", 0, 60, 60)
+    if retry_after is None and scope == "upload":
+        retry_after = _limiter.check("upload-global", 0, 60, 60)
     if retry_after is not None:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,

@@ -66,7 +66,7 @@ echo "==> Пакеты"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq python3 python3-venv python3-pip postgresql nginx certbot \
-    python3-certbot-nginx fonts-dejavu-core curl ca-certificates
+    python3-certbot-nginx fonts-dejavu-core curl ca-certificates openssl
 
 echo "==> Своп"
 # На машинах с 1 ГБ памяти (например, GCP e2-micro) своп страхует от OOM —
@@ -93,17 +93,19 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR" "$DATA_DIR"
 
 echo "==> Виртуальное окружение и зависимости"
 [[ -d "$VENV" ]] || python3 -m venv "$VENV"
-"$VENV/bin/pip" install --quiet --upgrade pip
+chown -R "$APP_USER:$APP_USER" "$VENV"
+sudo -u "$APP_USER" "$VENV/bin/pip" install --quiet --upgrade pip
 REQUIREMENTS="$APP_DIR/requirements.lock"
 [[ -f "$REQUIREMENTS" ]] || REQUIREMENTS="$APP_DIR/requirements.txt"
 # На ARM (Oracle Ampere) готовое колесо есть не для каждой версии пакета —
 # тогда его надо собрать, а для этого нужен компилятор.
-if ! "$VENV/bin/pip" install --quiet -r "$REQUIREMENTS"; then
+PIP_HASH_ARGS=()
+[[ "$REQUIREMENTS" == *.lock ]] && PIP_HASH_ARGS=(--require-hashes)
+if ! sudo -u "$APP_USER" "$VENV/bin/pip" install --quiet "${PIP_HASH_ARGS[@]}" -r "$REQUIREMENTS"; then
     echo "    не хватило готовых пакетов ($(uname -m)) — ставлю инструменты сборки"
     apt-get install -y -qq build-essential python3-dev libffi-dev
-    "$VENV/bin/pip" install -r "$REQUIREMENTS"
+    sudo -u "$APP_USER" "$VENV/bin/pip" install "${PIP_HASH_ARGS[@]}" -r "$REQUIREMENTS"
 fi
-chown -R "$APP_USER:$APP_USER" "$VENV"
 
 echo "==> PostgreSQL"
 systemctl enable --now postgresql
@@ -121,6 +123,13 @@ PGCONF
     systemctl restart postgresql
     echo "    применены компактные настройки (RAM: ${RAM_MB} МБ)"
 fi
+BACKUP_KEY_FILE=/root/.bratstvo_backup_key
+if [[ ! -f "$BACKUP_KEY_FILE" ]]; then
+    openssl rand -hex 32 > "$BACKUP_KEY_FILE"
+    chmod 600 "$BACKUP_KEY_FILE"
+    echo "    создан отдельный ключ шифрования резервных копий"
+fi
+
 DB_PASS_FILE=/root/.bratstvo_db_password
 if [[ -f "$DB_PASS_FILE" ]]; then
     DB_PASS=$(cat "$DB_PASS_FILE")
@@ -220,6 +229,7 @@ sed -e "s|__DOMAIN__|$DOMAIN|g" -e "s|__PORT__|$PORT|g" \
 ln -sf /etc/nginx/sites-available/bratstvo /etc/nginx/sites-enabled/bratstvo
 nginx -t
 systemctl reload nginx
+sha256sum "$APP_DIR/deploy/nginx-bratstvo.conf" | cut -d' ' -f1 > /etc/nginx/.bratstvo-template.sha256
 
 echo "==> Локальный файрвол"
 # У образов Oracle Linux/Ubuntu на Oracle Cloud, кроме облачных Security List,

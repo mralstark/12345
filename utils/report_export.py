@@ -10,6 +10,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from services.reports import RegionReport
+from utils.export_security import reportlab_text, spreadsheet_cell
 from utils.parser import format_kopecks
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ def _write_table(sheet, headers: list[str], rows: list[tuple], widths: list[int]
         cell.font = _HEADER_FONT
         cell.alignment = Alignment(horizontal="center")
     for row in rows:
-        sheet.append(list(row))
+        sheet.append([spreadsheet_cell(value) for value in row])
     for index, width in enumerate(widths or [], start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
@@ -170,7 +171,14 @@ def build_region_pdf(report: RegionReport) -> bytes:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import (
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
     font, font_bold = _register_fonts()
 
@@ -181,7 +189,7 @@ def build_region_pdf(report: RegionReport) -> bytes:
     def table(headers: list[str], rows: list[list], widths: list[float]) -> Table:
         data = [[Paragraph(f"<b>{h}</b>", ParagraphStyle("th", fontName=font_bold, fontSize=9)) for h in headers]]
         cell_style = ParagraphStyle("td", fontName=font, fontSize=9, leading=11)
-        data.extend([[Paragraph(str(value), cell_style) for value in row] for row in rows])
+        data.extend([[Paragraph(reportlab_text(value), cell_style) for value in row] for row in rows])
         component = Table(data, colWidths=widths, repeatRows=1)
         component.setStyle(
             TableStyle(
@@ -211,9 +219,11 @@ def build_region_pdf(report: RegionReport) -> bytes:
 
     total_width = doc.width
     story = [
-        Paragraph(f"Отчёт регионального отделения: {report.region_name}", title_style),
+        Paragraph(f"Отчёт регионального отделения: {reportlab_text(report.region_name)}", title_style),
         Paragraph(
-            f"Период: {report.period_label} ({report.start:%d.%m.%Y} — {report.end:%d.%m.%Y})", subtitle_style
+            f"Период: {reportlab_text(report.period_label)} "
+            f"({report.start:%d.%m.%Y} — {report.end:%d.%m.%Y})",
+            subtitle_style,
         ),
         Spacer(1, 8),
         Paragraph("Сводка", heading_style),

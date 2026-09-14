@@ -12,16 +12,18 @@ from datetime import time as time_
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
-    CheckConstraint,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     Time,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -210,6 +212,7 @@ class University(Base):
     Рособрнадзора без экспорта, поэтому решили не тянуть внешнюю зависимость."""
 
     __tablename__ = "universities"
+    __table_args__ = (Index("uq_universities_name_ci", text("lower(name)"), unique=True),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), unique=True)
@@ -784,6 +787,15 @@ class MembershipApplication(Base):
     (services/admin_actions.py, handlers/apply.py)."""
 
     __tablename__ = "membership_applications"
+    __table_args__ = (
+        Index(
+            "uq_membership_applications_pending_telegram",
+            "telegram_id",
+            unique=True,
+            sqlite_where=text("state = 'pending'"),
+            postgresql_where=text("state = 'pending'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)

@@ -13,9 +13,8 @@
     только в своих (accessible_region_ids уже даёт нужный набор: у
     federal/superuser это все активные регионы, у coordinator — свои).
 
-Удаление региона — полное и необратимое (services/admin_actions.py::
-delete_region_permanently), не архивирование: тот же принцип «одно действие
-без мягкого варианта», что и у «Исключить» человека из состава (план §5)."""
+Удаление региона в интерфейсе означает безопасное архивирование: данные
+сохраняются для восстановления, а доступ и приглашение закрываются."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -23,8 +22,24 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
-from database.models import ROLE_COORDINATOR, ROLE_FEDERAL, ROLE_LEADER, ROLE_SUPERUSER, CoordinatorRegion, Region, User
-from services.admin_actions import create_coordinator, create_leader, remove_coordinator, remove_leader, create_region, delete_region_permanently, update_region
+from database.models import (
+    ROLE_COORDINATOR,
+    ROLE_FEDERAL,
+    ROLE_LEADER,
+    ROLE_SUPERUSER,
+    CoordinatorRegion,
+    Region,
+    User,
+)
+from services.admin_actions import (
+    archive_region,
+    create_coordinator,
+    create_leader,
+    create_region,
+    remove_coordinator,
+    remove_leader,
+    update_region,
+)
 from utils.access import accessible_region_ids
 from utils.notify import send_role_assigned_notice, send_role_removed_notice
 
@@ -148,15 +163,14 @@ async def delete_region_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Полное и необратимое удаление — тот же принцип, что и «Исключить»
-    человека (§5): одно действие, без промежуточного архивирования."""
+    """Архивирует регион и отзывает ссылку регистрации, сохраняя данные."""
     if user.role not in _CAN_DELETE_REGION:
-        raise HTTPException(403, "Удалять регионы вправе только федеральный координатор")
+        raise HTTPException(403, "Архивировать регионы вправе только федеральный координатор")
     try:
-        await delete_region_permanently(session, region_id)
+        await archive_region(session, region_id)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
-    return {"ok": True}
+    return {"ok": True, "archived": True}
 
 
 class AssignLeaderIn(BaseModel):
@@ -209,7 +223,7 @@ async def remove_leader_endpoint(
 
 class AssignCoordinatorIn(BaseModel):
     member_id: int
-    region_ids: list[int] = Field(min_length=1)
+    region_ids: list[int] = Field(min_length=1, max_length=100)
 
 
 @router.post("/coordinators")

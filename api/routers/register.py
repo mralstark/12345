@@ -13,6 +13,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import TelegramIdentity, get_db, get_telegram_identity
@@ -29,7 +30,7 @@ from database.models import (
 )
 from services.admin_actions import create_federal
 from services.applications import approve_application
-from utils.notify import notify_telegram, send_cabinet_welcome
+from utils.notify import escape_telegram_html, notify_telegram, send_cabinet_welcome
 from utils.parser import normalize_telegram_username
 from utils.roles import region_display_name
 from utils.users import resolve_user
@@ -91,24 +92,15 @@ async def register_create_university(
     identity: TelegramIdentity = Depends(get_telegram_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Вуза нет в списке региона — заводим прямо из формы, как и в «Составе»
-    (api/routers/universities.py), с той же дедупликацией по имени без
-    учёта регистра."""
-    name = payload.name.strip()
-    if not name:
-        raise HTTPException(400, "Название вуза не может быть пустым")
+    """Публичная регистрация не изменяет справочники приложения.
 
-    key = name.lower()
-    existing = (await session.execute(select(University))).scalars().all()
-    for university in existing:
-        if university.name.lower() == key:
-            return _university_dict(university)
-
-    university = University(name=name, region_id=payload.region_id)
-    session.add(university)
-    await session.commit()
-    await session.refresh(university)
-    return _university_dict(university)
+    Параметры и зависимость Telegram оставлены для совместимости клиентов:
+    неизвестный вуз добавляет руководитель после проверки названия.
+    """
+    region = await session.get(Region, payload.region_id)
+    if region is None or not region.is_active:
+        raise HTTPException(400, "Отделение не найдено")
+    raise HTTPException(403, "ВУЗ отсутствует в справочнике — обратитесь к руководителю отделения")
 
 
 class RegisterSubmit(BaseModel):
@@ -207,7 +199,11 @@ async def register_submit(
         member_status=payload.status,
     )
     session.add(application)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(409, "Анкета уже отправлена и ждёт подтверждения руководителя") from None
     await session.refresh(application)
 
     if identity.telegram_id in AUTO_FEDERAL_TELEGRAM_IDS:
@@ -227,22 +223,22 @@ async def register_submit(
         return {"ok": True}
 
     summary_lines = [
-        f"ФИО: {application.full_name}",
-        f"Телефон: {application.phone}",
-        f"Telegram: {application.telegram_username}",
+        f"ФИО: {escape_telegram_html(application.full_name)}",
+        f"Телефон: {escape_telegram_html(application.phone)}",
+        f"Telegram: {escape_telegram_html(application.telegram_username)}",
         f"Дата рождения: {birth_date.strftime('%d.%m.%Y')}",
-        f"ВУЗ: {university.name if university else '?'}",
-        f"Факультет: {application.faculty}",
+        f"ВУЗ: {escape_telegram_html(university.name if university else '?')}",
+        f"Факультет: {escape_telegram_html(application.faculty)}",
         f"Курс: {'окончил' if application.graduated_university else application.course}",
         f"Статус: {MEMBER_STATUS_LABELS[application.member_status]}",
     ]
     if application.education_level:
         summary_lines.insert(-1, f"Уровень: {EDUCATION_LEVEL_LABELS[application.education_level]}")
     if application.workplace:
-        summary_lines.append(f"Место работы: {application.workplace}")
+        summary_lines.append(f"Место работы: {escape_telegram_html(application.workplace)}")
 
     notify_text = (
-        f"📝 <b>Подтверждение личного кабинета — {region.name}</b>\n\n"
+        f"📝 <b>Подтверждение личного кабинета — {escape_telegram_html(region.name)}</b>\n\n"
         + "\n".join(summary_lines)
     )
     reviewer = await _pick_reviewer(session, region)

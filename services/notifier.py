@@ -28,7 +28,7 @@ from database.models import (
 )
 from services.education import bump_courses
 from services.recurring_events import materialize_all
-from utils.notify import notify_telegram
+from utils.notify import escape_telegram_html, notify_telegram
 from utils.parser import first_and_patronymic, format_date_ru
 from utils.tz import now as tz_now
 from utils.tz import today as tz_today
@@ -77,8 +77,9 @@ async def check_birthdays(bot: Bot) -> int:
             await notify_telegram(
                 leader_telegram_id,
                 f"🎂 <b>День рождения</b>\n\n"
-                f"Сегодня {age} лет — {full_name} ({region_name}).\n"
-                f"{'Телефон: ' + phone if phone else ''}",
+                f"Сегодня {age} лет — {escape_telegram_html(full_name)} "
+                f"({escape_telegram_html(region_name)}).\n"
+                f"{escape_telegram_html('Телефон: ' + phone) if phone else ''}",
                 bot=bot,
             )
             sent += 1
@@ -112,7 +113,8 @@ async def check_deadlines(bot: Bot) -> int:
             when = "сегодня" if task.deadline == today else format_date_ru(task.deadline)
             await notify_telegram(
                 assignee.telegram_id,
-                f"⏰ <b>Приближается срок</b>\n\n«{task.title}» — до {when}.",
+                f"⏰ <b>Приближается срок</b>\n\n«{escape_telegram_html(task.title)}» — "
+                f"до {escape_telegram_html(when)}.",
                 bot=bot,
             )
             sent += 1
@@ -142,7 +144,7 @@ async def check_overdue(bot: Bot) -> int:
             author = await session.get(User, task.from_user_id)
             text = (
                 f"🔴 <b>Задача просрочена</b>\n\n"
-                f"«{task.title}»\nСрок был: {format_date_ru(task.deadline)}"
+                f"«{escape_telegram_html(task.title)}»\nСрок был: {format_date_ru(task.deadline)}"
             )
             if assignee:
                 await notify_telegram(assignee.telegram_id, text, bot=bot)
@@ -150,7 +152,7 @@ async def check_overdue(bot: Bot) -> int:
             if author and author.id != task.to_user_id:
                 await notify_telegram(
                     author.telegram_id,
-                    text + f"\nИсполнитель: {assignee.full_name if assignee else '—'}",
+                    text + f"\nИсполнитель: {escape_telegram_html(assignee.full_name if assignee else '—')}",
                     bot=bot,
                 )
                 sent += 1
@@ -202,8 +204,9 @@ async def check_event_reminders(bot: Bot) -> int:
             for telegram_id, full_name in attendees.all():
                 await notify_telegram(
                     telegram_id,
-                    f"📅 <b>Напоминание</b>\n\n{first_and_patronymic(full_name)}, через 24 часа — "
-                    f"«{event.title}» ({when}). Вы отметились как «иду».",
+                    f"📅 <b>Напоминание</b>\n\n{escape_telegram_html(first_and_patronymic(full_name))}, "
+                    f"через 24 часа — «{escape_telegram_html(event.title)}» "
+                    f"({escape_telegram_html(when)}). Вы отметились как «иду».",
                     bot=bot,
                 )
                 sent += 1

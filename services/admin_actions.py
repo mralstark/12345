@@ -7,9 +7,13 @@
 Управленческая роль назначается только уже существующему аккаунту (человек
 прошёл саморегистрацию, telegram_id уже проставлен) — см. _resolve_or_promote."""
 
+import logging
+from pathlib import Path
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import STORAGE_DIR
 from database.models import (
     ROLE_CELL_LEADER,
     ROLE_COORDINATOR,
@@ -19,7 +23,6 @@ from database.models import (
     ROLE_SUPERUSER,
     BirthdayNotice,
     BureauMember,
-    NewsPost,
     Category,
     CoordinatorRegion,
     Document,
@@ -31,6 +34,8 @@ from database.models import (
     MemberQuestProgress,
     MembershipApplication,
     NewsComment,
+    NewsPhoto,
+    NewsPost,
     NewsReaction,
     NewsView,
     Region,
@@ -42,6 +47,24 @@ from database.models import (
     User,
 )
 from utils.invites import generate_application_code
+
+logger = logging.getLogger(__name__)
+
+
+def _stored_file(relative_path: str | None) -> Path | None:
+    if not relative_path:
+        return None
+    root = STORAGE_DIR.resolve()
+    target = (root / relative_path).resolve()
+    return target if target != root and root in target.parents else None
+
+
+def _delete_stored_files(paths: set[Path]) -> None:
+    for target in paths:
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Не удалось удалить файл хранилища: %s", target)
 
 
 async def _resolve_or_promote(session: AsyncSession, role: str, member_id: int) -> User:
@@ -311,10 +334,12 @@ async def update_region(session: AsyncSession, region_id: int, name: str | None 
 
 
 async def archive_region(session: AsyncSession, region_id: int) -> Region:
+    """Закрывает регион и его приглашение без необратимого удаления данных."""
     region = await session.get(Region, region_id)
     if region is None:
         raise ValueError("Регион не найден")
     region.is_active = False
+    region.application_code = None
     await session.commit()
     await session.refresh(region)
     return region
@@ -325,6 +350,8 @@ async def unarchive_region(session: AsyncSession, region_id: int) -> Region:
     if region is None:
         raise ValueError("Регион не найден")
     region.is_active = True
+    if not region.application_code:
+        region.application_code = generate_application_code()
     await session.commit()
     await session.refresh(region)
     return region
@@ -414,10 +441,17 @@ async def _delete_all(session: AsyncSession, model, condition) -> None:
         await session.delete(row)
 
 
-async def exclude_member(session: AsyncSession, member_id: int) -> None:
+async def exclude_member(
+    session: AsyncSession, member_id: int, *, commit: bool = True
+) -> set[Path]:
     member = await session.get(Member, member_id)
     if member is None:
         raise ValueError("Человек не найден в составе")
+
+    stored_files: set[Path] = set()
+    avatar = _stored_file(member.avatar_path)
+    if avatar is not None:
+        stored_files.add(avatar)
 
     # Ссылки на самого человека из «Состава» — не зависят от того, есть ли у
     # него личный кабинет: оба поля смотрят на Member напрямую, не на User.
@@ -463,9 +497,18 @@ async def exclude_member(session: AsyncSession, member_id: int) -> None:
         # NewsPost.author_user_id — NOT NULL, как Task выше; удаление каскадом
         # заберёт и адресатов-регионы этой новости
         # (cascade="all, delete-orphan" на NewsPost.regions).
-        for post in (
+        posts = (
             await session.execute(select(NewsPost).where(NewsPost.author_user_id == user.id))
-        ).scalars().all():
+        ).scalars().all()
+        post_ids = [post.id for post in posts]
+        if post_ids:
+            for stored_path in (
+                await session.execute(select(NewsPhoto.stored_path).where(NewsPhoto.post_id.in_(post_ids)))
+            ).scalars().all():
+                target = _stored_file(stored_path)
+                if target is not None:
+                    stored_files.add(target)
+        for post in posts:
             await session.delete(post)
 
         for region in (await session.execute(select(Region).where(Region.leader_user_id == user.id))).scalars().all():
@@ -482,7 +525,10 @@ async def exclude_member(session: AsyncSession, member_id: int) -> None:
 
     await session.flush()
     await session.delete(member)
-    await session.commit()
+    if commit:
+        await session.commit()
+        _delete_stored_files(stored_files)
+    return stored_files
 
 
 # --- Удаление региона --------------------------------------------------------
@@ -500,9 +546,10 @@ async def delete_region_permanently(session: AsyncSession, region_id: int) -> No
     # Каждый человек состава — тем же путём, что и «Исключить» одного
     # человека: так же полностью убирает и его личный кабинет, если был,
     # без повторения той же FK-логики здесь ещё раз.
+    stored_files: set[Path] = set()
     member_ids = (await session.execute(select(Member.id).where(Member.region_id == region_id))).scalars().all()
     for member_id in member_ids:
-        await exclude_member(session, member_id)
+        stored_files.update(await exclude_member(session, member_id, commit=False))
 
     # Остальное — то, что не привязано к конкретному человеку из состава.
     await session.execute(delete(MembershipApplication).where(MembershipApplication.region_id == region_id))
@@ -511,6 +558,12 @@ async def delete_region_permanently(session: AsyncSession, region_id: int) -> No
     category_ids = select(Category.id).where(Category.region_id == region_id)
     await session.execute(delete(EventAttendance).where(EventAttendance.event_id.in_(event_ids)))
     await session.execute(delete(Keyword).where(Keyword.category_id.in_(category_ids)))
+    for stored_path in (
+        await session.execute(select(Document.stored_path).where(Document.region_id == region_id))
+    ).scalars().all():
+        target = _stored_file(stored_path)
+        if target is not None:
+            stored_files.add(target)
     await session.execute(delete(Document).where(Document.region_id == region_id))
     await session.execute(delete(Transaction).where(Transaction.region_id == region_id))
     await session.execute(delete(Event).where(Event.region_id == region_id))
@@ -526,3 +579,4 @@ async def delete_region_permanently(session: AsyncSession, region_id: int) -> No
     await session.flush()
     await session.delete(region)
     await session.commit()
+    _delete_stored_files(stored_files)

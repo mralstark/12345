@@ -9,7 +9,15 @@ from html import escape
 
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -29,30 +37,30 @@ from database.models import (
     User,
 )
 from services.news import (
+    BYLINE_BRATSTVO,
+    BYLINE_LOGOS,
+    BYLINE_OTDELENIE,
+    BYLINE_PERSONAL,
     COMMENTS_CLOSED_HINT,
     COMMENTS_OPEN,
+    PHOTO_LIMIT,
     add_comment,
     attach_photos,
+    avatar_url_for_user,
     byline_for,
     byline_kind_for,
     can_delete_comment,
-    can_post_officially,
     can_delete_post,
     can_post_news,
+    can_post_officially,
     create_news,
     delete_comment,
     delete_news,
     mark_viewed,
     news_audience_telegram_ids,
-    PHOTO_LIMIT,
     news_feed,
     photo_token_valid,
     photo_url,
-    BYLINE_BRATSTVO,
-    BYLINE_LOGOS,
-    BYLINE_OTDELENIE,
-    BYLINE_PERSONAL,
-    avatar_url_for_user,
     reactions_for,
     short_name,
     toggle_reaction,
@@ -315,7 +323,7 @@ async def photo(
         path,
         media_type=item.content_type or "image/jpeg",
         filename=item.original_name,
-        headers={"Cache-Control": "private, max-age=900", "X-Content-Type-Options": "nosniff"},
+        headers={"Cache-Control": "private, max-age=120", "X-Content-Type-Options": "nosniff"},
     )
 
 

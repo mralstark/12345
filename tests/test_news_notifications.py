@@ -302,3 +302,24 @@ async def test_rejected_custom_emoji_falls_back_to_plain(world, session, monkeyp
     assert result is not None, "человек остался без уведомления"
     assert len(attempts) == 2, "запасной вариант не отправлялся"
     assert "tg-emoji" not in attempts[1]
+
+
+async def test_rejected_html_is_retried_as_plain_text(monkeypatch):
+    from aiogram.exceptions import TelegramBadRequest
+
+    from utils import notify as notify_module
+
+    modes = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, **kwargs):
+            modes.append(kwargs.get("parse_mode"))
+            if kwargs.get("parse_mode") == "HTML":
+                raise TelegramBadRequest(method=None, message="can't parse entities")
+            return _SentMessage(chat_id, 43)
+
+    monkeypatch.setattr(notify_module, "get_notifier_bot", lambda: FakeBot())
+    result = await notify_module.notify_telegram(555, "<broken>")
+
+    assert result is not None
+    assert modes == ["HTML", None]

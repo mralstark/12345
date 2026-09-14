@@ -14,7 +14,12 @@ config.PRIMARY_REVIEWER_FULL_NAME."""
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from sqlalchemy import select
 
 from database.db import async_session
@@ -35,7 +40,7 @@ from services.admin_actions import regenerate_application_code
 from services.applications import approve_application as svc_approve_application
 from services.applications import reject_application as svc_reject_application
 from utils.invites import application_link
-from utils.notify import notify_telegram, send_cabinet_welcome
+from utils.notify import escape_telegram_html, notify_telegram, send_cabinet_welcome
 from utils.parser import parse_date_hint
 from utils.tz import today as tz_today
 from utils.users import resolve_user
@@ -88,24 +93,24 @@ async def _render_application_text(application: MembershipApplication) -> str:
     async with async_session() as session:
         region = await session.get(Region, application.region_id)
         university = await session.get(University, application.university_id) if application.university_id else None
-    lines = [f"ФИО: {application.full_name}"]
+    lines = [f"ФИО: {escape_telegram_html(application.full_name)}"]
     if application.phone:
-        lines.append(f"Телефон: {application.phone}")
+        lines.append(f"Телефон: {escape_telegram_html(application.phone)}")
     if application.birth_date:
         lines.append(f"Дата рождения: {application.birth_date.strftime('%d.%m.%Y')}")
     if university:
-        lines.append(f"ВУЗ: {university.name}")
+        lines.append(f"ВУЗ: {escape_telegram_html(university.name)}")
     if application.faculty:
-        lines.append(f"Факультет: {application.faculty}")
+        lines.append(f"Факультет: {escape_telegram_html(application.faculty)}")
     if application.course:
         lines.append(f"Курс: {application.course}")
     if application.education_level:
-        lines.append(f"Уровень: {EDUCATION_LEVEL_LABELS.get(application.education_level, application.education_level)}")
+        lines.append(f"Уровень: {escape_telegram_html(EDUCATION_LEVEL_LABELS.get(application.education_level, application.education_level))}")
     if application.workplace:
-        lines.append(f"Место работы: {application.workplace}")
-    lines.append(f"Статус в составе: {MEMBER_STATUS_LABELS.get(application.member_status, application.member_status)}")
-    lines.append(f"\nСтатус заявки: {APPLICATION_STATE_LABELS[application.state]}")
-    return f"📝 <b>Подтверждение личного кабинета — {region.name if region else '?'}</b>\n\n" + "\n".join(lines)
+        lines.append(f"Место работы: {escape_telegram_html(application.workplace)}")
+    lines.append(f"Статус в составе: {escape_telegram_html(MEMBER_STATUS_LABELS.get(application.member_status, application.member_status))}")
+    lines.append(f"\nСтатус заявки: {escape_telegram_html(APPLICATION_STATE_LABELS[application.state])}")
+    return f"📝 <b>Подтверждение личного кабинета — {escape_telegram_html(region.name if region else '?')}</b>\n\n" + "\n".join(lines)
 
 
 async def _send_pending_applications(send, telegram_id: int, full_name: str) -> None:
@@ -122,7 +127,13 @@ async def _send_pending_applications(send, telegram_id: int, full_name: str) -> 
             await send("Доступно только администраторам.")
             return
         stmt = select(MembershipApplication).where(MembershipApplication.state == APPLICATION_STATE_PENDING)
-        pending = list((await session.execute(stmt.order_by(MembershipApplication.created_at))).scalars().all())
+        pending = list(
+            (
+                await session.execute(
+                    stmt.order_by(MembershipApplication.created_at).limit(100)
+                )
+            ).scalars().all()
+        )
 
     if not pending:
         await send("Анкет на подтверждении нет.")
@@ -164,8 +175,8 @@ async def show_application_link(callback: CallbackQuery) -> None:
     bot_username = (await callback.bot.get_me()).username
     link = application_link(bot_username or "<имя_бота>", code) if code else None
     text = (
-        f"🔗 <b>Ссылка-приглашение — {region_name}</b>\n\n"
-        + (link if link else "Код ещё не сгенерирован — обновите.")
+        f"🔗 <b>Ссылка-приглашение — {escape_telegram_html(region_name)}</b>\n\n"
+        + (escape_telegram_html(link) if link else "Код ещё не сгенерирован — обновите.")
         + "\n\nПо этой ссылке человек, уже принятый через отбор на сайте, попадёт прямо в форму "
         "создания личного кабинета с уже выбранным отделением. Ссылка многоразовая — "
         "если её кто-то распространил не туда, обновите, старая перестанет работать."
@@ -198,7 +209,7 @@ async def regenerate_application_link(callback: CallbackQuery) -> None:
     bot_username = (await callback.bot.get_me()).username
     link = application_link(bot_username or "<имя_бота>", code)
     await callback.message.edit_text(
-        f"🔗 <b>Ссылка-приглашение — {region_name}</b>\n\n{link}\n\n"
+        f"🔗 <b>Ссылка-приглашение — {escape_telegram_html(region_name)}</b>\n\n{escape_telegram_html(link)}\n\n"
         "Старая ссылка больше не работает.",
         parse_mode="HTML",
     )
@@ -224,7 +235,7 @@ async def approve_application_button(callback: CallbackQuery) -> None:
 
         await send_cabinet_welcome(approved_user, bot=callback.bot)
 
-    await callback.message.edit_text(f"✅ Подтверждено: {application.full_name}")
+    await callback.message.edit_text(f"✅ Подтверждено: {application.full_name}", parse_mode=None)
     await callback.answer()
 
 
@@ -250,7 +261,7 @@ async def reject_application_button(callback: CallbackQuery) -> None:
             "❌ Подтверждение личного кабинета отклонено. Если это ошибка — напишите администратору.",
         )
 
-    await callback.message.edit_text(f"❌ Отклонено: {application.full_name}")
+    await callback.message.edit_text(f"❌ Отклонено: {application.full_name}", parse_mode=None)
     await callback.answer()
 
 

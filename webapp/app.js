@@ -2935,7 +2935,7 @@
       '<div class="field"><label>Название</label><input id="reName" value="' + esc(region.name) + '" /></div>' +
       '<div class="btn-row"><button class="btn" id="reSave">Сохранить</button>' +
       '<button class="btn btn--ghost" id="reClose">Закрыть</button></div>' +
-      '<div class="btn-row" style="margin-top:var(--space-16)"><button class="btn btn--danger" id="reDelete">🗑 Удалить регион</button></div>',
+      '<div class="btn-row" style="margin-top:var(--space-16)"><button class="btn btn--danger" id="reDelete">Архивировать регион</button></div>',
       () => {
         document.getElementById('reClose').onclick = closeModal;
         document.getElementById('reSave').onclick = async () => {
@@ -2949,13 +2949,13 @@
           } catch (error) { fail(error); }
         };
         document.getElementById('reDelete').onclick = () => confirmAction(
-          'Удалить регион «' + region.name + '» безвозвратно? Весь состав, финансы, мероприятия, документы, ' +
-          'вузовские ячейки этого региона будут удалены полностью — это необратимо.',
+          'Архивировать регион «' + region.name + '»? Он исчезнет из рабочих списков, ' +
+          'ссылка регистрации перестанет работать, а данные сохранятся для восстановления.',
           async () => {
             try {
               await api('/regions/' + region.id, { method: 'DELETE' });
               closeModal();
-              toast('Регион удалён');
+              toast('Регион архивирован');
               startRender(renderRegionsTab);
             } catch (error) { fail(error); }
           });
@@ -4506,10 +4506,7 @@
       regions.map((r) => '<option value="' + r.id + '">' + esc(r.label) + '</option>').join('') +
       '</select></div>' +
       '<div class="field"><label id="rUniversityLabel">ВУЗ</label><input id="rUniversityInput" autocomplete="off" disabled />' +
-      // Подсказка нужна больше всего новым отделениям: справочник вузов у них
-      // пустой, автодополнение молчит, и откуда-то надо узнать, что название
-      // можно просто написать — оно добавится само.
-      '<div class="row__sub" style="margin-top:var(--space-4)">Нет в списке — напишите название полностью, оно добавится.</div>' +
+      '<div class="row__sub" style="margin-top:var(--space-4)">Нет в списке — обратитесь к руководителю отделения.</div>' +
       '<div id="rUniversitySuggestions" class="chips" style="margin-top:var(--space-8)"></div></div>' +
       '<div class="field"><label id="rFacultyLabel">Факультет</label><input id="rFaculty" /></div>' +
       '<div class="field"><label>Курс</label><select id="rCourse">' +
@@ -4629,12 +4626,10 @@
       const status = document.getElementById('rStatus').value;
       if (!status) { toast('Выберите статус'); return; }
 
-      let universityId = selectedUniversityId;
+      const universityId = selectedUniversityId;
       if (!universityId) {
-        try {
-          const created = await api('/register/universities', { method: 'POST', body: { name: uniName, region_id: regionId } });
-          universityId = created.id;
-        } catch (error) { fail(error); return; }
+        toast('Выберите ВУЗ из справочника. Если его нет — обратитесь к руководителю отделения.');
+        return;
       }
 
       try {

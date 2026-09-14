@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
 from api.serializers import member_dict
+from config import STORAGE_DIR
 from database.models import (
     MEMBER_STATUS_MEMBER,
     BureauMember,
@@ -22,16 +23,22 @@ from database.models import (
     NewsReaction,
     NewsView,
     Region,
-    UniversityCell,
     University,
+    UniversityCell,
     User,
 )
 from services.education import academic_year
 from services.moderation import check as check_text
-from config import STORAGE_DIR
-from services.news import avatar_token_valid, avatar_url_for_user, photo_url, save_avatar, short_name
+from services.news import (
+    avatar_token_valid,
+    avatar_url_for_user,
+    photo_url,
+    save_avatar,
+    short_name,
+)
 from utils.parser import normalize_telegram_username
-from utils.tz import iso_utc, today as tz_today
+from utils.tz import iso_utc
+from utils.tz import today as tz_today
 from utils.university_cells import resolve_member_cell
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -299,7 +306,7 @@ async def avatar(
         raise HTTPException(404, "Файл не найден")
     return FileResponse(
         path,
-        headers={"Cache-Control": "private, max-age=900", "X-Content-Type-Options": "nosniff"},
+        headers={"Cache-Control": "private, max-age=120", "X-Content-Type-Options": "nosniff"},
     )
 
 
@@ -356,7 +363,12 @@ async def public_profile(
 async def _role_title(session: AsyncSession, user: User) -> str | None:
     """Должность для профиля: членство показывает герб, а руководство — строка.
     У участника её нет вовсе."""
-    from database.models import ROLE_CELL_LEADER, ROLE_COORDINATOR, ROLE_FEDERAL, ROLE_LEADER
+    from database.models import (
+        ROLE_CELL_LEADER,
+        ROLE_COORDINATOR,
+        ROLE_FEDERAL,
+        ROLE_LEADER,
+    )
     from utils.access import accessible_region_ids, actor_cell
 
     if user.role == ROLE_FEDERAL:

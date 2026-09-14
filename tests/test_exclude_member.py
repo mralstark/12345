@@ -13,7 +13,6 @@ from database.models import (
     Base,
     BirthdayNotice,
     BureauMember,
-    NewsPost,
     CoordinatorRegion,
     Document,
     Event,
@@ -24,6 +23,8 @@ from database.models import (
     MemberQuestProgress,
     MembershipApplication,
     NewsComment,
+    NewsPhoto,
+    NewsPost,
     NewsReaction,
     NewsView,
     Quest,
@@ -34,6 +35,7 @@ from database.models import (
     UniversityCell,
     User,
 )
+from services import admin_actions
 from services.admin_actions import (
     EXCLUDE_HANDLES_MEMBER_REFS,
     EXCLUDE_HANDLES_USER_REFS,
@@ -63,6 +65,52 @@ def test_every_reference_to_a_person_is_accounted_for():
     """
     assert _refs_to("users.id") == set(EXCLUDE_HANDLES_USER_REFS)
     assert _refs_to("members.id") == set(EXCLUDE_HANDLES_MEMBER_REFS)
+
+
+async def test_exclude_member_removes_avatar_and_authored_news_files(
+    session, world, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(admin_actions, "STORAGE_DIR", tmp_path)
+    avatar = tmp_path / "avatars" / "person.jpg"
+    photo = tmp_path / "news" / "post.jpg"
+    avatar.parent.mkdir(parents=True)
+    photo.parent.mkdir(parents=True)
+    avatar.write_bytes(b"avatar")
+    photo.write_bytes(b"photo")
+
+    member = Member(
+        region_id=world["moscow"].id,
+        full_name="Удаляемый Автор",
+        avatar_path="avatars/person.jpg",
+    )
+    session.add(member)
+    await session.flush()
+    user = User(
+        full_name=member.full_name,
+        role=ROLE_PARTICIPANT,
+        member_id=member.id,
+        telegram_id=555099,
+    )
+    session.add(user)
+    await session.flush()
+    post = NewsPost(author_user_id=user.id, text="Новость", byline="Автор")
+    session.add(post)
+    await session.flush()
+    session.add(
+        NewsPhoto(
+            post_id=post.id,
+            stored_path="news/post.jpg",
+            original_name="post.jpg",
+            content_type="image/jpeg",
+            size_bytes=5,
+        )
+    )
+    await session.commit()
+
+    await exclude_member(session, member.id)
+
+    assert not avatar.exists()
+    assert not photo.exists()
 
 
 async def test_exclude_member_without_account_just_removes_member(session, world):

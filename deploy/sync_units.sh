@@ -63,7 +63,7 @@ if [ "$units_changed" = "1" ]; then
     fi
 fi
 
-# --- nginx: только предупреждение ---------------------------------------------
+# --- nginx: запрещаем тихий drift ---------------------------------------------
 # Сверяем не с файлом в системе (его правил certbot, разойдётся всегда), а с
 # отпечатком шаблона на момент последней установки.
 NGINX_TEMPLATE="$APP_DIR/deploy/nginx-bratstvo.conf"
@@ -72,12 +72,13 @@ NGINX_STAMP=/etc/nginx/.bratstvo-template.sha256
 if [ -f "$NGINX_TEMPLATE" ]; then
     current=$(sha256sum "$NGINX_TEMPLATE" | cut -d' ' -f1)
     if [ ! -f "$NGINX_STAMP" ]; then
-        # Первый запуск на уже настроенном сервере: считаем нынешний шаблон
-        # применённым, иначе предупреждали бы на ровном месте.
-        printf '%s\n' "$current" > "$NGINX_STAMP"
+        echo "    ОШИБКА: нет подтверждения применённой конфигурации nginx ($NGINX_STAMP)."
+        echo "    Сверьте /etc/nginx/sites-available/bratstvo с шаблоном, выполните"
+        echo "    nginx -t && systemctl reload nginx, затем создайте stamp командой из README."
+        exit 1
     elif [ "$current" != "$(cat "$NGINX_STAMP")" ]; then
         echo
-        echo "    ВНИМАНИЕ: настройка nginx в проекте изменилась, но применена НЕ будет."
+        echo "    ОШИБКА: настройка nginx в проекте изменилась и ещё не применена."
         echo "    В системе её правил certbot (сертификаты, перенаправление на HTTPS),"
         echo "    и перезапись шаблоном снесла бы HTTPS. Перенесите правку руками:"
         echo "      /etc/nginx/sites-available/bratstvo"
@@ -85,6 +86,7 @@ if [ -f "$NGINX_TEMPLATE" ]; then
         echo "    После этого отметьте применённой:"
         echo "      sha256sum $NGINX_TEMPLATE | cut -d' ' -f1 > $NGINX_STAMP"
         echo
+        exit 1
     fi
 fi
 

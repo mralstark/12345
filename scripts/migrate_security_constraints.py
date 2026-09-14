@@ -27,8 +27,8 @@ async def migrate() -> None:
             return
 
         tables = await conn.run_sync(lambda sync_conn: set(inspect(sync_conn).get_table_names()))
-        if not {"members", "shop_purchases"}.issubset(tables):
-            raise RuntimeError("Не найдены таблицы members и shop_purchases")
+        if not {"members", "shop_purchases", "universities", "membership_applications"}.issubset(tables):
+            raise RuntimeError("Не найдены обязательные таблицы приложения")
 
         negative = await conn.scalar(text("SELECT count(*) FROM members WHERE stars < 0"))
         duplicate = (
@@ -40,12 +40,38 @@ async def migrate() -> None:
                 )
             )
         ).first()
+        duplicate_university = (
+            await conn.execute(
+                text(
+                    "SELECT lower(name) AS key, count(*) AS copies FROM universities "
+                    "GROUP BY lower(name) HAVING count(*) > 1 LIMIT 1"
+                )
+            )
+        ).first()
+        duplicate_pending = (
+            await conn.execute(
+                text(
+                    "SELECT telegram_id, count(*) AS copies FROM membership_applications "
+                    "WHERE state = 'pending' GROUP BY telegram_id HAVING count(*) > 1 LIMIT 1"
+                )
+            )
+        ).first()
         if negative:
             raise RuntimeError(f"Найдено записей members с отрицательными stars: {negative}")
         if duplicate:
             raise RuntimeError(
                 "Найдена повторная покупка: "
                 f"member_id={duplicate.member_id}, item_id={duplicate.item_id}, copies={duplicate.copies}"
+            )
+        if duplicate_university:
+            raise RuntimeError(
+                "Найдены дубликаты вузов без учёта регистра: "
+                f"name={duplicate_university.key}, copies={duplicate_university.copies}"
+            )
+        if duplicate_pending:
+            raise RuntimeError(
+                "Найдены повторные ожидающие заявки: "
+                f"telegram_id={duplicate_pending.telegram_id}, copies={duplicate_pending.copies}"
             )
 
         await conn.execute(
@@ -70,6 +96,18 @@ async def migrate() -> None:
                     END IF;
                 END $$;
                 """
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_universities_name_ci "
+                "ON universities (lower(name))"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_membership_applications_pending_telegram "
+                "ON membership_applications (telegram_id) WHERE state = 'pending'"
             )
         )
         print("Ограничения безопасности базы данных применены")

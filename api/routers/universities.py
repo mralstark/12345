@@ -1,13 +1,17 @@
 """Каталог вузов — общий на всю систему, без региональной привязки
 (см. utils/university_cells.py, database/models.py::University)."""
 
+import unicodedata
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
-from database.models import University, User
+from database.models import ROLE_FEDERAL, ROLE_SUPERUSER, Region, University, User
+from utils.access import require_edit
 
 router = APIRouter(prefix="/universities", tags=["universities"])
 
@@ -60,7 +64,16 @@ async def create_university(
     не рискуя задвоить каталог опечаткой в регистре. region_id проставляется
     только при создании новой записи — у уже существующей не переписывается
     (одна и та же ячейка каталога общая на всю систему, а не своя на регион)."""
-    name = payload.name.strip()
+    if payload.region_id is None:
+        if user.role not in (ROLE_FEDERAL, ROLE_SUPERUSER):
+            raise HTTPException(403, "Создавать записи общего каталога может только федеральный координатор")
+    else:
+        region = await session.get(Region, payload.region_id)
+        if region is None or not region.is_active:
+            raise HTTPException(400, "Регион не найден или архивирован")
+        await require_edit(session, user, payload.region_id)
+
+    name = unicodedata.normalize("NFKC", " ".join(payload.name.split()))
     if not name:
         raise HTTPException(400, "Название вуза не может быть пустым")
 
@@ -72,6 +85,15 @@ async def create_university(
 
     university = University(name=name, region_id=payload.region_id)
     session.add(university)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        existing = (
+            await session.execute(select(University).where(University.name == name))
+        ).scalar_one_or_none()
+        if existing is not None:
+            return _university_dict(existing)
+        raise HTTPException(409, "ВУЗ с таким названием уже существует") from None
     await session.refresh(university)
     return _university_dict(university)

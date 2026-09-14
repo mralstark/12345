@@ -16,6 +16,7 @@ from api.serializers import document_dict
 from config import MAX_UPLOAD_BYTES, STORAGE_DIR
 from database.models import Document, Event, User
 from utils.access import require_edit, require_view
+from utils.storage import ensure_storage_capacity
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -156,6 +157,10 @@ async def upload_document(
     original_name = _safe_original_name(file.filename or "file")
     payload = await _read_limited(file)
     content_type, suffix = _validated_document(payload, original_name)
+    try:
+        ensure_storage_capacity(len(payload))
+    except ValueError as exc:
+        raise HTTPException(507, str(exc)) from exc
     clean_doc_type = (doc_type or "").strip()
     if len(clean_doc_type) > 32:
         raise HTTPException(422, "Тип документа длиннее 32 символов")

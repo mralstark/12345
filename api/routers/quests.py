@@ -12,7 +12,7 @@ from api.auth import get_current_user, get_db
 from api.routers.character import _quest_dict
 from database.models import Member, MemberQuestProgress, Quest, User
 from utils.access import actor_cell, require_edit, require_same_cell, require_view
-from utils.notify import notify_telegram
+from utils.notify import escape_telegram_html, notify_telegram
 from utils.tz import now as tz_now
 
 router = APIRouter(prefix="/members/{member_id}/quests", tags=["quests"])
@@ -106,7 +106,8 @@ async def increment_member_quest(
             label = "Выполнено" if crossed == thresholds[-1] else f"новый уровень {crossed}"
             await notify_telegram(
                 owner.telegram_id,
-                f"🎉 Задание «{quest.title}» — {label}! Заберите звёзды в «Академии».",
+                f"🎉 Задание «{escape_telegram_html(quest.title)}» — "
+                f"{escape_telegram_html(label)}! Заберите звёзды в «Академии».",
             )
 
     return _quest_dict(quest, row.count, row.stars_claimed)
