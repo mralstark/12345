@@ -159,7 +159,6 @@ async def main() -> None:
                     description="Демонстрационная запись.",
                     responsible_member_id=random.choice(members).id,
                     status=EVENT_STATUS_DONE if offset < 0 else EVENT_STATUS_PLANNED,
-                    category="Собрание" if offset < 0 else "Форум",
                     planned_budget=random.randint(10, 60) * 100_00 if offset > 0 else None,
                 )
                 session.add(event)
