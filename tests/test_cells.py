@@ -7,7 +7,15 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import select
 
-from database.models import ROLE_PARTICIPANT, Event, Member, Transaction, User
+from database.models import (
+    ROLE_PARTICIPANT,
+    Event,
+    Member,
+    ShopPurchase,
+    Transaction,
+    UniversityCell,
+    User,
+)
 
 from tests.conftest import login
 from utils.tz import today as tz_today
@@ -19,6 +27,13 @@ async def _add_member(session, region_id, cell_id, name):
     await session.commit()
     await session.refresh(member)
     return member
+
+
+async def _add_sibling_member(session, world, name="Соседний Человек"):
+    cell = UniversityCell(region_id=world["moscow"].id, name=f"Соседняя ячейка {name}")
+    session.add(cell)
+    await session.flush()
+    return await _add_member(session, world["moscow"].id, cell.id, name)
 
 
 async def test_cell_leader_sees_only_own_cell_members(client, session, world):
@@ -62,6 +77,129 @@ async def test_cell_leader_cannot_touch_foreign_cell_member(client, session, wor
 
     deleted = await client.delete(f"/api/members/{foreign.id}")
     assert deleted.status_code == 403
+
+
+async def test_cell_leader_search_and_quest_read_stay_in_own_cell(client, session, world):
+    own = await _add_member(session, world["moscow"].id, world["mgimo"].id, "Иван Проверочный")
+    foreign = await _add_sibling_member(session, world, "Иван Соседний")
+
+    login(world["cell_leader"])
+    searched = await client.get("/api/members/search", params={"q": "Иван", "region_id": world["moscow"].id})
+    assert searched.status_code == 200
+    assert {item["id"] for item in searched.json()["items"]} == {own.id}
+    assert (await client.get(f"/api/members/{own.id}/quests")).status_code == 200
+    assert (await client.get(f"/api/members/{foreign.id}/quests")).status_code == 403
+
+    login(world["leader_moscow"])
+    searched = await client.get("/api/members/search", params={"q": "Иван", "region_id": world["moscow"].id})
+    assert {item["id"] for item in searched.json()["items"]} == {own.id, foreign.id}
+    assert (await client.get(f"/api/members/{foreign.id}/quests")).status_code == 200
+
+
+async def test_cell_leader_cannot_read_or_acknowledge_foreign_purchases(client, session, world):
+    own = await _add_member(session, world["moscow"].id, world["mgimo"].id, "Свой Покупатель")
+    foreign = await _add_sibling_member(session, world, "Чужой Покупатель")
+    own_purchase = ShopPurchase(member_id=own.id, item_id="sticker", kind="physical", price_stars=5)
+    foreign_purchase = ShopPurchase(member_id=foreign.id, item_id="chevron", kind="physical", price_stars=10)
+    session.add_all([own_purchase, foreign_purchase])
+    await session.commit()
+
+    login(world["cell_leader"])
+    assert (await client.get(f"/api/members/{foreign.id}/shop-purchases")).status_code == 403
+    await session.refresh(foreign_purchase)
+    assert foreign_purchase.seen_by_leader is False
+
+    assert (await client.get(f"/api/members/{own.id}/shop-purchases")).status_code == 200
+    await session.refresh(own_purchase)
+    assert own_purchase.seen_by_leader is True
+
+
+async def test_read_only_coordinator_does_not_acknowledge_leader_purchase(client, session, world):
+    member = await _add_member(session, world["moscow"].id, None, "Покупатель Координатора")
+    purchase = ShopPurchase(member_id=member.id, item_id="sticker", kind="physical", price_stars=5)
+    session.add(purchase)
+    await session.commit()
+
+    login(world["coordinator"])
+    assert (await client.get(f"/api/members/{member.id}/shop-purchases")).status_code == 200
+    await session.refresh(purchase)
+    assert purchase.seen_by_leader is False
+
+
+async def test_read_only_impersonation_does_not_acknowledge_purchase(client, session, world):
+    member = await _add_member(session, world["moscow"].id, None, "Покупатель в режиме просмотра")
+    purchase = ShopPurchase(member_id=member.id, item_id="sticker", kind="physical", price_stars=5)
+    session.add(purchase)
+    await session.commit()
+
+    world["leader_moscow"]._impersonated_by = world["superuser"]
+    login(world["leader_moscow"])
+    assert (await client.get(f"/api/members/{member.id}/shop-purchases")).status_code == 200
+    await session.refresh(purchase)
+    assert purchase.seen_by_leader is False
+
+
+@pytest.mark.parametrize("format", ["xlsx", "pdf"])
+async def test_cell_leader_cannot_export_full_region_report(client, world, format):
+    login(world["cell_leader"])
+    response = await client.get(
+        "/api/reports/region",
+        params={"region_id": world["moscow"].id, "format": format},
+    )
+    assert response.status_code == 403
+
+
+async def test_cell_leader_cannot_assign_foreign_cell_members_to_event_or_task(client, session, world):
+    own = await _add_member(session, world["moscow"].id, world["mgimo"].id, "Свой Ответственный")
+    foreign = await _add_sibling_member(session, world, "Чужой Ответственный")
+    login(world["cell_leader"])
+
+    rejected_event = await client.post(
+        "/api/events",
+        json={
+            "region_id": world["moscow"].id,
+            "title": "Закрытая встреча",
+            "date": "2026-10-10",
+            "description": "Описание",
+            "responsible_member_id": foreign.id,
+        },
+    )
+    assert rejected_event.status_code == 400
+
+    created = await client.post(
+        "/api/events",
+        json={
+            "region_id": world["moscow"].id,
+            "title": "Своя встреча",
+            "date": "2026-10-10",
+            "description": "Описание",
+            "responsible_member_id": own.id,
+        },
+    )
+    assert created.status_code == 200, created.text
+    event_id = created.json()["id"]
+    rejected_event_patch = await client.patch(
+        f"/api/events/{event_id}",
+        json={"responsible_member_id": foreign.id},
+    )
+    assert rejected_event_patch.status_code == 400
+
+    rejected_task = await client.post(
+        f"/api/events/{event_id}/tasks",
+        json={"title": "Чужая задача", "due_date": "2026-10-09", "assignee_member_id": foreign.id},
+    )
+    assert rejected_task.status_code == 400
+
+    accepted_task = await client.post(
+        f"/api/events/{event_id}/tasks",
+        json={"title": "Своя задача", "due_date": "2026-10-09", "assignee_member_id": own.id},
+    )
+    assert accepted_task.status_code == 200, accepted_task.text
+    rejected_task_patch = await client.patch(
+        f"/api/events/{event_id}/tasks/{accepted_task.json()['id']}",
+        json={"assignee_member_id": foreign.id},
+    )
+    assert rejected_task_patch.status_code == 400
 
 
 async def test_cell_leader_events_and_finance_scoped(client, session, world):
@@ -166,7 +304,11 @@ async def test_cell_vk_url_accepts_only_https_vk(client, world):
 async def moscow_member(session, world):
     """Уже саморегистрирован (services/admin_actions.py::_resolve_or_promote
     назначает роль только такому человеку — telegram_id уже известен)."""
-    member = Member(region_id=world["moscow"].id, full_name="Волков Михаил")
+    member = Member(
+        region_id=world["moscow"].id,
+        cell_id=world["mgimo"].id,
+        full_name="Волков Михаил",
+    )
     session.add(member)
     await session.flush()
     session.add(User(full_name=member.full_name, role=ROLE_PARTICIPANT, member_id=member.id, telegram_id=930001))
@@ -183,6 +325,24 @@ async def test_region_leader_can_assign_cell_leader(client, session, world, mosc
     await session.refresh(world["mgimo"])
     user = (await session.execute(select(User).where(User.member_id == moscow_member.id))).scalar_one()
     assert world["mgimo"].leader_user_id == user.id
+
+
+async def test_region_leader_cannot_assign_cell_leader_from_sibling_cell(client, session, world):
+    candidate = await _add_sibling_member(session, world, "Кандидат из соседней ячейки")
+    account = User(
+        full_name=candidate.full_name,
+        role=ROLE_PARTICIPANT,
+        member_id=candidate.id,
+        telegram_id=930099,
+    )
+    session.add(account)
+    await session.commit()
+
+    login(world["leader_moscow"])
+    response = await client.post(f"/api/cells/{world['mgimo'].id}/leader", json={"member_id": candidate.id})
+    assert response.status_code == 400
+    await session.refresh(account)
+    assert account.role == ROLE_PARTICIPANT
 
 
 async def test_cell_leader_cannot_assign_another_cell_leader(client, world, moscow_member):

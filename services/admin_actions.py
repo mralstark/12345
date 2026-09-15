@@ -10,7 +10,7 @@
 import logging
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import STORAGE_DIR
@@ -67,7 +67,14 @@ def _delete_stored_files(paths: set[Path]) -> None:
             logger.exception("Не удалось удалить файл хранилища: %s", target)
 
 
-async def _resolve_or_promote(session: AsyncSession, role: str, member_id: int) -> User:
+async def _resolve_or_promote(
+    session: AsyncSession,
+    role: str,
+    member_id: int,
+    *,
+    region_id: int | None = None,
+    cell_id: int | None = None,
+) -> User:
     """Общий шаг всех create_*: назначение управленческой роли — это всегда
     повышение уже существующего аккаунта (человек сам прошёл саморегистрацию,
     services/applications.py::approve_application уже проставил telegram_id),
@@ -77,6 +84,12 @@ async def _resolve_or_promote(session: AsyncSession, role: str, member_id: int) 
     member = await session.get(Member, member_id)
     if member is None:
         raise ValueError("Человек не найден в составе")
+    if not member.is_active:
+        raise ValueError("Нельзя назначить роль исключённому из активного состава человеку")
+    if region_id is not None and member.region_id != region_id:
+        raise ValueError("Человек должен быть из состава выбранного региона")
+    if cell_id is not None and member.cell_id != cell_id:
+        raise ValueError("Человек должен состоять в выбранной вузовской ячейке")
 
     existing = (await session.execute(select(User).where(User.member_id == member_id))).scalar_one_or_none()
     if existing is None:
@@ -86,8 +99,17 @@ async def _resolve_or_promote(session: AsyncSession, role: str, member_id: int) 
         )
     if existing.role == ROLE_SUPERUSER:
         raise ValueError("Нельзя назначить управленческую роль техническому superuser")
-    existing.role = role
-    await session.commit()
+    if existing.role != ROLE_PARTICIPANT:
+        raise ValueError("Сначала снимите с человека текущую управленческую роль")
+    # Смена должна быть атомарной: два одновременных назначения не могут оба
+    # увидеть participant и записать разные управленческие роли/привязки.
+    promoted = await session.execute(
+        update(User)
+        .where(User.id == existing.id, User.role == ROLE_PARTICIPANT)
+        .values(role=role)
+    )
+    if promoted.rowcount != 1:
+        raise ValueError("Роль человека уже изменилась; обновите данные и повторите действие")
     await session.refresh(existing)
     return existing
 
@@ -135,7 +157,7 @@ async def create_leader(
 
     previous_id = region.leader_user_id
 
-    user = await _resolve_or_promote(session, ROLE_LEADER, member_id)
+    user = await _resolve_or_promote(session, ROLE_LEADER, member_id, region_id=region_id)
     if phone:
         user.phone = phone
     region.leader_user_id = user.id
@@ -249,7 +271,13 @@ async def create_cell_leader(
     if cell is None:
         raise ValueError("Вузовская ячейка не найдена")
 
-    user = await _resolve_or_promote(session, ROLE_CELL_LEADER, member_id)
+    user = await _resolve_or_promote(
+        session,
+        ROLE_CELL_LEADER,
+        member_id,
+        region_id=cell.region_id,
+        cell_id=cell.id,
+    )
     if phone:
         user.phone = phone
     cell.leader_user_id = user.id
@@ -268,15 +296,16 @@ async def create_coordinator(
     if not region_ids:
         raise ValueError("Нужен хотя бы один регион")
 
+    regions = [await session.get(Region, region_id) for region_id in region_ids]
+    if any(region is None or not region.is_active for region in regions):
+        raise ValueError("Один из выбранных регионов не найден или неактивен")
+
     user = await _resolve_or_promote(session, ROLE_COORDINATOR, member_id)
     if phone:
         user.phone = phone
     await session.flush()
 
     for region_id in region_ids:
-        region = await session.get(Region, region_id)
-        if region is None:
-            continue
         # Один регион — один координатор (ТЗ §3): прежняя привязка снимается.
         existing_link = (
             await session.execute(select(CoordinatorRegion).where(CoordinatorRegion.region_id == region_id))
@@ -305,8 +334,8 @@ async def create_federal(
     user = await _resolve_or_promote(session, ROLE_FEDERAL, member_id)
     if phone:
         user.phone = phone
-        await session.commit()
-        await session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
     return user
 
 

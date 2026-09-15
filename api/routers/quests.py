@@ -33,6 +33,7 @@ async def list_member_quests(
 ) -> dict:
     member = await _get_member(session, member_id)
     await require_view(session, user, member.region_id)
+    require_same_cell(await actor_cell(session, user), member.cell_id)
 
     quests = list(
         (await session.execute(select(Quest).where(Quest.is_active.is_(True)).order_by(Quest.position))).scalars().all()

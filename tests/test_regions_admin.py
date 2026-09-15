@@ -89,6 +89,45 @@ async def test_federal_can_assign_leader_in_any_region(client, session, world, t
     assert world["tula"].leader_user_id == user.id
 
 
+async def test_federal_cannot_assign_region_leader_from_another_region(client, session, world, tula_member):
+    login(world["federal"])
+    response = await client.post(
+        f"/api/regions/{world['moscow'].id}/leader",
+        json={"member_id": tula_member.id},
+    )
+    assert response.status_code == 400
+    account = (await session.execute(select(User).where(User.member_id == tula_member.id))).scalar_one()
+    await session.refresh(account)
+    assert account.role == ROLE_PARTICIPANT
+
+
+async def test_management_role_cannot_be_silently_overwritten(client, session, world):
+    member = Member(region_id=world["moscow"].id, full_name="Действующий Координатор")
+    session.add(member)
+    await session.flush()
+    account = User(
+        full_name=member.full_name,
+        role="coordinator",
+        member_id=member.id,
+        telegram_id=930098,
+    )
+    session.add(account)
+    await session.flush()
+    link = CoordinatorRegion(coordinator_user_id=account.id, region_id=world["tula"].id)
+    session.add(link)
+    await session.commit()
+
+    login(world["federal"])
+    response = await client.post(
+        f"/api/regions/{world['moscow'].id}/leader",
+        json={"member_id": member.id},
+    )
+    assert response.status_code == 400
+    await session.refresh(account)
+    assert account.role == "coordinator"
+    assert await session.get(CoordinatorRegion, link.id) is not None
+
+
 async def test_coordinator_can_assign_leader_only_in_own_region(client, world, moscow_member, tula_member):
     login(world["coordinator"])  # world: координатор назначен только на Москву
     ok = await client.post(f"/api/regions/{world['moscow'].id}/leader", json={"member_id": moscow_member.id})

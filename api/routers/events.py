@@ -75,12 +75,19 @@ def _validate_recurrence(is_recurring: bool, rule: str | None) -> None:
         raise HTTPException(400, f"Правило повтора — одно из: {', '.join(RECURRENCE_RULES)}")
 
 
-async def _validate_responsible(session: AsyncSession, member_id: int | None, region_id: int) -> None:
+async def _validate_responsible(
+    session: AsyncSession,
+    member_id: int | None,
+    region_id: int,
+    cell_id: int | None = None,
+) -> None:
     if member_id is None:
         return
     member = await session.get(Member, member_id)
     if member is None or member.region_id != region_id:
         raise HTTPException(400, "Ответственный должен быть из состава этого региона")
+    if cell_id is not None and member.cell_id != cell_id:
+        raise HTTPException(400, "Ответственный должен быть из состава этой вузовской ячейки")
 
 
 async def _own_member(user: User, session: AsyncSession) -> Member:
@@ -281,11 +288,16 @@ async def create_event(
     if not payload.description.strip():
         raise HTTPException(400, "Укажите описание")
     _validate_recurrence(payload.is_recurring, payload.recurrence_rule)
-    await _validate_responsible(session, payload.responsible_member_id, payload.region_id)
+    cell = await actor_cell(session, user)
+    await _validate_responsible(
+        session,
+        payload.responsible_member_id,
+        payload.region_id,
+        cell.id if cell is not None else None,
+    )
     if payload.status not in EVENT_STATUS_LABELS:
         raise HTTPException(400, f"Неизвестный статус: {payload.status}")
 
-    cell = await actor_cell(session, user)
     payload_data = payload.model_dump()
     if cell is not None:
         # Сервер не доверяет cell_id от клиента, если пишет руководитель ячейки.
@@ -323,7 +335,12 @@ async def update_event(
     if data.get("status") and data["status"] not in EVENT_STATUS_LABELS:
         raise HTTPException(400, f"Неизвестный статус: {data['status']}")
     if "responsible_member_id" in data:
-        await _validate_responsible(session, data["responsible_member_id"], event.region_id)
+        await _validate_responsible(
+            session,
+            data["responsible_member_id"],
+            event.region_id,
+            cell.id if cell is not None else None,
+        )
 
     for field, value in data.items():
         setattr(event, field, value)

@@ -11,7 +11,7 @@ import pytest
 from PIL import Image
 
 from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, InvalidImageError, shrink, suffix_for
-from services.news import PHOTO_LIMIT
+from services.news import PHOTO_LIMIT, _read_upload_limited
 from tests.conftest import login
 
 
@@ -144,6 +144,29 @@ def test_broken_file_is_rejected():
     broken = b"\x00\x01 not an image at all"
     with pytest.raises(InvalidImageError):
         shrink(broken, PHOTO_MAX_SIDE)
+
+
+class _BoundedUpload:
+    def __init__(self, payload: bytes):
+        self.payload = payload
+        self.read_sizes = []
+
+    async def read(self, size=-1):
+        assert size >= 0, "неограниченный read() снова загружает всё тело в память"
+        self.read_sizes.append(size)
+        return self.payload[:size]
+
+
+async def test_upload_reader_stops_at_limit_plus_one(monkeypatch):
+    monkeypatch.setattr("services.news.MAX_UPLOAD_BYTES", 8)
+    accepted = _BoundedUpload(b"12345678")
+    assert await _read_upload_limited(accepted, too_large_message="слишком большой") == b"12345678"
+    assert accepted.read_sizes == [9]
+
+    rejected = _BoundedUpload(b"123456789-extra-data-never-read")
+    with pytest.raises(ValueError, match="слишком большой"):
+        await _read_upload_limited(rejected, too_large_message="слишком большой")
+    assert rejected.read_sizes == [9]
 
 
 @pytest.mark.parametrize(

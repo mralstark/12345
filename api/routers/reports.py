@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user, get_db
 from database.models import Region, User
 from services.reports import gather_region_report
-from utils.access import require_view
+from utils.access import actor_cell, require_view
 from utils.period import resolve_period
 from utils.report_export import build_region_pdf, build_region_xlsx
 
@@ -31,6 +31,8 @@ async def region_report(
     session: AsyncSession = Depends(get_db),
 ) -> Response:
     await require_view(session, user, region_id)
+    if await actor_cell(session, user) is not None:
+        raise HTTPException(403, "Полный отчёт региона недоступен руководителю вузовской ячейки")
     if format not in ("xlsx", "pdf"):
         raise HTTPException(400, "Формат отчёта — xlsx или pdf")
 

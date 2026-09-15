@@ -37,10 +37,7 @@ async def _self_register(session, member, telegram_id=555555):
 async def test_create_leader_rejects_member_without_account(session, world, plain_member):
     """Человек есть в «Составе», но ещё не саморегистрировался — назначить
     роль нельзя, пока он сам не пройдёт регистрацию по ссылке региона."""
-    region = await session.get(Region, world["tula"].id)
-    # Тула уже занята leader_tula — освобождаем, чтобы не путать «замену».
-    region.leader_user_id = None
-    await session.commit()
+    region = await session.get(Region, world["moscow"].id)
 
     with pytest.raises(ValueError):
         await create_leader(session, region.id, member_id=plain_member.id)
@@ -51,9 +48,7 @@ async def test_create_leader_promotes_existing_cabinet_in_place(session, world, 
     руководителем не создаёт второй, а повышает роль на месте."""
     cabinet_user = await _self_register(session, plain_member)
 
-    region = await session.get(Region, world["tula"].id)
-    region.leader_user_id = None
-    await session.commit()
+    region = await session.get(Region, world["moscow"].id)
 
     promoted = await create_leader(session, region.id, member_id=plain_member.id)
 
@@ -74,9 +69,7 @@ async def test_create_leader_rejects_promoting_superuser(session, world, plain_m
     world["superuser"].member_id = su_member.id
     await session.commit()
 
-    region = await session.get(Region, world["tula"].id)
-    region.leader_user_id = None
-    await session.commit()
+    region = await session.get(Region, world["moscow"].id)
 
     with pytest.raises(ValueError):
         await create_leader(session, region.id, member_id=su_member.id)

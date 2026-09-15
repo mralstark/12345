@@ -367,6 +367,20 @@ PHOTO_DIR = "news"
 PHOTO_LIMIT = 10
 
 
+async def _read_upload_limited(upload, *, too_large_message: str, empty_ok: bool = False) -> bytes:
+    """Читает не больше лимита плюс один байт, достаточный для отказа.
+
+    UploadFile обычно буферизуется до вызова сервиса, но безразмерный read()
+    всё равно копировал произвольно большой файл целиком в память процесса.
+    """
+    payload = await upload.read(MAX_UPLOAD_BYTES + 1)
+    if len(payload) > MAX_UPLOAD_BYTES:
+        raise ValueError(too_large_message)
+    if not payload and not empty_ok:
+        raise ValueError("Пустой файл")
+    return payload
+
+
 async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> int:
     """Сохраняет файлы на диск и привязывает их к новости. Возвращает число
     добавленных. Порядок в галерее — порядок, в котором их прислали."""
@@ -376,11 +390,13 @@ async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> i
         raise ValueError(f"К одной новости можно приложить не больше {PHOTO_LIMIT} фотографий")
 
     for index, upload in enumerate(incoming):
-        payload = await upload.read()
+        payload = await _read_upload_limited(
+            upload,
+            too_large_message=f"Фото больше допустимых {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ",
+            empty_ok=True,
+        )
         if not payload:
             continue
-        if len(payload) > MAX_UPLOAD_BYTES:
-            raise ValueError(f"Фото больше допустимых {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ")
         if upload.content_type not in ALLOWED_PHOTO_TYPES:
             raise ValueError("Можно прикреплять только изображения")
 
@@ -640,11 +656,10 @@ AVATAR_DIR = "avatars"
 async def save_avatar(session: AsyncSession, member: Member, upload) -> str:
     """Свой круглый аватар. Старый файл удаляем: иначе каждая замена оставляет
     мусор в STORAGE_DIR."""
-    payload = await upload.read()
-    if not payload:
-        raise ValueError("Пустой файл")
-    if len(payload) > MAX_UPLOAD_BYTES:
-        raise ValueError(f"Файл больше допустимых {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ")
+    payload = await _read_upload_limited(
+        upload,
+        too_large_message=f"Файл больше допустимых {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ",
+    )
     if upload.content_type not in ALLOWED_AVATAR_TYPES:
         raise ValueError("Аватар должен быть изображением")
 

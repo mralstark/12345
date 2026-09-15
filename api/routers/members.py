@@ -142,6 +142,9 @@ async def search_members(
         return {"items": []}
 
     stmt = select(Member).where(Member.region_id.in_(region_ids), Member.is_active.is_(True))
+    cell = await actor_cell(session, user)
+    if cell is not None:
+        stmt = stmt.where(Member.cell_id == cell.id)
     rows = list((await session.execute(stmt.order_by(Member.full_name).limit(200))).scalars().all())
     matches = [m for m in rows if needle in m.full_name.lower()][:15]
 

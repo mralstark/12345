@@ -78,7 +78,11 @@ async def _assignee(session: AsyncSession, task_id: int) -> tuple[int | None, st
 
 
 async def _set_assignee(
-    session: AsyncSession, task: EventTask, member_id: int | None, region_id: int
+    session: AsyncSession,
+    task: EventTask,
+    member_id: int | None,
+    region_id: int,
+    cell_id: int | None = None,
 ) -> int | None:
     """Ставит одного исполнителя. Возвращает его member_id, если он тут впервые,
     — ему и уходит уведомление о новой задаче.
@@ -88,13 +92,13 @@ async def _set_assignee(
     зажигало кружок у человека, который задачу уже видел.
     """
     if member_id is not None:
-        valid = (
-            await session.execute(
-                select(Member.id).where(Member.id == member_id, Member.region_id == region_id)
-            )
-        ).scalar_one_or_none()
+        conditions = [Member.id == member_id, Member.region_id == region_id]
+        if cell_id is not None:
+            conditions.append(Member.cell_id == cell_id)
+        valid = (await session.execute(select(Member.id).where(*conditions))).scalar_one_or_none()
         if valid is None:
-            raise HTTPException(400, "Исполнитель должен быть из состава этого региона")
+            scope = "этой вузовской ячейки" if cell_id is not None else "этого региона"
+            raise HTTPException(400, f"Исполнитель должен быть из состава {scope}")
 
     existing = (
         await session.execute(select(EventTaskAssignee).where(EventTaskAssignee.task_id == task.id))
@@ -201,7 +205,8 @@ async def create_event_task(
 ) -> dict:
     event = await _get_event(session, event_id)
     await require_edit(session, user, event.region_id)
-    require_same_cell(await actor_cell(session, user), event.cell_id)
+    cell = await actor_cell(session, user)
+    require_same_cell(cell, event.cell_id)
 
     task = EventTask(
         event_id=event_id,
@@ -211,7 +216,13 @@ async def create_event_task(
     )
     session.add(task)
     await session.flush()
-    added = await _set_assignee(session, task, payload.assignee_member_id, event.region_id)
+    added = await _set_assignee(
+        session,
+        task,
+        payload.assignee_member_id,
+        event.region_id,
+        cell.id if cell is not None else None,
+    )
     await session.commit()
     await session.refresh(task)
     _schedule_assignment_notifications(background_tasks, event, task, added)
@@ -232,7 +243,8 @@ async def update_event_task(
     # ставит из «Задач» (api/routers/tasks.py::set_event_task_status) — там ему
     # и место, а сюда он не ходит.
     await require_edit(session, user, event.region_id)
-    require_same_cell(await actor_cell(session, user), event.cell_id)
+    cell = await actor_cell(session, user)
+    require_same_cell(cell, event.cell_id)
 
     task = await session.get(EventTask, task_id)
     if task is None or task.event_id != event_id:
@@ -247,7 +259,17 @@ async def update_event_task(
     assignee_id = data.pop("assignee_member_id", None)
     for field, value in data.items():
         setattr(task, field, value)
-    added = await _set_assignee(session, task, assignee_id, event.region_id) if assignee_given else None
+    added = (
+        await _set_assignee(
+            session,
+            task,
+            assignee_id,
+            event.region_id,
+            cell.id if cell is not None else None,
+        )
+        if assignee_given
+        else None
+    )
 
     await session.commit()
     await session.refresh(task)

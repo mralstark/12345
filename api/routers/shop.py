@@ -14,7 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
 from database.db import async_session
-from database.models import Member, Region, ShopPurchase, UniversityCell, User
+from database.models import (
+    ROLE_CELL_LEADER,
+    ROLE_LEADER,
+    Member,
+    Region,
+    ShopPurchase,
+    UniversityCell,
+    User,
+)
 from utils.access import (
     AccessDenied,
     actor_cell,
@@ -185,6 +193,7 @@ async def list_member_purchases(
     if member is None:
         raise HTTPException(404, "Человек не найден")
     await require_view(session, user, member.region_id)
+    require_same_cell(await actor_cell(session, user), member.cell_id)
 
     rows = (
         await session.execute(
@@ -193,10 +202,13 @@ async def list_member_purchases(
     ).scalars().all()
     # Открыл список покупок — красный кружок на «Составе» снят (см.
     # utils/counters.py::new_purchases_count).
-    await session.execute(
-        update(ShopPurchase).where(ShopPurchase.member_id == member_id, ShopPurchase.seen_by_leader.is_(False)).values(seen_by_leader=True)
-    )
-    await session.commit()
+    if user.role in (ROLE_LEADER, ROLE_CELL_LEADER) and getattr(user, "_impersonated_by", None) is None:
+        await session.execute(
+            update(ShopPurchase)
+            .where(ShopPurchase.member_id == member_id, ShopPurchase.seen_by_leader.is_(False))
+            .values(seen_by_leader=True)
+        )
+        await session.commit()
     return {
         "items": [
             {
