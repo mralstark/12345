@@ -51,6 +51,33 @@ async def test_universities_scoped_to_chosen_region(client, session, world):
     assert names == ["МГУ им. М.В. Ломоносова"]
 
 
+async def test_archived_university_is_hidden_and_cannot_be_submitted(client, session, world):
+    university = University(
+        name="Архивный университет", region_id=world["moscow"].id, is_active=False
+    )
+    session.add(university)
+    await session.commit()
+    await session.refresh(university)
+
+    login_as_identity(999104, "Архивный Абитуриент")
+    search = await client.get(f"/api/register/universities?region_id={world['moscow'].id}")
+    assert search.json()["items"] == []
+    payload = {
+        "full_name": "Архивный Абитуриент",
+        "birth_date": "20.02.2000",
+        "phone": "+7 900 111-22-33",
+        "telegram_username": "@archived_user",
+        "region_id": world["moscow"].id,
+        "university_id": university.id,
+        "faculty": "Экономический",
+        "course": 2,
+        "education_level": "bachelor",
+        "status": "activist",
+    }
+    response = await client.post("/api/register/submit", json=payload)
+    assert response.status_code == 400
+
+
 async def test_public_registration_cannot_modify_university_catalog(client, session, world):
     login_as_identity(999004)
     response = await client.post(

@@ -74,7 +74,11 @@ async def register_universities(
 ) -> dict:
     """Строго внутри выбранного отделения — до выбора региона список вузов не
     отдаём вовсе (план §3): человек из Новосибирска не должен увидеть МГИМО."""
-    stmt = select(University).where(University.region_id == region_id).order_by(University.name)
+    stmt = (
+        select(University)
+        .where(University.region_id == region_id, University.is_active.is_(True))
+        .order_by(University.name)
+    )
     items = list((await session.execute(stmt.limit(5_000))).scalars().all())
     needle = q.strip().lower()
     if needle:
@@ -83,7 +87,7 @@ async def register_universities(
 
 
 class RegisterUniversityIn(BaseModel):
-    name: str = Field(min_length=2, max_length=255)
+    name: str = Field(min_length=2, max_length=128)
     region_id: int
 
 
@@ -114,7 +118,7 @@ class RegisterSubmit(BaseModel):
     telegram_username: str = Field(min_length=2, max_length=33)
     region_id: int
     university_id: int | None = None
-    university_name: str | None = Field(default=None, max_length=255)
+    university_name: str | None = Field(default=None, max_length=128)
     faculty: str = Field(min_length=1, max_length=255)
     # 1-6 либо «Окончил» (graduated_university=True, курс тогда пустой) —
     # тот же выбор, что и в «Составе» (api/routers/members.py).
@@ -191,6 +195,8 @@ async def register_submit(
         university = await session.get(University, payload.university_id)
         if university is None or university.region_id != region.id:
             raise HTTPException(400, "ВУЗ не принадлежит выбранному отделению")
+        if not university.is_active:
+            raise HTTPException(400, "Этот ВУЗ архивирован — обратитесь к руководителю отделения")
     else:
         # Неизвестный вуз создаётся только вместе с валидной заявкой. Отдельный
         # публичный POST /universities по-прежнему запрещён: так один Telegram-
@@ -203,6 +209,8 @@ async def register_submit(
         university = next((item for item in universities if item.name.casefold() == key), None)
         if university is not None and university.region_id != region.id:
             raise HTTPException(400, "ВУЗ с таким названием уже относится к другому отделению")
+        if university is not None and not university.is_active:
+            raise HTTPException(400, "Этот ВУЗ архивирован — обратитесь к руководителю отделения")
         if university is None:
             university = University(name=university_name, region_id=region.id)
             session.add(university)
