@@ -246,8 +246,12 @@ async def update_profile(
         university_id = data["university_id"]
         if university_id is not None:
             university = await session.get(University, university_id)
-            if university is None or university.region_id != member.region_id:
-                raise HTTPException(400, "ВУЗ не принадлежит вашему отделению")
+            if (
+                university is None
+                or university.region_id != member.region_id
+                or not university.is_active
+            ):
+                raise HTTPException(400, "Выберите действующий ВУЗ вашего отделения")
         resolved_cell = await resolve_member_cell(session, member.region_id, university_id)
         member.cell_id = resolved_cell.id if resolved_cell is not None else None
 

@@ -70,7 +70,7 @@ async def test_resolve_member_cell_none_university_returns_none(session, world):
 
 
 async def test_create_member_auto_creates_cell_and_assigns_it(client, session, world):
-    university = University(name="Университет Для API-теста")
+    university = University(name="Университет Для API-теста", region_id=world["moscow"].id)
     session.add(university)
     await session.commit()
     await session.refresh(university)
@@ -117,6 +117,102 @@ async def test_cell_leader_cannot_set_foreign_university(client, session, world)
     body = response.json()
     assert body["cell_id"] == world["mgimo"].id
     assert body["university_id"] == world["mgimo"].university_id
+
+
+async def test_region_leadership_can_manage_university_catalog(client, session, world):
+    login(world["leader_moscow"])
+    created = await client.post(
+        "/api/universities",
+        json={"name": "Московский тестовый университет", "region_id": world["moscow"].id},
+    )
+    assert created.status_code == 200
+    university_id = created.json()["id"]
+
+    login(world["federal"])
+    federal_created = await client.post(
+        "/api/universities",
+        json={"name": "Тульский федеральный тестовый вуз", "region_id": world["tula"].id},
+    )
+    assert federal_created.status_code == 200
+
+    login(world["superuser"])
+    listing = await client.get(f"/api/universities/manage?region_id={world['moscow'].id}")
+    assert listing.status_code == 200
+    assert listing.json()["items"][0]["id"] == university_id
+
+
+async def test_university_catalog_rejects_roles_without_management_rights(client, world):
+    payload = {"name": "Недоступный вуз", "region_id": world["moscow"].id}
+    for actor in (world["coordinator"], world["cell_leader"]):
+        login(actor)
+        assert (await client.post("/api/universities", json=payload)).status_code == 403
+        assert (
+            await client.get(f"/api/universities/manage?region_id={world['moscow'].id}")
+        ).status_code == 403
+
+
+async def test_university_can_be_renamed_archived_and_restored(client, session, world):
+    university = University(name="Старое название", region_id=world["moscow"].id)
+    session.add(university)
+    await session.commit()
+    await session.refresh(university)
+
+    login(world["leader_moscow"])
+    member_response = await client.post(
+        "/api/members",
+        json={
+            "region_id": world["moscow"].id,
+            "full_name": "Участник Каталога",
+            "university_id": university.id,
+        },
+    )
+    assert member_response.status_code == 200
+
+    renamed = await client.patch(
+        f"/api/universities/{university.id}", json={"name": "Новое название"}
+    )
+    assert renamed.status_code == 200
+    cell = await session.get(UniversityCell, member_response.json()["cell_id"])
+    await session.refresh(cell)
+    assert cell.name == "Новое название"
+
+    archived = await client.patch(
+        f"/api/universities/{university.id}", json={"is_active": False}
+    )
+    assert archived.status_code == 200
+    search = await client.get(f"/api/universities?region_id={world['moscow'].id}&q=Новое")
+    assert search.json()["items"] == []
+    listing = await client.get(f"/api/universities/manage?region_id={world['moscow'].id}")
+    assert listing.json()["items"][0]["members_total"] == 1
+    assert listing.json()["items"][0]["is_active"] is False
+
+    restored = await client.patch(
+        f"/api/universities/{university.id}", json={"is_active": True}
+    )
+    assert restored.status_code == 200
+    search = await client.get(f"/api/universities?region_id={world['moscow'].id}&q=Новое")
+    assert search.json()["items"][0]["id"] == university.id
+
+
+async def test_member_rejects_archived_or_foreign_university(client, session, world):
+    archived = University(name="Архивный вуз", region_id=world["moscow"].id, is_active=False)
+    foreign = University(name="Чужой вуз", region_id=world["tula"].id)
+    session.add_all([archived, foreign])
+    await session.commit()
+    await session.refresh(archived)
+    await session.refresh(foreign)
+    login(world["leader_moscow"])
+
+    for university in (archived, foreign):
+        response = await client.post(
+            "/api/members",
+            json={
+                "region_id": world["moscow"].id,
+                "full_name": "Неверная привязка",
+                "university_id": university.id,
+            },
+        )
+        assert response.status_code == 400
 
 
 async def _self_register(session, region_id, full_name, telegram_id):

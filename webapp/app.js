@@ -407,6 +407,10 @@
     return state.me && state.me.editable_region_ids.indexOf(state.regionId) !== -1;
   }
 
+  function canManageUniversities() {
+    return Boolean(state.me) && ['superuser', 'federal', 'leader'].indexOf(state.me.role) !== -1;
+  }
+
   function view() { return document.getElementById('view'); }
 
   // --- Номер рендера экрана -------------------------------------------------
@@ -636,6 +640,9 @@
     if (state.me && state.me.role !== 'cell_leader') {
       items.push({ id: 'cells', label: 'Вузовские ячейки' });
     }
+    if (canManageUniversities()) {
+      items.push({ id: 'universities', label: 'ВУЗы' });
+    }
     items.push({ id: 'documents', label: 'Документы' });
     // Отчёты — по региону/ячейке в целом, руководителю ячейки не нужны
     // (у него нет полномочий за пределами своей ячейки).
@@ -681,6 +688,7 @@
     myEvents: 'calendar',
     finance: 'wallet',
     cells: 'building',
+    universities: 'building',
     documents: 'doc',
     tasks: 'checks',
     reports: 'download',
@@ -949,6 +957,7 @@
       events: renderEvents,
       documents: renderDocuments,
       cells: renderCells,
+      universities: renderUniversities,
       tasks: renderTasks,
       analytics: renderAnalytics,
       reports: renderReports,
@@ -1026,6 +1035,79 @@
 
   }
 
+  // --- Каталог вузов --------------------------------------------------------
+
+  async function renderUniversities(gen) {
+    if (needRegion(gen)) return;
+    const data = await api('/universities/manage?region_id=' + state.regionId);
+    const rows = data.items.length ? data.items.map((university) =>
+      '<div class="row">' +
+      '<div class="row__main"><div class="row__title">' + esc(university.name) + '</div>' +
+      '<div class="row__sub">Участников: ' + university.members_total +
+      (university.is_active ? '' : ' · в архиве') + '</div></div>' +
+      '<div class="row__side"><button class="btn btn--ghost btn--small" data-uni-rename="' + university.id + '">Изменить</button> ' +
+      '<button class="btn btn--ghost btn--small" data-uni-active="' + university.id + '">' +
+      (university.is_active ? 'В архив' : 'Восстановить') + '</button></div></div>'
+    ).join('') : '<div class="empty">В этом регионе пока нет вузов</div>';
+
+    setView(
+      '<button class="btn btn--block" id="addUniversity">Добавить ВУЗ</button>' +
+      '<div class="card">' + rows + '</div>' +
+      '<div class="card__note">Архивный ВУЗ остаётся в карточках участников, но больше не предлагается при регистрации и редактировании состава.</div>',
+      gen
+    );
+
+    document.getElementById('addUniversity').onclick = () => universityNameModal(null);
+    on('[data-uni-rename]', 'click', (event) => {
+      const university = data.items.find((item) => item.id === Number(event.currentTarget.dataset.uniRename));
+      if (university) universityNameModal(university);
+    });
+    on('[data-uni-active]', 'click', (event) => {
+      const university = data.items.find((item) => item.id === Number(event.currentTarget.dataset.uniActive));
+      if (!university) return;
+      confirmAction({
+        title: university.is_active ? 'Архивировать ВУЗ?' : 'Восстановить ВУЗ?',
+        body: university.is_active
+          ? university.name + ' исчезнет из выбора для новых и редактируемых участников.'
+          : university.name + ' снова появится в списке вузов региона.',
+        confirmLabel: university.is_active ? 'В архив' : 'Восстановить',
+      }, async () => {
+        try {
+          await api('/universities/' + university.id, {
+            method: 'PATCH', body: { is_active: !university.is_active },
+          });
+          startRender(renderUniversities);
+        } catch (error) { fail(error); }
+      });
+    });
+  }
+
+  function universityNameModal(university) {
+    modal(university ? 'Изменить ВУЗ' : 'Новый ВУЗ',
+      '<div class="field"><label>Полное название</label><input id="universityName" value="' +
+      esc(university ? university.name : '') + '" /></div>' +
+      '<div class="btn-row"><button class="btn" id="universitySave">Сохранить</button>' +
+      '<button class="btn btn--ghost" id="universityCancel">Отмена</button></div>',
+      () => {
+        document.getElementById('universityCancel').onclick = closeModal;
+        document.getElementById('universitySave').onclick = async () => {
+          const name = document.getElementById('universityName').value.trim();
+          const problem = universityNameProblem(name);
+          if (!name || problem) { toast(problem || 'Введите название ВУЗа'); return; }
+          try {
+            if (university) {
+              await api('/universities/' + university.id, { method: 'PATCH', body: { name: name } });
+            } else {
+              await api('/universities', { method: 'POST', body: { name: name, region_id: state.regionId } });
+            }
+            closeModal();
+            toast('Сохранено');
+            startRender(renderUniversities);
+          } catch (error) { fail(error); }
+        };
+      });
+  }
+
   // --- Состав ---------------------------------------------------------------
 
   async function renderMembers(gen) {
@@ -1055,9 +1137,12 @@
 
     setView(
       '<div class="field"><input id="memberSearch" placeholder="Поиск по ФИО" value="' + esc(state.membersFilter.q) + '" /></div>' +
+      (canEdit() ? '<button class="btn btn--block" id="addMember">Добавить участника</button>' : '') +
       chips +
       '<div class="card">' + rows + '</div>'
     , gen);
+
+    if (canEdit()) document.getElementById('addMember').onclick = () => memberForm(null).catch(fail);
 
     const search = document.getElementById('memberSearch');
     let timer = null;
@@ -1170,7 +1255,7 @@
           if (!q) { uniSuggestions.innerHTML = ''; return; }
           uniTimer = setTimeout(async () => {
             try {
-              const data = await api('/universities?q=' + encodeURIComponent(q));
+              const data = await api('/universities?region_id=' + state.regionId + '&q=' + encodeURIComponent(q));
               uniSuggestions.innerHTML = data.items.map((u) =>
                 '<button type="button" class="chip" data-uni="' + u.id + '" data-name="' + esc(u.name) + '">' + esc(u.name) + '</button>'
               ).join('');
@@ -1226,7 +1311,9 @@
             universityId = null;
           } else if (!universityId) {
             try {
-              const created = await api('/universities', { method: 'POST', body: { name: uniName } });
+              const created = await api('/universities', {
+                method: 'POST', body: { name: uniName, region_id: state.regionId },
+              });
               universityId = created.id;
             } catch (error) { fail(error); return; }
           }
@@ -3468,10 +3555,8 @@
       if (!uniName) {
         universityId = null;
       } else if (!universityId) {
-        try {
-          const created = await api('/universities', { method: 'POST', body: { name: uniName } });
-          universityId = created.id;
-        } catch (error) { fail(error); return; }
+        toast('Такого ВУЗа нет в списке региона. Попросите руководителя добавить его.');
+        return;
       }
       const payload = {
         phone: document.getElementById('pPhone').value.trim() || null,

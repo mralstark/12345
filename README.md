@@ -220,7 +220,8 @@ initData (включая подделку и протухшие данные), �
 ## Деплой
 
 1. PostgreSQL: `DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/bratstvo`.
-   При обновлении запускайте `python -m scripts.migrate_security_constraints`;
+   При обновлении запускайте `python -m scripts.migrate_security_constraints` и
+   `python -m scripts.migrate_university_active`;
    штатные deploy-скрипты делают это автоматически до перезапуска сервисов.
 2. Два systemd-юнита: `bot.py` и `uvicorn api.main:app`. Один и тот же `.env`.
 3. Nginx с TLS перед uvicorn — Telegram открывает Mini App только по HTTPS.

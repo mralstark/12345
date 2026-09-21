@@ -118,6 +118,16 @@ async def _university_name(session: AsyncSession, university_id: int | None) -> 
     return university.name if university is not None else None
 
 
+async def _validate_university(
+    session: AsyncSession, region_id: int, university_id: int | None
+) -> None:
+    if university_id is None:
+        return
+    university = await session.get(University, university_id)
+    if university is None or university.region_id != region_id or not university.is_active:
+        raise HTTPException(400, "Выберите действующий ВУЗ вашего региона")
+
+
 @router.get("/search")
 async def search_members(
     q: str = Query(min_length=1, max_length=128),
@@ -243,6 +253,7 @@ async def create_member(
         university_id = cell.university_id
     else:
         university_id = payload.university_id
+        await _validate_university(session, payload.region_id, university_id)
         resolved_cell = await resolve_member_cell(session, payload.region_id, university_id)
         cell_id = resolved_cell.id if resolved_cell is not None else None
 
@@ -298,6 +309,7 @@ async def update_member(
         # он правит только свою ячейку.
         data.pop("university_id", None)
     elif "university_id" in data:
+        await _validate_university(session, member.region_id, data["university_id"])
         resolved_cell = await resolve_member_cell(session, member.region_id, data["university_id"])
         data["cell_id"] = resolved_cell.id if resolved_cell is not None else None
     if "status" in data and data["status"] is not None:
