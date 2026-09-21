@@ -101,6 +101,59 @@ async def test_submit_creates_pending_application(client, session, world):
     assert application.telegram_username == "@novikov"
 
 
+async def test_submit_can_add_missing_university_atomically(client, session, world):
+    login_as_identity(999105, "Новый Пользователь")
+    response = await client.post(
+        "/api/register/submit",
+        json={
+            "full_name": "Новый Пользователь",
+            "birth_date": "20.02.2000",
+            "phone": "+7 900 111-22-33",
+            "telegram_username": "@new_user",
+            "region_id": world["moscow"].id,
+            "university_name": "  Новый   государственный вуз  ",
+            "faculty": "Экономический",
+            "course": 2,
+            "education_level": "bachelor",
+            "status": "activist",
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    university = (
+        await session.execute(select(University).where(University.name == "Новый государственный вуз"))
+    ).scalar_one()
+    assert university.region_id == world["moscow"].id
+    application = (
+        await session.execute(select(MembershipApplication).where(MembershipApplication.telegram_id == 999105))
+    ).scalar_one()
+    assert application.university_id == university.id
+
+
+async def test_invalid_application_does_not_add_missing_university(client, session, world):
+    login_as_identity(999106, "Новый Пользователь")
+    response = await client.post(
+        "/api/register/submit",
+        json={
+            "full_name": "Новый Пользователь",
+            "birth_date": "не дата",
+            "phone": "+7 900",
+            "telegram_username": "@new_user2",
+            "region_id": world["moscow"].id,
+            "university_name": "Вуз из невалидной заявки",
+            "faculty": "Экономический",
+            "course": 2,
+            "education_level": "bachelor",
+            "status": "activist",
+        },
+    )
+    assert response.status_code == 400
+    university = (
+        await session.execute(select(University).where(University.name == "Вуз из невалидной заявки"))
+    ).scalar_one_or_none()
+    assert university is None
+
+
 async def test_submit_rejects_all_fields_required(client, world):
     """Все поля анкеты обязательны — сокращать её дальше некуда, она и так
     короче внешней формы отбора на сайте."""

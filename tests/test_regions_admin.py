@@ -241,6 +241,37 @@ async def test_federal_archives_region_without_destroying_its_data(client, sessi
     assert university_after.region_id == region_id
 
 
+async def test_federal_can_see_and_restore_archived_region(client, session, world):
+    region = Region(name="Архивный регион", application_code=None, is_active=False)
+    session.add(region)
+    await session.commit()
+    await session.refresh(region)
+
+    login(world["federal"])
+    listing = await client.get("/api/regions")
+    archived = next(item for item in listing.json()["items"] if item["id"] == region.id)
+    assert archived["is_active"] is False
+
+    response = await client.post(f"/api/regions/{region.id}/restore")
+    assert response.status_code == 200, response.text
+    await session.refresh(region)
+    assert region.is_active is True
+    assert region.application_code
+
+
+async def test_coordinator_cannot_see_or_restore_archived_region(client, session, world):
+    region = Region(name="Скрытый архив", is_active=False)
+    session.add(region)
+    await session.commit()
+    await session.refresh(region)
+
+    login(world["coordinator"])
+    listing = await client.get("/api/regions")
+    assert all(item["id"] != region.id for item in listing.json()["items"])
+    response = await client.post(f"/api/regions/{region.id}/restore")
+    assert response.status_code == 403
+
+
 # --- Снятие с должности -------------------------------------------------------
 # Раньше должность можно было только сменить: убрать человека, не назначая
 # нового, было нечем, и регион нельзя было оставить без руководителя.

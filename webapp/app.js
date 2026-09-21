@@ -2983,7 +2983,9 @@
       '<button type="button" class="duty__act' + (kind === 'drop' ? ' duty__act--drop' : ' duty__act--go') +
       '" ' + attr + '="' + id + '">' + esc(label) + '</button>';
 
-    const rows = data.items.map((r) =>
+    const activeRegions = data.items.filter((r) => r.is_active !== false);
+    const archivedRegions = data.items.filter((r) => r.is_active === false);
+    const rows = activeRegions.map((r) =>
       '<div class="card region">' +
       '<div class="region__head"><span class="region__name">' + esc(r.name) + '</span>' +
       (data.can_create_region
@@ -3009,14 +3011,39 @@
           : '')) +
       '</div>').join('');
 
+    const archivedRows = archivedRegions.length
+      ? '<div class="section-title">Архив</div>' + archivedRegions.map((r) =>
+          '<div class="card region"><div class="region__head">' +
+          '<span class="region__name">' + esc(r.name) + '</span>' +
+          '<button type="button" class="duty__act duty__act--go" data-restore-region="' + r.id + '">Восстановить</button>' +
+          '</div><div class="row__sub">Регистрация закрыта, данные сохранены</div></div>'
+        ).join('')
+      : '';
+
     setView(
-      (rows || '<div class="empty">Отделений нет</div>') +
+      (rows || '<div class="empty">Активных отделений нет</div>') + archivedRows +
       (data.can_create_region
         ? '<button class="btn btn--block btn--dashed" id="regionsCreate">➕ Создать отделение</button>'
         : '')
     , gen);
 
     if (data.can_create_region) document.getElementById('regionsCreate').onclick = () => regionsCreateForm();
+
+    on('[data-restore-region]', 'click', (event) => {
+      const region = data.items.find((r) => r.id === Number(event.currentTarget.dataset.restoreRegion));
+      if (!region) return;
+      confirmAction({
+        title: 'Восстановить регион?',
+        body: 'Отделение «' + region.name + '» снова появится в рабочих списках. Для него будет создана новая ссылка регистрации.',
+        confirmLabel: 'Восстановить',
+      }, async () => {
+        try {
+          await api('/regions/' + region.id + '/restore', { method: 'POST' });
+          toast('Регион восстановлен');
+          startRender(renderRegionsTab);
+        } catch (error) { fail(error); }
+      });
+    });
 
     on('[data-drop-leader]', 'click', (event) => {
       const region = data.items.find((r) => String(r.id) === event.currentTarget.dataset.dropLeader);
@@ -4506,7 +4533,7 @@
       regions.map((r) => '<option value="' + r.id + '">' + esc(r.label) + '</option>').join('') +
       '</select></div>' +
       '<div class="field"><label id="rUniversityLabel">ВУЗ</label><input id="rUniversityInput" autocomplete="off" disabled />' +
-      '<div class="row__sub" style="margin-top:var(--space-4)">Нет в списке — обратитесь к руководителю отделения.</div>' +
+      '<div class="row__sub" style="margin-top:var(--space-4)">Если вуза нет в списке, напишите его полное название — он будет добавлен вместе с заявкой.</div>' +
       '<div id="rUniversitySuggestions" class="chips" style="margin-top:var(--space-8)"></div></div>' +
       '<div class="field"><label id="rFacultyLabel">Факультет</label><input id="rFaculty" /></div>' +
       '<div class="field"><label>Курс</label><select id="rCourse">' +
@@ -4627,10 +4654,6 @@
       if (!status) { toast('Выберите статус'); return; }
 
       const universityId = selectedUniversityId;
-      if (!universityId) {
-        toast('Выберите ВУЗ из справочника. Если его нет — обратитесь к руководителю отделения.');
-        return;
-      }
 
       try {
         await api('/register/submit', {
@@ -4642,6 +4665,7 @@
             telegram_username: telegramUsername,
             region_id: regionId,
             university_id: universityId,
+            university_name: uniName,
             faculty: faculty,
             course: graduatedUniversity ? null : Number(courseRaw),
             graduated_university: graduatedUniversity,

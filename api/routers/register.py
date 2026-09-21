@@ -9,9 +9,10 @@
 состоялся."""
 
 from datetime import datetime
+import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -112,7 +113,8 @@ class RegisterSubmit(BaseModel):
     phone: str = Field(min_length=1, max_length=32)
     telegram_username: str = Field(min_length=2, max_length=33)
     region_id: int
-    university_id: int
+    university_id: int | None = None
+    university_name: str | None = Field(default=None, max_length=255)
     faculty: str = Field(min_length=1, max_length=255)
     # 1-6 либо «Окончил» (graduated_university=True, курс тогда пустой) —
     # тот же выбор, что и в «Составе» (api/routers/members.py).
@@ -129,6 +131,12 @@ class RegisterSubmit(BaseModel):
     # от статуса зависят вкладки личного кабинета на будущих этапах.
     status: str = Field(max_length=16)
 
+    @model_validator(mode="after")
+    def require_university(self) -> "RegisterSubmit":
+        if self.university_id is None and not (self.university_name or "").strip():
+            raise ValueError("Укажите ВУЗ")
+        return self
+
 
 @router.post("/submit")
 async def register_submit(
@@ -143,10 +151,6 @@ async def register_submit(
     region = await session.get(Region, payload.region_id)
     if region is None or not region.is_active:
         raise HTTPException(400, "Отделение не найдено")
-    university = await session.get(University, payload.university_id)
-    if university is None or university.region_id != region.id:
-        raise HTTPException(400, "ВУЗ не принадлежит выбранному отделению")
-
     # Строго ДД.ММ.ГГГГ с годом — в отличие от utils/parser.py::parse_date_hint
     # (тот для быстрого ввода в чате и год не требует), у формальной анкеты
     # маска на вводе (webapp/app.js::applyDateMask) уже гарантирует этот
@@ -183,6 +187,26 @@ async def register_submit(
     if pending is not None:
         raise HTTPException(409, "Анкета уже отправлена и ждёт подтверждения руководителя")
 
+    if payload.university_id is not None:
+        university = await session.get(University, payload.university_id)
+        if university is None or university.region_id != region.id:
+            raise HTTPException(400, "ВУЗ не принадлежит выбранному отделению")
+    else:
+        # Неизвестный вуз создаётся только вместе с валидной заявкой. Отдельный
+        # публичный POST /universities по-прежнему запрещён: так один Telegram-
+        # аккаунт не сможет бесконтрольно засорять справочник без заявок.
+        university_name = unicodedata.normalize("NFKC", " ".join((payload.university_name or "").split()))
+        if len(university_name) < 2:
+            raise HTTPException(400, "Напишите название вуза полностью")
+        key = university_name.casefold()
+        universities = (await session.execute(select(University))).scalars().all()
+        university = next((item for item in universities if item.name.casefold() == key), None)
+        if university is not None and university.region_id != region.id:
+            raise HTTPException(400, "ВУЗ с таким названием уже относится к другому отделению")
+        if university is None:
+            university = University(name=university_name, region_id=region.id)
+            session.add(university)
+
     application = MembershipApplication(
         region_id=region.id,
         telegram_id=identity.telegram_id,
@@ -190,7 +214,7 @@ async def register_submit(
         phone=payload.phone.strip(),
         telegram_username=telegram_username,
         birth_date=birth_date,
-        university_id=payload.university_id,
+        university=university,
         faculty=payload.faculty.strip(),
         course=payload.course,
         graduated_university=payload.graduated_university,

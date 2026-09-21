@@ -38,6 +38,7 @@ from services.admin_actions import (
     create_region,
     remove_coordinator,
     remove_leader,
+    unarchive_region,
     update_region,
 )
 from utils.access import accessible_region_ids
@@ -66,11 +67,10 @@ async def list_regions(
         raise HTTPException(403, "Недоступно")
 
     assignable = set(await accessible_region_ids(session, user))
-    regions = list(
-        (await session.execute(select(Region).where(Region.is_active.is_(True)).order_by(Region.name)))
-        .scalars()
-        .all()
-    )
+    regions_stmt = select(Region).order_by(Region.is_active.desc(), Region.name)
+    if user.role not in _CAN_CREATE_REGION:
+        regions_stmt = regions_stmt.where(Region.is_active.is_(True))
+    regions = list((await session.execute(regions_stmt)).scalars().all())
 
     # Все закрепления разом: куратор ведёт несколько отделений, и в строке
     # каждого надо показать остальные — снятие затрагивает их все, а раньше
@@ -97,6 +97,7 @@ async def list_regions(
             {
                 "id": region.id,
                 "name": region.name,
+                "is_active": region.is_active,
                 "leader_name": leader.full_name if leader else None,
                 # Идентификаторы нужны, чтобы было кого снимать: по имени
                 # человека не снимешь.
@@ -171,6 +172,27 @@ async def delete_region_endpoint(
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"ok": True, "archived": True}
+
+
+@router.post("/{region_id}/restore")
+async def restore_region_endpoint(
+    region_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    """Возвращает регион в рабочие списки и выпускает новую ссылку регистрации."""
+    if user.role not in _CAN_CREATE_REGION:
+        raise HTTPException(403, "Восстанавливать регионы вправе только федеральный координатор")
+    region = await session.get(Region, region_id)
+    if region is None:
+        raise HTTPException(404, "Регион не найден")
+    if region.is_active:
+        raise HTTPException(409, "Регион уже активен")
+    try:
+        region = await unarchive_region(session, region_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"id": region.id, "name": region.name, "is_active": True}
 
 
 class AssignLeaderIn(BaseModel):
