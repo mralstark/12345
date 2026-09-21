@@ -15,6 +15,7 @@ from api.auth import get_current_user, get_db
 from api.serializers import member_dict
 from config import STORAGE_DIR
 from database.models import (
+    EDUCATION_LEVEL_LABELS,
     MEMBER_STATUS_MEMBER,
     BureauMember,
     Member,
@@ -78,6 +79,7 @@ def education_rows(
     faculty: str | None,
     course: int | None,
     graduated: bool,
+    education_level: str | None = None,
 ) -> list[dict]:
     """«Учёба» отдельными строками — и без того, что уже сказано выше.
 
@@ -96,9 +98,16 @@ def education_rows(
     if faculty:
         rows.append({"label": "Факультет", "value": faculty})
     if graduated:
-        rows.append({"label": "Учёба", "value": "окончил вуз"})
+        rows.append({"label": "Обучение", "value": "вуз окончен"})
     elif course:
         rows.append({"label": "Курс", "value": f"{course}-й"})
+    if not graduated and education_level:
+        rows.append(
+            {
+                "label": "Уровень",
+                "value": EDUCATION_LEVEL_LABELS.get(education_level, education_level),
+            }
+        )
     return rows
 
 
@@ -200,7 +209,10 @@ async def get_profile(
         member.faculty,
         member.course,
         member.graduated_university,
+        member.education_level,
     )
+    if member.workplace:
+        data["education"].append({"label": "Место работы", "value": member.workplace})
     data["stats"] = await author_stats(session, user.id)
     data["posts"] = await author_posts(session, user.id)
     return data
@@ -231,10 +243,23 @@ async def update_profile(
                 raise HTTPException(400, str(exc)) from exc
 
     if "university_id" in data:
-        resolved_cell = await resolve_member_cell(session, member.region_id, data["university_id"])
+        university_id = data["university_id"]
+        if university_id is not None:
+            university = await session.get(University, university_id)
+            if university is None or university.region_id != member.region_id:
+                raise HTTPException(400, "ВУЗ не принадлежит вашему отделению")
+        resolved_cell = await resolve_member_cell(session, member.region_id, university_id)
         member.cell_id = resolved_cell.id if resolved_cell is not None else None
 
-    if data.get("graduated_university"):
+    final_graduated = data.get("graduated_university", member.graduated_university)
+    final_workplace = data.get("workplace", member.workplace)
+    if final_graduated and not (final_workplace or "").strip():
+        raise HTTPException(400, "Укажите место работы")
+
+    if "education_level" in data and data["education_level"] not in (None, *EDUCATION_LEVEL_LABELS):
+        raise HTTPException(400, "Неизвестный уровень обучения")
+
+    if final_graduated:
         data["course"] = None
         data["education_level"] = None
     elif "course" in data and data["course"] is not None:
@@ -345,6 +370,7 @@ async def public_profile(
             member.faculty,
             member.course,
             member.graduated_university,
+            member.education_level,
         ),
         "avatar": await avatar_url_for_user(session, target),
         # Ник отдаём всегда: по нему открывается переписка, и ради этого

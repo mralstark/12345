@@ -3437,7 +3437,7 @@
       if (!q) { uniSuggestions.innerHTML = ''; return; }
       uniTimer = setTimeout(async () => {
         try {
-          const data = await api('/universities?q=' + encodeURIComponent(q));
+          const data = await api('/universities?region_id=' + profile.region_id + '&q=' + encodeURIComponent(q));
           uniSuggestions.innerHTML = data.items.map((u) =>
             '<button type="button" class="chip" data-uni="' + u.id + '" data-name="' + esc(u.name) + '">' + esc(u.name) + '</button>'
           ).join('');

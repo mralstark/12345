@@ -897,15 +897,15 @@ async def test_education_rows_do_not_repeat_the_cell(client, world, session):
     def labels(rows):
         return [(row["label"], row["value"]) for row in rows]
 
-    assert labels(education_rows("СПбГУ", "СПбГУ", "Юрфак", 3, False)) == [
-        ("Факультет", "Юрфак"), ("Курс", "3-й"),
+    assert labels(education_rows("СПбГУ", "СПбГУ", "Юрфак", 3, False, "bachelor")) == [
+        ("Факультет", "Юрфак"), ("Курс", "3-й"), ("Уровень", "Бакалавриат"),
     ]
     # Учится не там, по чему названа ячейка — это уже не повтор, а новый факт.
     assert labels(education_rows("МГУ", "СПбГУ", "Юрфак", 3, False)) == [
         ("Вуз", "МГУ"), ("Факультет", "Юрфак"), ("Курс", "3-й"),
     ]
     assert labels(education_rows("СПбГУ", None, None, None, True)) == [
-        ("Вуз", "СПбГУ"), ("Учёба", "окончил вуз"),
+        ("Вуз", "СПбГУ"), ("Обучение", "вуз окончен"),
     ]
     assert education_rows(None, None, None, None, False) == []
 

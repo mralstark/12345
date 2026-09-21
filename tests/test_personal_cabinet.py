@@ -7,7 +7,7 @@ _resolve_or_promote) — назначить роль тому, кто ещё н�
 import pytest
 from sqlalchemy import select
 
-from database.models import ROLE_LEADER, ROLE_PARTICIPANT, Member, Region, User
+from database.models import ROLE_LEADER, ROLE_PARTICIPANT, Member, Region, University, User
 from services.admin_actions import create_leader
 from tests.conftest import login
 
@@ -93,6 +93,49 @@ async def test_profile_self_edit_persists_to_same_member(client, session, world,
 
     await session.refresh(plain_member)
     assert plain_member.workplace == "Тестовая компания"
+
+
+async def test_own_profile_shows_saved_education_and_workplace(client, session, world, plain_member):
+    university = University(name="Профильный университет", region_id=world["moscow"].id)
+    session.add(university)
+    await session.flush()
+    plain_member.university_id = university.id
+    plain_member.faculty = "Экономический"
+    plain_member.graduated_university = True
+    plain_member.workplace = "Тестовая компания"
+    user = await _self_register(session, plain_member)
+    login(user)
+
+    profile = (await client.get("/api/profile/me")).json()
+    rows = {(row["label"], row["value"]) for row in profile["education"]}
+    assert ("Обучение", "вуз окончен") in rows
+    assert ("Место работы", "Тестовая компания") in rows
+
+
+async def test_profile_rejects_foreign_university_and_invalid_education(client, session, world, plain_member):
+    user = await _self_register(session, plain_member)
+    foreign = University(name="Вуз другого региона", region_id=world["tula"].id)
+    session.add(foreign)
+    await session.commit()
+    await session.refresh(foreign)
+    login(user)
+
+    wrong_university = await client.patch("/api/profile/me", json={"university_id": foreign.id})
+    assert wrong_university.status_code == 400
+    wrong_level = await client.patch("/api/profile/me", json={"education_level": "unknown"})
+    assert wrong_level.status_code == 400
+
+
+async def test_graduated_profile_cannot_clear_workplace(client, session, world, plain_member):
+    plain_member.graduated_university = True
+    plain_member.workplace = "Работа"
+    user = await _self_register(session, plain_member)
+    login(user)
+
+    response = await client.patch("/api/profile/me", json={"workplace": None})
+    assert response.status_code == 400
+    await session.refresh(plain_member)
+    assert plain_member.workplace == "Работа"
 
 
 async def test_profile_404_without_member_link(client, world):
