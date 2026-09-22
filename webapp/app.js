@@ -251,29 +251,65 @@
     return null;
   }
 
+  const recentMutations = new Map();
+  const MUTATION_DEDUP_MS = 1500;
+
+  function requestBodyFingerprint(body) {
+    if (!body) return '';
+    if (!(body instanceof FormData)) return JSON.stringify(body);
+    const parts = [];
+    body.forEach((value, key) => {
+      if (value instanceof File) parts.push(key + '=file:' + value.name + ':' + value.size + ':' + value.lastModified);
+      else parts.push(key + '=' + String(value));
+    });
+    return parts.join('&');
+  }
+
+  function idempotencyKey() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-request';
+  }
+
   async function api(path, options) {
     const opts = Object.assign({ headers: {} }, options || {});
     opts.headers = Object.assign({}, opts.headers);
+    const method = String(opts.method || 'GET').toUpperCase();
+    const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    const fingerprint = mutating ? method + ' ' + path + ' ' + requestBodyFingerprint(opts.body) : null;
+    const existing = fingerprint && recentMutations.get(fingerprint);
+    if (existing && existing.expiresAt > Date.now()) return existing.promise;
+
     if (tg && tg.initData) opts.headers['Authorization'] = 'tma ' + tg.initData;
+    if (mutating) opts.headers['Idempotency-Key'] = idempotencyKey();
     if (opts.body && !(opts.body instanceof FormData)) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(opts.body);
     }
-    const response = await fetch('/api' + path, opts);
-    if (!response.ok) {
-      let detail = 'Ошибка ' + response.status;
-      try {
-        const data = await response.json();
-        if (data && typeof data.detail === 'string') {
-          detail = data.detail;
-        } else if (data && data.detail) {
-          detail = validationMessage(data.detail);
-        }
-      } catch (e) { /* тело не JSON — оставляем код ответа */ }
-      throw new Error(detail);
+    const promise = (async () => {
+      const response = await fetch('/api' + path, opts);
+      if (!response.ok) {
+        let detail = 'Ошибка ' + response.status;
+        try {
+          const data = await response.json();
+          if (data && typeof data.detail === 'string') {
+            detail = data.detail;
+          } else if (data && data.detail) {
+            detail = validationMessage(data.detail);
+          }
+        } catch (e) { /* тело не JSON — оставляем код ответа */ }
+        throw new Error(detail);
+      }
+      if (response.status === 204) return null;
+      return response.json();
+    })();
+    if (fingerprint) {
+      const entry = { promise: promise, expiresAt: Date.now() + MUTATION_DEDUP_MS };
+      recentMutations.set(fingerprint, entry);
+      setTimeout(() => {
+        if (recentMutations.get(fingerprint) === entry) recentMutations.delete(fingerprint);
+      }, MUTATION_DEDUP_MS);
     }
-    if (response.status === 204) return null;
-    return response.json();
+    return promise;
   }
 
   async function download(path, fallbackName) {
@@ -629,6 +665,7 @@
     const items = [
       { id: 'dashboard', label: 'Сводка' },
       { id: 'members', label: 'Состав', badge: counters.new_purchases },
+      { id: 'academyManage', label: 'Академия' },
       { id: 'events', label: 'Мероприятия' },
     ];
     // У federal/coordinator/superuser задачи — в их собственном кабинете
@@ -976,6 +1013,7 @@
       news: renderNews,
       regions: renderRegionsTab,
       applications: renderApplicationsTab,
+      academyManage: renderAcademyManage,
       character: renderCharacter,
       shop: renderShop,
       myEvents: renderParticipantEvents,
@@ -1441,6 +1479,10 @@
           ? '<div class="quest-review"><strong>Ждёт проверки</strong>' +
             (q.submitted_note ? '<br>' + esc(q.submitted_note) : '') + '</div>'
           : '') +
+        (q.assigned
+          ? '<div class="quest-assigned"><strong>Назначено</strong>' +
+            (q.assignment_note ? '<br>' + esc(q.assignment_note) : '') + '</div>'
+          : '') +
         (was
           ? '<div class="quest__note">' +
             '<span class="' + (was.stars ? 'quest__note--good' : 'row__sub') + '">' +
@@ -1450,7 +1492,9 @@
           : '') +
         '</div>' +
         (editable
-          ? '<div class="row__side"><button class="btn btn--small" data-quest-mark="' + q.id + '">' +
+          ? '<div class="row__side">' +
+            (!q.pending_count && !q.assigned ? '<button class="btn btn--small" data-quest-assign="' + q.id + '">Выдать</button>' : '') +
+            '<button class="btn btn--small' + (!q.pending_count ? ' btn--ghost' : '') + '" data-quest-mark="' + q.id + '">' +
             (q.pending_count ? 'Одобрить' : (done ? 'Ещё' : 'Отметить')) + '</button>' +
             (q.pending_count ? '<button class="duty__act duty__act--drop" data-quest-reject="' + q.id + '">Вернуть</button>' : '') + '</div>'
           : '') +
@@ -1479,6 +1523,26 @@
         step(Number(event.currentTarget.dataset.questMark), 'increment', 1, data));
       on('[data-quest-undo]', 'click', (event) =>
         step(Number(event.currentTarget.dataset.questUndo), 'decrement', -1, data));
+      on('[data-quest-assign]', 'click', (event) => {
+        const questId = Number(event.currentTarget.dataset.questAssign);
+        const quest = data.items.find((item) => item.id === questId);
+        modal('Выдать задание',
+          '<p><strong>' + esc(quest.title) + '</strong></p>' +
+          '<div class="field"><label>Комментарий участнику</label>' +
+          '<textarea id="questAssignNote" placeholder="Что важно учесть, срок или ожидаемый результат"></textarea></div>' +
+          '<div class="btn-row"><button class="btn" id="questAssignSave">Выдать</button>' +
+          '<button class="btn btn--ghost" id="questAssignCancel">Отмена</button></div>', () => {
+            document.getElementById('questAssignCancel').onclick = () => memberQuestsModal(member, editable);
+            document.getElementById('questAssignSave').onclick = async () => {
+              try {
+                await api('/members/' + member.id + '/quests/' + questId + '/assign', { method: 'POST', body: {
+                  note: document.getElementById('questAssignNote').value.trim() || null,
+                }});
+                toast('Задание выдано'); memberQuestsModal(member, editable);
+              } catch (error) { fail(error); }
+            };
+          });
+      });
       on('[data-quest-reject]', 'click', async (event) => {
         try {
           await api('/members/' + member.id + '/quests/' + Number(event.currentTarget.dataset.questReject) + '/reject', { method: 'POST' });
@@ -1493,6 +1557,46 @@
   function declOtmetka(n) {
     const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
     return 'Отмечено ' + n + (tail === 1 ? ' раз' : (tail >= 2 && tail <= 4 ? ' раза' : ' раз'));
+  }
+
+  async function renderAcademyManage(gen) {
+    const data = await api('/academy?region_id=' + state.regionId);
+    const region = (state.me.regions || []).find((item) => item.id === state.regionId);
+    const rows = data.items.map((member) =>
+      '<div class="card academy-member" data-academy-member="' + member.id + '">' +
+      '<div class="row"><div class="row__main"><div class="row__title">' + esc(member.full_name) + '</div>' +
+      '<div class="row__sub">' + esc(member.status_label) + '</div></div>' +
+      (member.pending_count ? '<span class="badge badge--review">На проверке: ' + member.pending_count + '</span>' : '') +
+      '</div><div class="academy-member__numbers"><span>' + member.progress_percent + '% общего прогресса</span>' +
+      '<span>' + member.completed + ' из ' + member.total + ' завершено</span>' +
+      '<span>' + member.assigned_count + ' выдано</span></div>' +
+      '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + member.progress_percent + '%"></div></div>' +
+      (member.pending.length ? '<div class="academy-member__pending">' + member.pending.map((item) =>
+        '<div><strong>' + esc(item.title) + '</strong>' + (item.note ? '<br><span>' + esc(item.note) + '</span>' : '') + '</div>'
+      ).join('') + '</div>' : '') +
+      '<button class="btn btn--small" data-academy-open="' + member.id + '">' +
+      (member.pending_count ? 'Проверить задания' : 'Открыть задания') + '</button></div>'
+    ).join('');
+    setView(
+      '<div class="hero-card"><div class="eyebrow">Академия</div><h2>' + esc(region ? region.name : '') + '</h2>' +
+      '<p>Выдавайте задания, следите за движением участников и принимайте выполненное.</p></div>' +
+      '<div class="stats3"><div class="card stat2"><div class="row__sub">Участников</div><div class="stat2__value">' + data.items.length + '</div></div>' +
+      '<div class="card stat2"><div class="row__sub">Ждут проверки</div><div class="stat2__value stat2__value--accent">' + data.pending_count + '</div></div>' +
+      '<div class="card stat2"><div class="row__sub">Выдано</div><div class="stat2__value">' + data.assigned_count + '</div></div></div>' +
+      '<div class="field"><label>Найти участника</label><input id="academySearch" placeholder="Фамилия или имя" /></div>' +
+      '<div id="academyMembers" class="stack">' + (rows || '<div class="empty">В регионе пока нет участников</div>') + '</div>', gen);
+    const byId = new Map(data.items.map((member) => [String(member.id), member]));
+    on('[data-academy-open]', 'click', (event) => {
+      const member = byId.get(event.currentTarget.dataset.academyOpen);
+      if (member) memberQuestsModal(member, true);
+    });
+    document.getElementById('academySearch').addEventListener('input', (event) => {
+      const query = event.currentTarget.value.trim().toLocaleLowerCase('ru');
+      document.querySelectorAll('[data-academy-member]').forEach((card) => {
+        const member = byId.get(card.dataset.academyMember);
+        card.hidden = Boolean(query && !member.full_name.toLocaleLowerCase('ru').includes(query));
+      });
+    });
   }
 
   async function memberPurchasesModal(member, editable) {
@@ -3727,6 +3831,8 @@
         '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + pct + '%"></div></div>' +
         '<div class="row__sub">' + esc(q.progress_label) + '</div>' +
         (q.pending_count ? '<div class="quest-review">⏳ Выполнение отправлено на проверку</div>' : '') +
+        (q.assigned ? '<div class="quest-assigned">Задание выдано руководителем' +
+          (q.assignment_note ? '<br>' + esc(q.assignment_note) : '') + '</div>' : '') +
         '</div>' +
         '<div class="row__side">' +
         (q.reward_outfit

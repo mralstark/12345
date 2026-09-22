@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from api.routers import (
+    academy,
     analytics,
     applications,
     bureau,
@@ -34,6 +35,7 @@ from api.routers import (
     tasks,
     universities,
 )
+from api.idempotency import idempotency_store
 from config import (
     ALLOWED_HOSTS,
     BASE_DIR,
@@ -79,7 +81,7 @@ if CORS_ALLOWED_ORIGINS:
         CORSMiddleware,
         allow_origins=list(CORS_ALLOWED_ORIGINS),
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
     )
 
 
@@ -102,7 +104,7 @@ _CONTENT_SECURITY_POLICY = "; ".join(
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    response = await idempotency_store.execute(request, call_next)
     response.headers.setdefault("Content-Security-Policy", _CONTENT_SECURITY_POLICY)
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -126,6 +128,7 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
 
 
 for router in (
+    academy.router,
     context.router,
     applications.router,
     bureau.router,

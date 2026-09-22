@@ -127,6 +127,7 @@ def _earned_stars(thresholds: list[int], rewards: list[int], count: int) -> int:
 def _quest_dict(
     quest: Quest, count: int, stars_claimed: int = 0,
     pending_count: int = 0, submitted_note: str | None = None,
+    assigned_by_user_id: int | None = None, assignment_note: str | None = None,
 ) -> dict:
     thresholds = quest.thresholds_list()
     rewards = quest.rewards_list()
@@ -157,6 +158,9 @@ def _quest_dict(
         "stars_claimed": stars_claimed,
         "pending_count": pending_count,
         "submitted_note": submitted_note,
+        "assigned": assigned_by_user_id is not None,
+        "assigned_by_user_id": assigned_by_user_id,
+        "assignment_note": assignment_note,
         # Сколько откроет следующая ступень. Обычно это её же номер, но у
         # заданий со своей ценой — цена (Quest.rewards_list).
         "next_reward": next_reward,
@@ -188,7 +192,9 @@ async def _character_payload(session: AsyncSession, member: Member) -> dict:
         _quest_dict(q, (progress_by_quest[q.id].count if q.id in progress_by_quest else 0),
                     (progress_by_quest[q.id].stars_claimed if q.id in progress_by_quest else 0),
                     (progress_by_quest[q.id].pending_count if q.id in progress_by_quest else 0),
-                    (progress_by_quest[q.id].submitted_note if q.id in progress_by_quest else None))
+                    (progress_by_quest[q.id].submitted_note if q.id in progress_by_quest else None),
+                    (progress_by_quest[q.id].assigned_by_user_id if q.id in progress_by_quest else None),
+                    (progress_by_quest[q.id].assignment_note if q.id in progress_by_quest else None))
         for q in quests
     ]
     touched = sum(1 for item in quest_items if item["count"] > 0)
@@ -367,5 +373,3 @@ async def submit_quest_for_review(
     row.submitted_at = tz_now().replace(tzinfo=None)
     await session.commit()
     return await _character_payload(session, member)
-
-

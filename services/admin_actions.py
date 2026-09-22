@@ -457,6 +457,7 @@ EXCLUDE_HANDLES_USER_REFS = frozenset({
     "bureau_members.user_id",
     "coordinator_regions.coordinator_user_id",
     "membership_applications.reviewed_by_user_id",
+    "member_quest_progress.assigned_by_user_id",
     "news_posts.author_user_id",
     "news_comments.author_user_id",
     "news_reactions.user_id",
@@ -519,6 +520,12 @@ async def exclude_member(
             )
         ).scalars().all():
             app.reviewed_by_user_id = None
+        for progress in (
+            await session.execute(
+                select(MemberQuestProgress).where(MemberQuestProgress.assigned_by_user_id == user.id)
+            )
+        ).scalars().all():
+            progress.assigned_by_user_id = None
 
         # Кто-то мог смотреть систему его глазами (handlers/impersonate.py) —
         # иначе удаление упрётся в чужую строку.

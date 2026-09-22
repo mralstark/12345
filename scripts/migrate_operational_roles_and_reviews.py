@@ -42,8 +42,15 @@ async def migrate() -> None:
             ("pending_count", "INTEGER NOT NULL DEFAULT 0"),
             ("submitted_at", timestamp_type),
             ("submitted_note", "VARCHAR(500)"),
+            ("assigned_by_user_id", "INTEGER"),
+            ("assigned_at", timestamp_type),
+            ("assignment_note", "VARCHAR(500)"),
         ):
             await add("member_quest_progress", column, ddl)
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_member_quest_progress_assigned_by_user_id "
+            "ON member_quest_progress (assigned_by_user_id)"
+        ))
 
     print("Операционные роли и проверка выполнения готовы")
 

@@ -1875,6 +1875,17 @@ textarea {
 .academy-progress__number { color: var(--accent); font-size: 28px; font-weight: 700; margin: var(--space-8) 0; }
 .quest-description { margin-top: var(--space-4); line-height: 1.4; }
 .quest-review { margin-top: var(--space-8); padding: 7px 9px; border-radius: 9px; background: rgba(217,181,123,.12); color: var(--accent); font-size: 12px; line-height: 1.4; }
+.quest-assigned { margin-top: var(--space-8); padding: 7px 9px; border-radius: 9px; background: rgba(95,134,181,.13); color: #9fc5ed; font-size: 12px; line-height: 1.4; }
+
+.hero-card { margin-bottom: var(--space-16); padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: radial-gradient(circle at top right, rgba(217,181,123,.13), transparent 52%), var(--surface); }
+.hero-card h2 { margin: 5px 0 7px; }
+.hero-card p { margin: 0; color: var(--hint); line-height: 1.45; }
+.stats3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); margin-bottom: var(--space-16); }
+.academy-member { display: grid; gap: var(--space-12); }
+.academy-member__numbers { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--hint); font-size: 12px; }
+.academy-member__pending { display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: rgba(217,181,123,.09); color: var(--hint); font-size: 12px; line-height: 1.4; }
+.academy-member__pending strong { color: var(--text); }
+@media (max-width: 430px) { .stats3 { grid-template-columns: 1fr; } }
 
 /* Строка списка, оформленная кнопкой: .row задаёт раскладку и рамку, а
    собственный вид кнопки надо погасить, иначе выходит светлый прямоугольник. */

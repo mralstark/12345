@@ -929,10 +929,14 @@ class MemberQuestProgress(Base):
     pending_count: Mapped[int] = mapped_column(Integer, default=0)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     submitted_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    assigned_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    assignment_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     member: Mapped["Member"] = relationship(back_populates="quest_progress")
     quest: Mapped["Quest"] = relationship()
+    assigned_by: Mapped["User | None"] = relationship(foreign_keys=[assigned_by_user_id])
 
 
 class ShopPurchase(Base):

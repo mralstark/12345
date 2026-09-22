@@ -5,6 +5,8 @@
 показывать и то, и другое, иначе выходит «нажал и непонятно, было ли».
 """
 
+from sqlalchemy import select
+
 from database.models import (
     MEMBER_STATUS_ACTIVIST,
     ROLE_PARTICIPANT,
@@ -187,3 +189,39 @@ async def test_stranger_cannot_mark(client, world, session):
 
     assert (await client.post(
         f"/api/members/{member.id}/quests/{quest.id}/decrement")).status_code == 403
+
+
+async def test_leader_and_coordinator_manage_academy(client, world, session):
+    quest = await _quest(session, thresholds="1", title="Провести встречу")
+    member = await _member(session, world["moscow"].id, 6010)
+
+    login(world["leader_moscow"])
+    assigned = await client.post(
+        f"/api/members/{member.id}/quests/{quest.id}/assign",
+        json={"note": "Подготовить тему и список участников"},
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["assigned"] is True
+
+    participant = (await session.execute(select(User).where(User.member_id == member.id))).scalar_one()
+    login(participant)
+    submitted = await client.post(
+        f"/api/character/me/quests/{quest.id}/submit",
+        json={"note": "Встреча проведена"},
+    )
+    assert submitted.status_code == 200
+
+    login(world["coordinator"])
+    overview = await client.get(f"/api/academy?region_id={world['moscow'].id}")
+    assert overview.status_code == 200
+    row = next(item for item in overview.json()["items"] if item["id"] == member.id)
+    assert row["pending_count"] == 1
+    assert row["assigned_count"] == 1
+
+    approved = await client.post(f"/api/members/{member.id}/quests/{quest.id}/increment")
+    assert approved.status_code == 200
+    assert approved.json()["count"] == 1
+    assert approved.json()["pending_count"] == 0
+
+    login(world["leader_tula"])
+    assert (await client.get(f"/api/academy?region_id={world['moscow'].id}")).status_code == 403

@@ -1,5 +1,6 @@
 """Сквозные проверки API Mini App: каждый модуль ТЗ по разу, плюс отказы в доступе."""
 
+import asyncio
 import io
 import zipfile
 from datetime import timedelta
@@ -13,6 +14,7 @@ from database.models import (
     ROLE_PARTICIPANT,
     Member,
     ShopPurchase,
+    Task,
     UniversityCell,
     User,
 )
@@ -386,6 +388,20 @@ async def test_task_lifecycle(client, world):
     assert (await client.delete(f"/api/tasks/{task_id}")).status_code == 200
     login(world["leader_moscow"])
     assert (await client.get("/api/tasks?box=inbox")).json()["items"] == []
+
+
+async def test_duplicate_mutation_with_same_key_runs_once(client, world, session):
+    login(world["coordinator"])
+    payload = {"to_user_id": world["leader_moscow"].id, "title": "Один запрос"}
+    headers = {"Idempotency-Key": "test-task-one-request-2026"}
+    first, second = await asyncio.gather(
+        client.post("/api/tasks", json=payload, headers=headers),
+        client.post("/api/tasks", json=payload, headers=headers),
+    )
+    assert first.status_code == second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+    tasks = (await session.execute(select(Task).where(Task.title == "Один запрос"))).scalars().all()
+    assert len(tasks) == 1
 
 
 async def test_overdue_status_is_derived_from_deadline(client, world):
