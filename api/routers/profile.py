@@ -400,10 +400,11 @@ async def _role_title(session: AsyncSession, user: User) -> str | None:
         ROLE_LEADER,
     )
     from utils.access import accessible_region_ids, actor_cell
+    from utils.permissions import has_role
 
-    if user.role == ROLE_FEDERAL:
+    if has_role(user, ROLE_FEDERAL):
         return "Федеральный координатор"
-    if user.role == ROLE_COORDINATOR:
+    if has_role(user, ROLE_COORDINATOR):
         return "Координатор регионов"
     if user.role == ROLE_CELL_LEADER:
         cell = await actor_cell(session, user)

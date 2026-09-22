@@ -12,6 +12,7 @@ from utils.counters import (
     pending_applications_count,
 )
 from utils.notify import escape_telegram_html
+from utils.permissions import has_any_role
 from utils.roles import role_label
 
 NO_ACCESS_TEXT = (
@@ -44,7 +45,7 @@ async def menu_text(session: AsyncSession, user: User) -> str:
     if user.role == ROLE_LEADER:
         region_name = regions[0].name if regions else "— не назначен —"
         lines.append(f"Регион: {escape_telegram_html(region_name)}")
-    elif user.role in SUPERVISOR_ROLES:
+    elif has_any_role(user, SUPERVISOR_ROLES):
         lines.append(f"Регионов в ведении: {len(regions)}")
 
     badges = []

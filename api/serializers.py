@@ -21,6 +21,7 @@ from database.models import (
 )
 from services.tasks import effective_status
 from utils.roles import role_label
+from utils.permissions import role_codes
 from utils.tz import iso_utc
 
 
@@ -31,6 +32,7 @@ async def user_brief(session: AsyncSession, user: User | None) -> dict | None:
         "id": user.id,
         "full_name": user.full_name,
         "role": user.role,
+        "roles": role_codes(user),
         "role_label": await role_label(session, user),
     }
 
@@ -212,6 +214,9 @@ def task_dict(task: Task, author: User | None = None, assignee: User | None = No
         "from_name": author.full_name if author else None,
         "to_name": assignee.full_name if assignee else None,
         "created_at": iso_utc(task.created_at),
+        "submitted_at": iso_utc(task.submitted_at),
+        "reviewed_at": iso_utc(task.reviewed_at),
+        "review_note": task.review_note,
     }
 
 

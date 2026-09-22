@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user, get_db
 from api.routers.character import _quest_dict
 from database.models import Member, MemberQuestProgress, Quest, User
-from utils.access import actor_cell, require_edit, require_same_cell, require_view
+from utils.access import actor_cell, require_same_cell, require_view
 from utils.notify import escape_telegram_html, notify_telegram
 from utils.tz import now as tz_now
 
@@ -44,7 +44,9 @@ async def list_member_quests(
     by_quest = {row.quest_id: row for row in progress}
     items = [
         _quest_dict(q, (by_quest[q.id].count if q.id in by_quest else 0),
-                    (by_quest[q.id].stars_claimed if q.id in by_quest else 0))
+                    (by_quest[q.id].stars_claimed if q.id in by_quest else 0),
+                    (by_quest[q.id].pending_count if q.id in by_quest else 0),
+                    (by_quest[q.id].submitted_note if q.id in by_quest else None))
         for q in quests
     ]
     # Баланс человека — руководителю он был не виден нигде: он жал «+1» и не
@@ -59,7 +61,7 @@ async def list_member_quests(
 async def _step(session: AsyncSession, user: User, member_id: int, quest_id: int, delta: int) -> tuple:
     """Общая часть отметки и её отмены: проверки прав и поиск строки прогресса."""
     member = await _get_member(session, member_id)
-    await require_edit(session, user, member.region_id)
+    await require_view(session, user, member.region_id)
     require_same_cell(await actor_cell(session, user), member.cell_id)
 
     quest = await session.get(Quest, quest_id)
@@ -81,6 +83,11 @@ async def _step(session: AsyncSession, user: User, member_id: int, quest_id: int
     # Ниже нуля не уходим: отменять нечего, а отрицательный счётчик сломал бы
     # и полоску прогресса, и подсчёт звёзд.
     row.count = max(0, row.count + delta)
+    if delta > 0 and (row.pending_count or 0) > 0:
+        row.pending_count = (row.pending_count or 0) - 1
+        if row.pending_count == 0:
+            row.submitted_at = None
+            row.submitted_note = None
     row.updated_at = tz_now().replace(tzinfo=None)
     await session.commit()
     return quest, row, before
@@ -111,7 +118,7 @@ async def increment_member_quest(
                 f"{escape_telegram_html(label)}! Заберите звёзды в «Академии».",
             )
 
-    return _quest_dict(quest, row.count, row.stars_claimed)
+    return _quest_dict(quest, row.count, row.stars_claimed, row.pending_count, row.submitted_note)
 
 
 @router.post("/{quest_id}/decrement")
@@ -130,4 +137,32 @@ async def decrement_member_quest(
     он не уходит ниже нуля).
     """
     quest, row, _ = await _step(session, user, member_id, quest_id, -1)
-    return _quest_dict(quest, row.count, row.stars_claimed)
+    return _quest_dict(quest, row.count, row.stars_claimed, row.pending_count, row.submitted_note)
+
+
+@router.post("/{quest_id}/reject")
+async def reject_member_quest(
+    member_id: int,
+    quest_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    member = await _get_member(session, member_id)
+    await require_view(session, user, member.region_id)
+    require_same_cell(await actor_cell(session, user), member.cell_id)
+    quest = await session.get(Quest, quest_id)
+    row = (await session.execute(select(MemberQuestProgress).where(
+        MemberQuestProgress.member_id == member_id,
+        MemberQuestProgress.quest_id == quest_id,
+    ))).scalar_one_or_none()
+    if quest is None or row is None or not row.pending_count:
+        raise HTTPException(400, "Нет выполнения, ожидающего проверки")
+    row.pending_count = 0
+    row.submitted_at = None
+    row.submitted_note = None
+    row.updated_at = tz_now().replace(tzinfo=None)
+    await session.commit()
+    owner = (await session.execute(select(User).where(User.member_id == member_id))).scalar_one_or_none()
+    if owner is not None:
+        await notify_telegram(owner.telegram_id, f"↩️ Задание «{escape_telegram_html(quest.title)}» возвращено на доработку.")
+    return _quest_dict(quest, row.count, row.stars_claimed, 0, None)

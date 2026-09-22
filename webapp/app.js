@@ -407,8 +407,13 @@
     return state.me && state.me.editable_region_ids.indexOf(state.regionId) !== -1;
   }
 
+  function meHasRole(role) {
+    if (!state.me) return false;
+    return (state.me.roles || [state.me.role]).indexOf(role) !== -1;
+  }
+
   function canManageUniversities() {
-    return Boolean(state.me) && ['superuser', 'federal', 'leader'].indexOf(state.me.role) !== -1;
+    return Boolean(state.me) && (meHasRole('superuser') || meHasRole('federal') || state.me.role === 'leader');
   }
 
   function view() { return document.getElementById('view'); }
@@ -568,7 +573,7 @@
   // у них всего один регион и он же их единственный кабинет, поведение не
   // меняется (просто государство `region` для них — единственное).
   function hasOwnCabinet() {
-    return Boolean(state.me) && ['federal', 'coordinator', 'superuser'].indexOf(state.me.role) !== -1;
+    return Boolean(state.me) && (meHasRole('federal') || meHasRole('coordinator') || meHasRole('superuser'));
   }
 
   function tabsConfig() {
@@ -607,7 +612,7 @@
       // интерфейс перед тем, как отдавать его federal (см.
       // api/routers/applications.py); в боте подтверждение по-прежнему
       // доступно federal через кнопку «📝 Подтверждения».
-      if (state.me && state.me.role === 'superuser') {
+      if (state.me && state.me.is_supervisor) {
         items.push({ id: 'applications', label: 'Заявки', badge: counters.pending_applications });
       }
       items.push({ id: 'bureau', label: 'Бюро' });
@@ -632,6 +637,9 @@
     // кабинета нет — задачи остаются прямо тут же, как и раньше.
     if (!hasOwnCabinet()) {
       items.push({ id: 'tasks', label: 'Задачи', badge: counters.new_tasks });
+      if (state.me && state.me.role === 'leader') {
+        items.push({ id: 'applications', label: 'Заявки', badge: counters.pending_applications });
+      }
     }
     items.push({ id: 'finance', label: 'Финансы' });
     // Руководитель ячейки работает через эти же вкладки — сервер сам сужает
@@ -796,8 +804,8 @@
   }
 
   function ownCabinetLabel() {
-    if (state.me.role === 'federal') return 'Кабинет федерального координатора';
-    if (state.me.role === 'coordinator') return 'Кабинет координатора регионов';
+    if (meHasRole('federal')) return 'Кабинет федерального координатора';
+    if (meHasRole('coordinator')) return 'Кабинет координатора регионов';
     return 'Кабинет управления'; // superuser — переходный период, план §6
   }
 
@@ -1176,6 +1184,7 @@
   async function memberForm(member) {
     const statuses = state.me.dictionaries.member_statuses;
     const editable = canEdit();
+    const cellData = await api('/register/cells?region_id=' + state.regionId);
     modal(member ? 'Карточка человека' : 'Новый человек',
       '<div class="field"><label>ФИО</label><input id="mName" value="' + esc(member ? member.full_name : '') + '" ' + (editable ? '' : 'disabled') + ' /></div>' +
       '<div class="field"><label>Статус</label><select id="mStatus" ' + (editable ? '' : 'disabled') + '>' +
@@ -1187,8 +1196,11 @@
       '<div class="field" id="mActivistJoinedField"><label>Вступление в Академисты</label><input id="mActivistJoined" placeholder="20.02.2000" inputmode="numeric" value="' + esc(member ? isoToRuDate(member.activist_joined_at) : '') + '" ' + (editable ? '' : 'disabled') + ' /></div>' +
       '<div class="field" id="mMemberInductedField" hidden><label>Посвящение в Братство</label><input id="mMemberInducted" placeholder="20.02.2000" inputmode="numeric" value="' + esc(member ? isoToRuDate(member.member_inducted_at) : '') + '" ' + (editable ? '' : 'disabled') + ' /></div>' +
       '<div class="field" id="mAlumniGraduatedField" hidden><label>Выпуск из студенческого Братства</label><input id="mAlumniGraduated" placeholder="20.02.2000" inputmode="numeric" value="' + esc(member ? isoToRuDate(member.alumni_graduated_at) : '') + '" ' + (editable ? '' : 'disabled') + ' /></div>' +
-      // ВУЗ — поиск по каталогу с автодополнением; ячейка производная от него,
-      // отдельного выбора ячейки в форме больше нет (см. utils/university_cells.py).
+      '<div class="field"><label>Ячейка Братства</label><select id="mCell" ' + (editable ? '' : 'disabled') + '>' +
+      '<option value="">Региональное отделение</option>' +
+      cellData.items.map((c) => '<option value="' + c.id + '"' + (member && member.cell_id === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('') +
+      '</select><div class="row__sub">Принадлежность к ячейке не зависит от места учёбы.</div></div>' +
+      // ВУЗ — глобальный каталог: человек может учиться в другом городе.
       '<div class="field"><label>ВУЗ</label><input id="mUniversityInput" placeholder="Начните вводить название" autocomplete="off" value="' +
         esc(member && member.university_name ? member.university_name : '') + '" ' + (editable ? '' : 'disabled') + ' />' +
         '<div id="mUniversitySuggestions" class="chips" style="margin-top:var(--space-8)"></div>' +
@@ -1255,7 +1267,7 @@
           if (!q) { uniSuggestions.innerHTML = ''; return; }
           uniTimer = setTimeout(async () => {
             try {
-              const data = await api('/universities?region_id=' + state.regionId + '&q=' + encodeURIComponent(q));
+              const data = await api('/universities?q=' + encodeURIComponent(q));
               uniSuggestions.innerHTML = data.items.map((u) =>
                 '<button type="button" class="chip" data-uni="' + u.id + '" data-name="' + esc(u.name) + '">' + esc(u.name) + '</button>'
               ).join('');
@@ -1328,6 +1340,7 @@
             alumni_graduated_at: alumniGraduatedAt,
             comment: document.getElementById('mComment').value.trim() || null,
             university_id: universityId,
+            cell_id: document.getElementById('mCell').value ? Number(document.getElementById('mCell').value) : null,
             faculty: document.getElementById('mFaculty').value.trim() || null,
             course: graduatedUniversity ? null : (courseRaw ? Number(courseRaw) : null),
             graduated_university: graduatedUniversity,
@@ -1424,6 +1437,10 @@
         '<div class="row__sub">' + esc(done
           ? 'Выполнено полностью · отмечено ' + q.count
           : q.count + ' из ' + q.next_target + ' — на ступени откроется ' + q.next_reward + ' ★') + '</div>' +
+        (q.pending_count
+          ? '<div class="quest-review"><strong>Ждёт проверки</strong>' +
+            (q.submitted_note ? '<br>' + esc(q.submitted_note) : '') + '</div>'
+          : '') +
         (was
           ? '<div class="quest__note">' +
             '<span class="' + (was.stars ? 'quest__note--good' : 'row__sub') + '">' +
@@ -1434,7 +1451,8 @@
         '</div>' +
         (editable
           ? '<div class="row__side"><button class="btn btn--small" data-quest-mark="' + q.id + '">' +
-            (done ? 'Ещё' : 'Отметить') + '</button></div>'
+            (q.pending_count ? 'Одобрить' : (done ? 'Ещё' : 'Отметить')) + '</button>' +
+            (q.pending_count ? '<button class="duty__act duty__act--drop" data-quest-reject="' + q.id + '">Вернуть</button>' : '') + '</div>'
           : '') +
         '</div>';
     };
@@ -1461,6 +1479,12 @@
         step(Number(event.currentTarget.dataset.questMark), 'increment', 1, data));
       on('[data-quest-undo]', 'click', (event) =>
         step(Number(event.currentTarget.dataset.questUndo), 'decrement', -1, data));
+      on('[data-quest-reject]', 'click', async (event) => {
+        try {
+          await api('/members/' + member.id + '/quests/' + Number(event.currentTarget.dataset.questReject) + '/reject', { method: 'POST' });
+          toast('Возвращено на доработку'); await draw();
+        } catch (error) { fail(error); }
+      });
     };
 
     modal('Задания', '<div id="mqBody" class="stack"><div class="loader">Загружаю…</div></div>', () => { draw().catch(fail); });
@@ -2642,9 +2666,13 @@
       if (task.status === 'done') actions.push(['planned', 'Вернуть', 'btn btn--ghost']);
     } else {
       if (isAssignee && task.status === 'new') actions.push(['in_progress', 'Взять в работу', 'btn']);
-      if (isAssignee && open) actions.push(['done', 'Выполнена', 'btn']);
+      if (isAssignee && open) actions.push(['review', 'Отправить на проверку', 'btn']);
+      if (isAuthor && task.status === 'review') {
+        actions.push(['done', 'Одобрить выполнение', 'btn']);
+        actions.push(['in_progress', 'Вернуть в работу', 'btn btn--ghost']);
+      }
       // Снятая задача исчезает, а не оседает строкой «Отменена» в чужом ящике.
-      if (isAuthor && open) actions.push(['delete', 'Снять задачу', 'btn btn--danger']);
+      if (isAuthor && task.status !== 'done') actions.push(['delete', 'Снять задачу', 'btn btn--danger']);
     }
 
     modal(task.title,
@@ -2713,11 +2741,17 @@
       '</select></div>' +
       '<div class="field"><label>Название</label><input id="tTitle" /></div>' +
       '<div class="field"><label>Описание</label><textarea id="tText"></textarea></div>' +
-      '<div class="field"><label>Срок</label><input id="tDeadline" placeholder="20.02.2026" inputmode="numeric" /></div>' +
+      '<div class="field"><label>Срок</label><div class="date-choice">' +
+      '<input id="tDeadline" placeholder="20.02.2026" inputmode="numeric" />' +
+      '<input id="tDeadlineCalendar" type="date" aria-label="Выбрать дату в календаре" /></div>' +
+      '<div class="row__sub">Можно написать дату или выбрать её в календаре.</div></div>' +
       '<div class="btn-row"><button class="btn" id="tSave">Поставить</button>' +
       '<button class="btn btn--ghost" id="tCancel">Отмена</button></div>',
       () => {
         applyDateMask(document.getElementById('tDeadline'));
+        document.getElementById('tDeadlineCalendar').addEventListener('change', (event) => {
+          document.getElementById('tDeadline').value = isoToRuDate(event.currentTarget.value);
+        });
         document.getElementById('tCancel').onclick = closeModal;
         document.getElementById('tSave').onclick = async () => {
           const title = document.getElementById('tTitle').value.trim();
@@ -2794,7 +2828,7 @@
 
     setView(
       '<div class="card"><div class="card__title">Отчёт по региону: ' + esc(regionName) + '</div>' +
-      '<p class="row__sub">Полный отчёт — финансы, состав и мероприятия — одним файлом (ТЗ §13).</p>' +
+      '<p class="row__sub">Полный отчёт — финансы, состав и мероприятия — одним файлом.</p>' +
       '<div class="field"><label>Период</label><select id="rpPeriod">' +
       '<option value="month">Текущий месяц</option>' +
       '<option value="semester">Текущий семестр</option>' +
@@ -3689,15 +3723,20 @@
     const questsHtml = branchQuests.map((q) => {
       const pct = q.next_target ? Math.max(0, Math.min(100, Math.round((q.count / q.next_target) * 100))) : 100;
       return '<div class="row"><div class="row__main"><div class="row__title">' + esc(q.title) + '</div>' +
+        (q.description ? '<div class="row__sub quest-description">' + esc(q.description) + '</div>' : '') +
         '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="row__sub">' + esc(q.progress_label) + '</div></div>' +
+        '<div class="row__sub">' + esc(q.progress_label) + '</div>' +
+        (q.pending_count ? '<div class="quest-review">⏳ Выполнение отправлено на проверку</div>' : '') +
+        '</div>' +
         '<div class="row__side">' +
         (q.reward_outfit
           ? '<div class="reward-skin"><img src="' + q.reward_outfit.image + '" alt="' + esc(q.reward_outfit.label) + '"><span>' + esc(q.reward_outfit.label) + '</span></div>'
           : q.claimable_stars > 0
             ? '<button class="btn btn--small btn--claim" data-claim-quest="' + q.id + '">Получить <span class="reward-badge">' + q.claimable_stars + ' ⭐</span></button>'
             : q.next_target !== null
-              ? '<span class="reward-badge reward-badge--pending">' + q.next_target + ' ⭐</span>'
+              ? (q.pending_count
+                ? '<span class="reward-badge reward-badge--pending">Проверяется</span>'
+                : '<button class="btn btn--small btn--ghost" data-submit-quest="' + q.id + '">Сдать</button>')
               : '') +
         '</div></div>';
     }).join('');
@@ -3724,6 +3763,25 @@
         document.getElementById('questsCard').innerHTML = renderQuestsCard(fresh);
         wireQuestsCard(fresh);
       } catch (error) { fail(error); }
+    });
+    on('[data-submit-quest]', 'click', (event) => {
+      const questId = Number(event.currentTarget.dataset.submitQuest);
+      const quest = data.quests.find((q) => q.id === questId);
+      modal('Сдать задание',
+        '<p>' + esc(quest.title) + '</p><div class="field"><label>Короткий комментарий</label>' +
+        '<textarea id="questSubmitNote" placeholder="Что сделано, где и когда"></textarea></div>' +
+        '<div class="btn-row"><button class="btn" id="questSubmitSave">Отправить</button>' +
+        '<button class="btn btn--ghost" id="questSubmitCancel">Отмена</button></div>', () => {
+          document.getElementById('questSubmitCancel').onclick = closeModal;
+          document.getElementById('questSubmitSave').onclick = async () => {
+            try {
+              await api('/character/me/quests/' + questId + '/submit', { method: 'POST', body: {
+                note: document.getElementById('questSubmitNote').value.trim() || null,
+              }});
+              closeModal(); toast('Отправлено на проверку'); startRender(renderCharacter);
+            } catch (error) { fail(error); }
+          };
+        });
     });
   }
 
@@ -3755,7 +3813,10 @@
       '<div class="row__sub" id="avatarMeta" style="margin-top:var(--space-8)">' + renderAvatarMeta(data, active) + '</div>' +
       '<button class="btn" id="avatarEdit" style="margin-top:var(--space-12)">Сменить образ</button>' +
       '</div>' +
-      '<div class="card">' + buildRadarSvg(data.radar) + '</div>' +
+      '<div class="card academy-progress"><div class="card__title">Мой прогресс</div>' +
+      '<div class="academy-progress__number">' + data.quests.filter((q) => q.completed).length + ' из ' + data.quests.length + '</div>' +
+      '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + (data.quests.length ? Math.round(data.quests.filter((q) => q.completed).length / data.quests.length * 100) : 0) + '%"></div></div>' +
+      '<div class="row__sub">Диаграмма показывает сильные стороны по направлениям Академии.</div>' + buildRadarSvg(data.radar) + '</div>' +
       '<div class="card"><div class="card__title">Задания</div><div id="questsCard">' + renderQuestsCard(data) + '</div></div>'
     , gen);
 
@@ -4290,7 +4351,7 @@
           '<div class="row__main" style="margin-left:var(--space-12)">' +
           '<span class="bureau__name">' + esc(item.name) + '</span>' +
           '<div class="row__sub">' + esc(item.title) +
-          (item.region ? ' · ' + esc(item.region) : '') + '</div></div>' +
+          (item.regions && item.regions.length ? ' · ' + esc(item.regions.join(', ')) : ' · федеральные проекты') + '</div></div>' +
           (data.can_edit
             ? '<span class="bureau__acts">' +
               '<button type="button" class="bureau__act" data-edit="' + item.id + '">Должность</button>' +
@@ -4312,12 +4373,12 @@
     const add = document.getElementById('bureauAdd');
     if (add) add.onclick = () => personPicker(null, (memberId) => {
       closeModal();
-      bureauTitleForm(null, '', memberId);
+      bureauTitleForm(null, '', memberId, [], data.regions || []);
     }, false);
 
     on('[data-edit]', 'click', (event) => {
       const item = items.find((i) => String(i.id) === event.currentTarget.dataset.edit);
-      if (item) bureauTitleForm(item.id, item.title, null);
+      if (item) bureauTitleForm(item.id, item.title, null, item.region_ids || [], data.regions || []);
     });
 
     on('[data-drop]', 'click', async (event) => {
@@ -4333,10 +4394,18 @@
 
   // Одна форма и на добавление, и на смену должности: поля те же, отличается
   // только куда отправить.
-  function bureauTitleForm(rowId, title, memberId) {
+  function bureauTitleForm(rowId, title, memberId, selectedRegionIds, regions) {
+    const selected = new Set(selectedRegionIds || []);
     modal(rowId ? 'Должность в бюро' : 'Новый человек в бюро',
       '<div class="field"><label>Должность</label>' +
-      '<input id="bTitle" value="' + esc(title || '') + '" placeholder="Куратор Сибири" /></div>' +
+      '<input id="bTitle" value="' + esc(title || '') + '" placeholder="Координатор федеральных проектов" /></div>' +
+      '<div class="field"><label>Регионы в ведении</label>' +
+      '<div class="row__sub">Можно выбрать несколько. Без выбора человек ведёт федеральные проекты.</div>' +
+      '<div class="card card--rows">' + regions.map((r) =>
+        '<label class="row row--pick' + (selected.has(r.id) ? ' row--pick-on' : '') + '">' +
+        '<input type="checkbox" class="check" value="' + r.id + '"' + (selected.has(r.id) ? ' checked' : '') + ' />' +
+        '<span class="pick__box">' + iconTick() + '</span><span class="row__main"><span class="row__title">' + esc(r.name) + '</span></span></label>'
+      ).join('') + '</div></div>' +
       '<div class="btn-row"><button class="btn" id="bSave">Сохранить</button>' +
       '<button class="btn btn--ghost" id="bCancel">Отмена</button></div>',
       () => {
@@ -4344,11 +4413,12 @@
         document.getElementById('bSave').onclick = async () => {
           const value = document.getElementById('bTitle').value.trim();
           if (value.length < 2) { toast('Укажите должность'); return; }
+          const regionIds = Array.from(document.querySelectorAll('#modal .check:checked')).map((x) => Number(x.value));
           try {
             if (rowId) {
-              await api('/bureau/' + rowId, { method: 'PATCH', body: { title: value } });
+              await api('/bureau/' + rowId, { method: 'PATCH', body: { title: value, region_ids: regionIds } });
             } else {
-              await api('/bureau', { method: 'POST', body: { member_id: memberId, title: value } });
+              await api('/bureau', { method: 'POST', body: { member_id: memberId, title: value, region_ids: regionIds } });
             }
             closeModal();
             toast('Сохранено');
@@ -4489,7 +4559,8 @@
     // Братство. Личных записей в ней больше нет, поэтому и выбирать не из
     // чего — прежняя развилка «из личного кабинета от себя, из управления от
     // отделения» исчезла вместе с личными постами.
-    const info = await api('/news/byline?official=true');
+    const identities = await Promise.all([api('/news/byline?official=true'), api('/news/byline?official=false')]);
+    let info = identities[0];
     const limit = info.photo_limit || 10;
 
     // Свой набор файлов вместо того, что держит поле выбора: из него нельзя
@@ -4502,7 +4573,10 @@
       // Подпись показываем так, как она будет выглядеть в ленте, — с аватаром.
       // И сразу говорим, кого потревожит уведомление: раньше об этом узнавали
       // уже после публикации.
-      '<div class="compose-as">' + avatarHtml(info.avatar, info.byline) +
+      '<div class="field"><label>Опубликовать от лица</label><select id="newsIdentity">' +
+      '<option value="true">' + esc(identities[0].byline) + '</option>' +
+      '<option value="false">' + esc(identities[1].byline) + ' · от себя</option></select></div>' +
+      '<div class="compose-as" id="newsIdentityPreview">' + avatarHtml(info.avatar, info.byline) +
       '<span class="compose-as__text"><span class="compose-as__name">' + esc(info.byline) + '</span>' +
       (info.audience ? '<span class="row__sub">' + esc(info.audience) + '</span>' : '') +
       '</span></div>' +
@@ -4516,6 +4590,12 @@
       () => {
         const picker = document.getElementById('newsPhotos');
         const album = document.getElementById('newsAlbum');
+        document.getElementById('newsIdentity').addEventListener('change', (event) => {
+          info = identities[event.currentTarget.value === 'true' ? 0 : 1];
+          document.getElementById('newsIdentityPreview').innerHTML = avatarHtml(info.avatar, info.byline) +
+            '<span class="compose-as__text"><span class="compose-as__name">' + esc(info.byline) + '</span>' +
+            (info.audience ? '<span class="row__sub">' + esc(info.audience) + '</span>' : '<span class="row__sub">Личная подпись</span>') + '</span>';
+        });
 
         const drawAlbum = () => {
           if (!chosen.length) {
@@ -4572,7 +4652,7 @@
           // multipart — текст и файлы одним запросом (api/routers/news.py::publish)
           const form = new FormData();
           form.append('text', text);
-          form.append('official', 'true');
+          form.append('official', document.getElementById('newsIdentity').value);
           // Кабинет передаём и здесь: сервер отказывает личному, а не только
           // приложение прячет кнопку.
           form.append('personal', state.cabinetMode === 'personal' ? 'true' : 'false');
@@ -4614,9 +4694,11 @@
       '<div class="field"><label>Дата рождения</label><input id="rBirth" placeholder="20.02.2000" inputmode="numeric" /></div>' +
       '<div class="field"><label>Телефон</label><input id="rPhone" /></div>' +
       '<div class="field"><label>Ник в Telegram</label><input id="rTelegram" placeholder="@qwerty" /></div>' +
-      '<div class="field"><label>Отделение</label><select id="rRegion"><option value="">Выберите отделение</option>' +
+      '<div class="field"><label>Регион участия</label><select id="rRegion"><option value="">Выберите регион</option>' +
       regions.map((r) => '<option value="' + r.id + '">' + esc(r.label) + '</option>').join('') +
       '</select></div>' +
+      '<div class="field"><label>Ячейка Братства</label><select id="rCell" disabled><option value="">Сначала выберите регион</option></select>' +
+      '<div class="row__sub" style="margin-top:var(--space-4)">Выбирается отдельно от места учёбы. Если нужной ячейки нет, оставьте «Региональное отделение».</div></div>' +
       '<div class="field"><label id="rUniversityLabel">ВУЗ</label><input id="rUniversityInput" autocomplete="off" disabled />' +
       '<div class="row__sub" style="margin-top:var(--space-4)">Если вуза нет в списке, напишите его полное название — он будет добавлен вместе с заявкой.</div>' +
       '<div id="rUniversitySuggestions" class="chips" style="margin-top:var(--space-8)"></div></div>' +
@@ -4666,10 +4748,22 @@
     });
 
     const regionSelect = document.getElementById('rRegion');
+    const cellSelect = document.getElementById('rCell');
     const uniInput = document.getElementById('rUniversityInput');
     const uniSuggestions = document.getElementById('rUniversitySuggestions');
     let selectedUniversityId = null;
     let uniTimer;
+
+    async function loadCells() {
+      const regionId = regionSelect.value;
+      cellSelect.disabled = !regionId;
+      cellSelect.innerHTML = '<option value="">Региональное отделение</option>';
+      if (!regionId) return;
+      try {
+        const data = await api('/register/cells?region_id=' + regionId);
+        cellSelect.innerHTML += data.items.map((c) => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+      } catch (error) { /* ячейка необязательна */ }
+    }
 
     function resetUniversity() {
       selectedUniversityId = null;
@@ -4683,7 +4777,8 @@
       regionSelect.value = String(prefillRegionId);
     }
     resetUniversity();
-    regionSelect.addEventListener('change', resetUniversity);
+    loadCells();
+    regionSelect.addEventListener('change', () => { resetUniversity(); loadCells(); });
 
     uniInput.addEventListener('input', () => {
       selectedUniversityId = null;
@@ -4693,7 +4788,7 @@
       if (!q || !regionId) { uniSuggestions.innerHTML = ''; return; }
       uniTimer = setTimeout(async () => {
         try {
-          const res = await api('/register/universities?region_id=' + regionId + '&q=' + encodeURIComponent(q));
+          const res = await api('/register/universities?q=' + encodeURIComponent(q));
           uniSuggestions.innerHTML = res.items.map((u) =>
             '<button type="button" class="chip" data-uni="' + u.id + '" data-name="' + esc(u.name) + '">' + esc(u.name) + '</button>'
           ).join('');
@@ -4749,6 +4844,7 @@
             phone: phone,
             telegram_username: telegramUsername,
             region_id: regionId,
+            cell_id: cellSelect.value ? Number(cellSelect.value) : null,
             university_id: universityId,
             university_name: uniName,
             faculty: faculty,

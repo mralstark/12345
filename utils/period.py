@@ -19,10 +19,10 @@ def month_bounds(year: int, month: int) -> tuple[date, date]:
 
 
 def semester_bounds(year: int, semester: int) -> tuple[date, date]:
-    # Учебные полугодия, не календарные — 1 января – 15 июля и 16 июля – 31 декабря.
+    """Границы семестра; ``year`` — год начала учебного года."""
     if semester == 1:
-        return date(year, 1, 1), date(year, 7, 15)
-    return date(year, 7, 16), date(year, 12, 31)
+        return date(year, 9, 1), date(year, 12, 31)
+    return date(year + 1, 1, 1), date(year + 1, 6, 30)
 
 
 def resolve_period(kind: str, offset: int = 0, today: date | None = None) -> tuple[date, date, str]:
@@ -40,12 +40,16 @@ def resolve_period(kind: str, offset: int = 0, today: date | None = None) -> tup
         return start, end, f"{MONTH_NAMES[month - 1]} {year}"
 
     if kind == "semester":
-        current_semester = 1 if (today.month, today.day) <= (7, 15) else 2
-        total = today.year * 2 + (current_semester - 1) + offset
+        # Сентябрь–декабрь — первый семестр, январь–июнь — второй.
+        # Июль и август относятся к завершившемуся второму семестру, чтобы
+        # летняя аналитика не перескакивала вперёд до начала учебного года.
+        current_semester = 1 if today.month >= 9 else 2
+        academic_year = today.year if current_semester == 1 else today.year - 1
+        total = academic_year * 2 + (current_semester - 1) + offset
         year, semester = divmod(total, 2)
         semester += 1
         start, end = semester_bounds(year, semester)
-        return start, end, f"{semester} семестр {year}"
+        return start, end, f"{semester} семестр {year}/{str(year + 1)[-2:]}"
 
     if kind == "year":
         year = today.year + offset

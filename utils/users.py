@@ -17,6 +17,7 @@ from database.models import (
     User,
 )
 from utils.tz import now
+from utils.permissions import has_role
 
 # «Войти как» — диагностическая возможность технического superuser. Federal
 # имеет широкий обзор, но не права записи; подмена его объектом руководителя
@@ -37,8 +38,10 @@ async def ensure_superuser(session: AsyncSession, telegram_id: int, full_name: s
 
     user = await get_user_by_telegram_id(session, telegram_id)
     if user:
-        if user.role != ROLE_SUPERUSER:
-            user.role = ROLE_SUPERUSER
+        if not user.is_superuser:
+            user.is_superuser = True
+            if user.role == ROLE_PARTICIPANT:
+                user.role = ROLE_SUPERUSER
             await session.commit()
         return user
 
@@ -46,6 +49,7 @@ async def ensure_superuser(session: AsyncSession, telegram_id: int, full_name: s
         telegram_id=telegram_id,
         full_name=full_name or f"Superuser {telegram_id}",
         role=ROLE_SUPERUSER,
+        is_superuser=True,
         activated_at=now().replace(tzinfo=None),
     )
     session.add(user)
@@ -77,7 +81,7 @@ async def resolve_user(session: AsyncSession, telegram_id: int, full_name: str =
     if user is None:
         return None
 
-    if user.role in IMPERSONATOR_ROLES and user.view_as_user_id is not None:
+    if has_role(user, ROLE_SUPERUSER) and user.view_as_user_id is not None:
         target = await session.get(User, user.view_as_user_id)
         if target is not None and target.is_active:
             target._impersonated_by = user  # type: ignore[attr-defined]
@@ -145,12 +149,12 @@ async def start_impersonation(session: AsyncSession, superuser: User, target_use
     """Включает режим «войти как». Возвращает цель — или бросает ValueError,
     если id не существует / неактивен / указывает на другого superuser'а
     (входить «как superuser» бессмысленно — им и так является сам вызывающий)."""
-    if superuser.role not in IMPERSONATOR_ROLES:
+    if not has_role(superuser, ROLE_SUPERUSER):
         raise ValueError("Режим «Войти как» доступен только техническому superuser")
     target = await session.get(User, target_user_id)
     if target is None or not target.is_active:
         raise ValueError("Пользователь не найден или отключён")
-    if target.role == ROLE_SUPERUSER:
+    if has_role(target, ROLE_SUPERUSER):
         raise ValueError("Нельзя войти как другой technical superuser")
 
     superuser.view_as_user_id = target.id

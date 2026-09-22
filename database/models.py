@@ -111,18 +111,20 @@ EVENT_STATUS_LABELS = {
 # --- Статусы задач (ТЗ §10.2) -----------------------------------------------
 TASK_STATUS_NEW = "new"
 TASK_STATUS_IN_PROGRESS = "in_progress"
+TASK_STATUS_REVIEW = "review"
 TASK_STATUS_DONE = "done"
 TASK_STATUS_OVERDUE = "overdue"
 
 TASK_STATUS_LABELS = {
     TASK_STATUS_NEW: "Новая",
     TASK_STATUS_IN_PROGRESS: "В работе",
+    TASK_STATUS_REVIEW: "На проверке",
     TASK_STATUS_DONE: "Выполнена",
     TASK_STATUS_OVERDUE: "Просрочена",
 }
 
 # Задачи, по которым дедлайн ещё имеет смысл отслеживать.
-TASK_STATUSES_OPEN = (TASK_STATUS_NEW, TASK_STATUS_IN_PROGRESS)
+TASK_STATUSES_OPEN = (TASK_STATUS_NEW, TASK_STATUS_IN_PROGRESS, TASK_STATUS_REVIEW)
 
 # --- Состояния заявки на вступление (публичная саморегистрация) ------------
 APPLICATION_STATE_PENDING = "pending"
@@ -148,6 +150,13 @@ class User(Base):
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
     full_name: Mapped[str] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(String(16))
+    # Независимые управленческие полномочия. ``role`` остаётся основной
+    # ролью для старых клиентов, а эти признаки позволяют одному человеку
+    # одновременно быть федеральным координатором, координатором регионов и
+    # техническим superuser без взаимного затирания ролей.
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_federal: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_coordinator: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -564,6 +573,9 @@ class Task(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Дата, за которую исполнителю уже отправлено напоминание о приближении
     # дедлайна — чтобы не слать его повторно при каждом цикле нотификатора.
     deadline_notified_on: Mapped[date_ | None] = mapped_column(Date, nullable=True)
@@ -725,6 +737,28 @@ class BureauMember(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped["User"] = relationship()
+    regions: Mapped[list["BureauRegion"]] = relationship(
+        back_populates="bureau_member", cascade="all, delete-orphan"
+    )
+
+
+class BureauRegion(Base):
+    """Регионы, порученные члену федерального бюро.
+
+    Это отдельный контур от единственного штатного CoordinatorRegion:
+    несколько членов бюро могут помогать одному региону, а один человек —
+    вести сразу несколько регионов.
+    """
+
+    __tablename__ = "bureau_regions"
+    __table_args__ = (UniqueConstraint("bureau_member_id", "region_id", name="uq_bureau_region"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bureau_member_id: Mapped[int] = mapped_column(ForeignKey("bureau_members.id"), index=True)
+    region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)
+
+    bureau_member: Mapped["BureauMember"] = relationship(back_populates="regions")
+    region: Mapped["Region"] = relationship()
 
 
 class NewsNotification(Base):
@@ -802,6 +836,9 @@ class MembershipApplication(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)
+    # Ячейка Братства выбирается отдельно от места учёбы: вуз может быть в
+    # другом городе или обучение может быть заочным.
+    cell_id: Mapped[int | None] = mapped_column(ForeignKey("university_cells.id"), nullable=True, index=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
     full_name: Mapped[str] = mapped_column(String(128))
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -843,6 +880,7 @@ class Quest(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(128), unique=True)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     emoji: Mapped[str] = mapped_column(String(8))
     thresholds: Mapped[str] = mapped_column(String(64), default="1")
     # Награда за каждую ступень. Пустая строка — награда равна самому порогу
@@ -886,6 +924,11 @@ class MemberQuestProgress(Base):
     # api/routers/character.py::claim_quest_stars. Руководитель, отмечая
     # «+1», прогресс двигает, но звёзды не начисляет — забирает сам человек.
     stars_claimed: Mapped[int] = mapped_column(Integer, default=0)
+    # Исполнитель сначала отправляет выполнение на проверку. Счётчик
+    # прогресса увеличивается только после решения руководителя.
+    pending_count: Mapped[int] = mapped_column(Integer, default=0)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     member: Mapped["Member"] = relationship(back_populates="quest_progress")

@@ -30,9 +30,11 @@ from utils.counters import (
     new_purchases_count,
     new_tasks_count,
     open_tasks_count,
+    pending_applications_count,
 )
 from utils.period import resolve_period
 from utils.roles import role_label
+from utils.permissions import has_any_role, has_role, role_codes
 from utils.tz import today as tz_today
 from utils.users import stop_impersonation
 
@@ -68,8 +70,9 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
         "id": user.id,
         "full_name": user.full_name,
         "role": user.role,
+        "roles": role_codes(user),
         "role_label": await role_label(session, user),
-        "is_supervisor": user.role in SUPERVISOR_ROLES,
+        "is_supervisor": has_any_role(user, SUPERVISOR_ROLES),
         "regions": [region_brief(r) for r in regions],
         # Руководитель вузовской ячейки: его кабинет — не регион целиком, а
         # одна ячейка внутри него (utils/access.py::actor_cell). Переключатель
@@ -100,15 +103,7 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
             "new_purchases": await new_purchases_count(session, user),
             # Вкладка «Заявки» пока только у superuser (api/routers/applications.py) —
             # не считаем лишний раз для остальных ролей.
-            "pending_applications": (
-                await session.execute(
-                    select(func.count(MembershipApplication.id)).where(
-                        MembershipApplication.state == APPLICATION_STATE_PENDING
-                    )
-                )
-            ).scalar()
-            if user.role == ROLE_SUPERUSER
-            else 0,
+            "pending_applications": await pending_applications_count(session, user),
         },
         "dictionaries": {
             "member_statuses": [{"value": k, "label": v} for k, v in MEMBER_STATUS_LABELS.items()],

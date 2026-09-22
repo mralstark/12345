@@ -13,7 +13,7 @@ import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,9 +24,14 @@ from database.models import (
     EDUCATION_LEVEL_LABELS,
     MEMBER_STATUS_LABELS,
     ROLE_FEDERAL,
+    ROLE_SUPERUSER,
+    BureauMember,
+    BureauRegion,
+    CoordinatorRegion,
     MembershipApplication,
     Region,
     University,
+    UniversityCell,
     User,
 )
 from services.admin_actions import create_federal
@@ -62,21 +67,24 @@ async def register_context(
 
 
 def _university_dict(university: University) -> dict:
-    return {"id": university.id, "name": university.name}
+    return {"id": university.id, "name": university.name, "region_id": university.region_id}
 
 
 @router.get("/universities")
 async def register_universities(
-    region_id: int,
+    region_id: int | None = None,
     q: str = Query(default="", max_length=255),
     identity: TelegramIdentity = Depends(get_telegram_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Строго внутри выбранного отделения — до выбора региона список вузов не
-    отдаём вовсе (план §3): человек из Новосибирска не должен увидеть МГИМО."""
+    """Глобальный поиск места учёбы.
+
+    Регион участия выбирается отдельно: человек может учиться заочно или в
+    другом городе и состоять в нужном ему отделении.
+    """
     stmt = (
         select(University)
-        .where(University.region_id == region_id, University.is_active.is_(True))
+        .where(University.is_active.is_(True))
         .order_by(University.name)
     )
     items = list((await session.execute(stmt.limit(5_000))).scalars().all())
@@ -84,6 +92,20 @@ async def register_universities(
     if needle:
         items = [u for u in items if needle in u.name.lower()]
     return {"items": [_university_dict(u) for u in items[:20]]}
+
+
+@router.get("/cells")
+async def register_cells(
+    region_id: int,
+    identity: TelegramIdentity = Depends(get_telegram_identity),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    rows = (await session.execute(
+        select(UniversityCell)
+        .where(UniversityCell.region_id == region_id, UniversityCell.is_active.is_(True))
+        .order_by(UniversityCell.name)
+    )).scalars().all()
+    return {"items": [{"id": c.id, "name": c.name} for c in rows]}
 
 
 class RegisterUniversityIn(BaseModel):
@@ -117,6 +139,7 @@ class RegisterSubmit(BaseModel):
     phone: str = Field(min_length=1, max_length=32)
     telegram_username: str = Field(min_length=2, max_length=33)
     region_id: int
+    cell_id: int | None = None
     university_id: int | None = None
     university_name: str | None = Field(default=None, max_length=128)
     faculty: str = Field(min_length=1, max_length=255)
@@ -193,8 +216,8 @@ async def register_submit(
 
     if payload.university_id is not None:
         university = await session.get(University, payload.university_id)
-        if university is None or university.region_id != region.id:
-            raise HTTPException(400, "ВУЗ не принадлежит выбранному отделению")
+        if university is None:
+            raise HTTPException(400, "ВУЗ не найден")
         if not university.is_active:
             raise HTTPException(400, "Этот ВУЗ архивирован — обратитесь к руководителю отделения")
     else:
@@ -207,16 +230,19 @@ async def register_submit(
         key = university_name.casefold()
         universities = (await session.execute(select(University))).scalars().all()
         university = next((item for item in universities if item.name.casefold() == key), None)
-        if university is not None and university.region_id != region.id:
-            raise HTTPException(400, "ВУЗ с таким названием уже относится к другому отделению")
         if university is not None and not university.is_active:
             raise HTTPException(400, "Этот ВУЗ архивирован — обратитесь к руководителю отделения")
         if university is None:
             university = University(name=university_name, region_id=region.id)
             session.add(university)
 
+    cell = await session.get(UniversityCell, payload.cell_id) if payload.cell_id else None
+    if cell is not None and (cell.region_id != region.id or not cell.is_active):
+        raise HTTPException(400, "Выберите действующую ячейку выбранного отделения")
+
     application = MembershipApplication(
         region_id=region.id,
+        cell_id=cell.id if cell else None,
         telegram_id=identity.telegram_id,
         full_name=payload.full_name.strip(),
         phone=payload.phone.strip(),
@@ -260,6 +286,7 @@ async def register_submit(
         f"Telegram: {escape_telegram_html(application.telegram_username)}",
         f"Дата рождения: {birth_date.strftime('%d.%m.%Y')}",
         f"ВУЗ: {escape_telegram_html(university.name if university else '?')}",
+        f"Ячейка Братства: {escape_telegram_html(cell.name if cell else 'региональное отделение')}",
         f"Факультет: {escape_telegram_html(application.faculty)}",
         f"Курс: {'окончил' if application.graduated_university else application.course}",
         f"Статус: {MEMBER_STATUS_LABELS[application.member_status]}",
@@ -273,9 +300,9 @@ async def register_submit(
         f"📝 <b>Подтверждение личного кабинета — {escape_telegram_html(region.name)}</b>\n\n"
         + "\n".join(summary_lines)
     )
-    reviewer = await _pick_reviewer(session, region)
-    if reviewer is not None:
-        await notify_telegram(reviewer.telegram_id, notify_text)
+    for reviewer in await _reviewers(session, region):
+        if reviewer.telegram_id and reviewer.telegram_id != identity.telegram_id:
+            await notify_telegram(reviewer.telegram_id, notify_text)
 
     # Подтверждение в чат бота — отдельно от текста внутри самой Mini App
     # (webapp/app.js::renderRegisterView), явно попросили именно сообщение в чат.
@@ -303,5 +330,54 @@ async def _pick_reviewer(session: AsyncSession, region: Region) -> User | None:
     if region.leader_user_id:
         return await session.get(User, region.leader_user_id)
     return (
-        await session.execute(select(User).where(User.role == ROLE_FEDERAL, User.is_active.is_(True)))
+        await session.execute(
+            select(User).where(
+                or_(User.role == ROLE_FEDERAL, User.is_federal.is_(True)),
+                User.is_active.is_(True),
+            )
+        )
     ).scalars().first()
+
+
+async def _reviewers(session: AsyncSession, region: Region) -> list[User]:
+    """Все, кто должен сразу узнать о новой заявке этого региона."""
+    people: dict[int, User] = {}
+    if region.leader_user_id:
+        leader = await session.get(User, region.leader_user_id)
+        if leader is not None and leader.is_active:
+            people[leader.id] = leader
+
+    coordinators = (await session.execute(
+        select(User)
+        .join(CoordinatorRegion, CoordinatorRegion.coordinator_user_id == User.id)
+        .where(CoordinatorRegion.region_id == region.id, User.is_active.is_(True))
+    )).scalars().all()
+    for person in coordinators:
+        people[person.id] = person
+
+    bureau = (await session.execute(
+        select(User)
+        .join(BureauMember, BureauMember.user_id == User.id)
+        .join(BureauRegion, BureauRegion.bureau_member_id == BureauMember.id)
+        .where(BureauRegion.region_id == region.id, User.is_active.is_(True))
+    )).scalars().all()
+    for person in bureau:
+        people[person.id] = person
+
+    elevated = (await session.execute(
+        select(User).where(
+            User.is_active.is_(True),
+            or_(
+                User.role.in_((ROLE_SUPERUSER, ROLE_FEDERAL)),
+                User.is_superuser.is_(True),
+                User.is_federal.is_(True),
+            ),
+        )
+    )).scalars().all()
+    for person in elevated:
+        people[person.id] = person
+
+    preferred = await _pick_reviewer(session, region)
+    if preferred is not None and preferred.is_active:
+        people[preferred.id] = preferred
+    return list(people.values())

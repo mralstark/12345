@@ -10,6 +10,7 @@ from database.models import (
     TASK_STATUS_LABELS,
     TASK_STATUS_NEW,
     TASK_STATUS_OVERDUE,
+    TASK_STATUS_REVIEW,
     Task,
     User,
 )
@@ -19,10 +20,10 @@ from utils.parser import format_date_ru
 from utils.tz import now, today
 
 # Кто какой статус вправе ставить: исполнитель ведёт работу, постановщик — отменяет.
-ASSIGNEE_STATUSES = (TASK_STATUS_IN_PROGRESS, TASK_STATUS_DONE)
+ASSIGNEE_STATUSES = (TASK_STATUS_IN_PROGRESS, TASK_STATUS_REVIEW)
 # Постановщик может вернуть задачу в новые. Отменить — нельзя: отменённой
 # задачи у нас не бывает, её удаляют (delete_task).
-AUTHOR_STATUSES = (TASK_STATUS_NEW,)
+AUTHOR_STATUSES = (TASK_STATUS_NEW, TASK_STATUS_IN_PROGRESS, TASK_STATUS_DONE)
 
 
 async def create_task(
@@ -72,17 +73,26 @@ async def change_status(session: AsyncSession, task: Task, actor: User, new_stat
     if not (is_assignee or is_author):
         raise AccessDenied("Задача не ваша")
     if is_assignee and not is_author and new_status not in ASSIGNEE_STATUSES:
-        raise AccessDenied("Исполнитель может взять задачу в работу или отметить выполненной")
+        raise AccessDenied("Исполнитель может взять задачу в работу или отправить на проверку")
     if is_author and not is_assignee and new_status not in AUTHOR_STATUSES:
-        raise AccessDenied("Постановщик может отменить задачу или вернуть её в новые")
+        raise AccessDenied("Постановщик проверяет выполнение или возвращает задачу в работу")
+    if is_author and not is_assignee and new_status == TASK_STATUS_DONE and task.status != TASK_STATUS_REVIEW:
+        raise AccessDenied("Сначала исполнитель должен отправить задачу на проверку")
 
     if task.status == new_status:
         return task
 
     task.status = new_status
     task.updated_at = now().replace(tzinfo=None)
+    if new_status == TASK_STATUS_REVIEW:
+        task.submitted_at = task.updated_at
+        task.reviewed_at = None
+        task.review_note = None
     if new_status == TASK_STATUS_DONE:
         task.overdue_notified = False
+        task.reviewed_at = task.updated_at
+    if is_author and new_status in (TASK_STATUS_NEW, TASK_STATUS_IN_PROGRESS):
+        task.reviewed_at = task.updated_at
     await session.commit()
     await session.refresh(task)
 

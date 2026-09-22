@@ -78,7 +78,7 @@ if ($Bootstrap) {
 }
 else {
     Write-Host "==> Обновление зависимостей и перезапуск" -ForegroundColor Cyan
-    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; test -f $AppDir/.env; chown root:bratstvo $AppDir/.env; chmod 640 $AppDir/.env; test -f $AppDir/requirements.lock; sudo -u bratstvo $AppDir/.venv/bin/pip install --quiet --require-hashes -r $AppDir/requirements.lock; cd $AppDir; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_security_constraints; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_university_active; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
+    Invoke-Remote "chown -R bratstvo:bratstvo $AppDir; test -f $AppDir/.env; chown root:bratstvo $AppDir/.env; chmod 640 $AppDir/.env; test -f $AppDir/requirements.lock; sudo -u bratstvo $AppDir/.venv/bin/pip install --quiet --require-hashes -r $AppDir/requirements.lock; cd $AppDir; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_security_constraints; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_university_active; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_operational_roles_and_reviews; sudo -u bratstvo $AppDir/.venv/bin/python -m scripts.migrate_gamification; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
 }
 
 Remove-Item $archive -Force

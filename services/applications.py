@@ -61,8 +61,13 @@ async def approve_application(session: AsyncSession, application_id: int, review
     session.add(member)
     await session.flush()
 
-    cell = await resolve_member_cell(session, application.region_id, application.university_id)
-    member.cell_id = cell.id if cell is not None else None
+    # Принадлежность к ячейке выбирается отдельно от вуза. Для старых заявок
+    # без cell_id сохраняем прежнее поведение как совместимый fallback.
+    if application.cell_id is not None:
+        member.cell_id = application.cell_id
+    else:
+        cell = await resolve_member_cell(session, application.region_id, application.university_id)
+        member.cell_id = cell.id if cell is not None else None
 
     user = User(
         full_name=application.full_name,

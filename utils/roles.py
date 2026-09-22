@@ -18,13 +18,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
     ROLE_CELL_LEADER,
+    ROLE_COORDINATOR,
+    ROLE_FEDERAL,
     ROLE_LABELS,
     ROLE_LEADER,
     ROLE_PARTICIPANT,
+    ROLE_SUPERUSER,
     Region,
     UniversityCell,
     User,
 )
+from utils.permissions import has_role, role_codes
 
 
 def region_display_name(region: Region) -> str:
@@ -45,6 +49,12 @@ async def role_label(session: AsyncSession, user: User) -> str | None:
     выходило, будто он уже участник. Кто человек в Братстве, говорит статус
     (MEMBER_STATUS_LABELS), и второй подписи рядом с ним не нужно.
     """
+    elevated = [
+        role for role in (ROLE_FEDERAL, ROLE_COORDINATOR, ROLE_SUPERUSER)
+        if has_role(user, role)
+    ]
+    if elevated:
+        return " · ".join(ROLE_LABELS[role] for role in elevated)
     if user.role == ROLE_PARTICIPANT:
         return None
     if user.role == ROLE_LEADER:

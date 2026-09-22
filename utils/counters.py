@@ -9,6 +9,7 @@ from database.models import (
     EVENT_STATUS_DONE,
     ROLE_CELL_LEADER,
     ROLE_FEDERAL,
+    ROLE_COORDINATOR,
     ROLE_LEADER,
     ROLE_SUPERUSER,
     TASK_STATUSES_OPEN,
@@ -21,6 +22,7 @@ from database.models import (
     User,
 )
 from utils.access import accessible_region_ids, actor_cell
+from utils.permissions import has_any_role
 
 
 async def new_tasks_count(session: AsyncSession, user_id: int) -> int:
@@ -114,9 +116,15 @@ async def pending_applications_count(session: AsyncSession, user: User) -> int:
     (handlers/apply.py). Временно (план «Убираем технического superuser») —
     подтверждают federal/superuser, не руководители регионов, поэтому считаем
     для них общее число по всей организации, а не по одному региону."""
-    if user.role not in (ROLE_FEDERAL, ROLE_SUPERUSER):
+    if user.role != ROLE_LEADER and not has_any_role(user, (ROLE_FEDERAL, ROLE_COORDINATOR, ROLE_SUPERUSER)):
+        return 0
+    region_ids = await accessible_region_ids(session, user)
+    if not region_ids:
         return 0
     result = await session.execute(
-        select(func.count(MembershipApplication.id)).where(MembershipApplication.state == APPLICATION_STATE_PENDING)
+        select(func.count(MembershipApplication.id)).where(
+            MembershipApplication.state == APPLICATION_STATE_PENDING,
+            MembershipApplication.region_id.in_(region_ids),
+        )
     )
     return result.scalar() or 0

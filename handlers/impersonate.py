@@ -23,6 +23,7 @@ from database.models import (
     User,
 )
 from handlers.common import show_main_menu
+from utils.permissions import has_role
 from utils.users import (
     IMPERSONATOR_ROLES,
     candidate_context,
@@ -54,7 +55,7 @@ GROUP_LABELS = dict(GROUPS)
 
 async def _require_admin(callback: CallbackQuery, session) -> User | None:
     real = await get_user_by_telegram_id(session, callback.from_user.id)
-    if real is None or real.role not in IMPERSONATOR_ROLES:
+    if real is None or not has_role(real, "superuser"):
         await callback.answer("Доступно только администраторам", show_alert=True)
         return None
     return real

@@ -836,6 +836,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 }
 .badge--new { background: #e8f0fe; color: #1a56b8; }
 .badge--in_progress { background: #fff3cd; color: #8a6d00; }
+.badge--review { background: rgba(217,181,123,.2); color: var(--accent); }
 .badge--done { background: #d7f2e3; color: #1d6b45; }
 .badge--overdue { background: #fde2e0; color: #a02c22; }
 .badge--cancelled { background: var(--border); color: var(--hint); }
@@ -1863,6 +1864,17 @@ textarea {
 .row--pick-on .pick__box { background: var(--accent); border-color: var(--accent); color: var(--button-text); }
 /* Отмеченная строка читается целиком, а не одной галочкой на краю. */
 .row--pick-on .row__title { font-weight: 700; }
+.row--pick:has(input:checked) .pick__box { background: var(--accent); border-color: var(--accent); color: var(--button-text); }
+.row--pick:has(input:checked) .row__title { font-weight: 700; }
+
+.date-choice { display: grid; grid-template-columns: minmax(0, 1fr) 52px; gap: var(--space-8); }
+.date-choice input[type="date"] { color-scheme: dark; padding-inline: 8px; }
+.date-choice input[type="date"]::-webkit-datetime-edit { display: none; }
+.date-choice input[type="date"]::-webkit-calendar-picker-indicator { width: 24px; height: 24px; margin: auto; opacity: .9; }
+
+.academy-progress__number { color: var(--accent); font-size: 28px; font-weight: 700; margin: var(--space-8) 0; }
+.quest-description { margin-top: var(--space-4); line-height: 1.4; }
+.quest-review { margin-top: var(--space-8); padding: 7px 9px; border-radius: 9px; background: rgba(217,181,123,.12); color: var(--accent); font-size: 12px; line-height: 1.4; }
 
 /* Строка списка, оформленная кнопкой: .row задаёт раскладку и рамку, а
    собственный вид кнопки надо погасить, иначе выходит светлый прямоугольник. */

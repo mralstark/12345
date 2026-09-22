@@ -80,11 +80,14 @@ BRANCHES = [
             "Помочь в организации мероприятия",
             "Привести нового участника",
             "Расклеить стикеры",
+            "Стать наставником новичка",
+            "Организовать добровольческую акцию",
+            "Провести дискуссионный клуб",
         ],
     },
-    {"id": "media", "label": "Творчество", "titles": ["Написать пост в соцсети об отделении"]},
+    {"id": "media", "label": "Творчество", "titles": ["Написать пост в соцсети об отделении", "Сделать фотоисторию мероприятия"]},
     {"id": "catechist", "label": "Духовность", "titles": ["Сходить на службу с Академистами"]},
-    {"id": "knowledge", "label": "Знание", "titles": ["Прочитать книгу"]},
+    {"id": "knowledge", "label": "Знание", "titles": ["Прочитать книгу", "Провести экскурсию по истории города", "Выступить с короткой лекцией"]},
     {"id": "honor", "label": "Честь", "titles": ["Помочь другому участнику Братства"]},
 ]
 _BRANCH_BY_TITLE = {title: b for b in BRANCHES for title in b["titles"]}
@@ -121,7 +124,10 @@ def _earned_stars(thresholds: list[int], rewards: list[int], count: int) -> int:
     return sum(reward for threshold, reward in zip(thresholds, rewards) if threshold <= count)
 
 
-def _quest_dict(quest: Quest, count: int, stars_claimed: int = 0) -> dict:
+def _quest_dict(
+    quest: Quest, count: int, stars_claimed: int = 0,
+    pending_count: int = 0, submitted_note: str | None = None,
+) -> dict:
     thresholds = quest.thresholds_list()
     rewards = quest.rewards_list()
     next_target = next((t for t in thresholds if count < t), None)
@@ -132,6 +138,7 @@ def _quest_dict(quest: Quest, count: int, stars_claimed: int = 0) -> dict:
     return {
         "id": quest.id,
         "title": quest.title,
+        "description": quest.description,
         "emoji": quest.emoji,
         "count": count,
         "thresholds": thresholds,
@@ -148,6 +155,8 @@ def _quest_dict(quest: Quest, count: int, stars_claimed: int = 0) -> dict:
             else max(0, _earned_stars(thresholds, rewards, count) - stars_claimed)
         ),
         "stars_claimed": stars_claimed,
+        "pending_count": pending_count,
+        "submitted_note": submitted_note,
         # Сколько откроет следующая ступень. Обычно это её же номер, но у
         # заданий со своей ценой — цена (Quest.rewards_list).
         "next_reward": next_reward,
@@ -177,7 +186,9 @@ async def _character_payload(session: AsyncSession, member: Member) -> dict:
 
     quest_items = [
         _quest_dict(q, (progress_by_quest[q.id].count if q.id in progress_by_quest else 0),
-                    (progress_by_quest[q.id].stars_claimed if q.id in progress_by_quest else 0))
+                    (progress_by_quest[q.id].stars_claimed if q.id in progress_by_quest else 0),
+                    (progress_by_quest[q.id].pending_count if q.id in progress_by_quest else 0),
+                    (progress_by_quest[q.id].submitted_note if q.id in progress_by_quest else None))
         for q in quests
     ]
     touched = sum(1 for item in quest_items if item["count"] > 0)
@@ -271,6 +282,10 @@ class AvatarPatch(BaseModel):
     outfit: str = Field(...)
 
 
+class QuestSubmissionIn(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
 @router.patch("/me/avatar")
 async def update_avatar(
     payload: AvatarPatch,
@@ -320,6 +335,36 @@ async def claim_quest_stars(
 
     row.stars_claimed += claimable
     member.stars += claimable
+    await session.commit()
+    return await _character_payload(session, member)
+
+
+@router.post("/me/quests/{quest_id}/submit")
+async def submit_quest_for_review(
+    quest_id: int,
+    payload: QuestSubmissionIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    member = await _own_member(user, session, lock=True)
+    quest = await session.get(Quest, quest_id)
+    if quest is None or not quest.is_active:
+        raise HTTPException(404, "Задание не найдено")
+    row = (await session.execute(
+        select(MemberQuestProgress).where(
+            MemberQuestProgress.member_id == member.id,
+            MemberQuestProgress.quest_id == quest_id,
+        ).with_for_update()
+    )).scalar_one_or_none()
+    if row is None:
+        row = MemberQuestProgress(member_id=member.id, quest_id=quest_id, count=0)
+        session.add(row)
+    if row.pending_count:
+        raise HTTPException(409, "Выполнение уже ждёт проверки")
+    row.pending_count = 1
+    row.submitted_note = (payload.note or "").strip() or None
+    from utils.tz import now as tz_now
+    row.submitted_at = tz_now().replace(tzinfo=None)
     await session.commit()
     return await _character_payload(session, member)
 

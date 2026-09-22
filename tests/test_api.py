@@ -366,6 +366,10 @@ async def test_task_lifecycle(client, world):
 
     in_progress = await client.post(f"/api/tasks/{task_id}/status", json={"status": "in_progress"})
     assert in_progress.json()["status"] == "in_progress"
+    review = await client.post(f"/api/tasks/{task_id}/status", json={"status": "review"})
+    assert review.json()["status_label"] == "На проверке"
+
+    login(world["coordinator"])
     done = await client.post(f"/api/tasks/{task_id}/status", json={"status": "done"})
     assert done.json()["status_label"] == "Выполнена"
 
@@ -374,6 +378,7 @@ async def test_task_lifecycle(client, world):
     assert unknown.status_code == 400
 
     # Снять задачу может только тот, кто её поставил.
+    login(world["leader_moscow"])
     forbidden = await client.delete(f"/api/tasks/{task_id}")
     assert forbidden.status_code == 403
 

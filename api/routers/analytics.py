@@ -17,6 +17,7 @@ from database.models import (
 from utils.access import AccessDenied, accessible_region_ids
 from utils.balance_calc import get_balance, get_totals
 from utils.period import resolve_period
+from utils.permissions import has_any_role
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -29,7 +30,7 @@ async def regions_dashboard(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Единый дашборд сравнения регионов: состав, баланс, активность мероприятий."""
-    if user.role not in SUPERVISOR_ROLES:
+    if not has_any_role(user, SUPERVISOR_ROLES):
         raise AccessDenied("Сводная аналитика доступна координаторам и федеральному")
 
     region_ids = await accessible_region_ids(session, user)

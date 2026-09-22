@@ -16,6 +16,7 @@ from database.models import (
     Member,
     ShopPurchase,
     University,
+    UniversityCell,
     User,
 )
 from services.admin_actions import exclude_member
@@ -36,8 +37,7 @@ router = APIRouter(prefix="/members", tags=["members"])
 
 class MemberIn(BaseModel):
     region_id: int
-    # cell_id больше не принимается от клиента — ячейка целиком производная
-    # от university_id (utils/university_cells.resolve_member_cell).
+    cell_id: int | None = None
     full_name: str = Field(min_length=2, max_length=128)
     phone: str | None = Field(default=None, max_length=32)
     telegram_username: str | None = Field(default=None, max_length=33)
@@ -59,6 +59,7 @@ class MemberIn(BaseModel):
 
 
 class MemberPatch(BaseModel):
+    cell_id: int | None = None
     full_name: str | None = Field(default=None, min_length=2, max_length=128)
     phone: str | None = Field(default=None, max_length=32)
     telegram_username: str | None = Field(default=None, max_length=33)
@@ -124,8 +125,16 @@ async def _validate_university(
     if university_id is None:
         return
     university = await session.get(University, university_id)
-    if university is None or university.region_id != region_id or not university.is_active:
-        raise HTTPException(400, "Выберите действующий ВУЗ вашего региона")
+    if university is None or not university.is_active:
+        raise HTTPException(400, "Выберите действующий ВУЗ")
+
+
+async def _validate_cell(session: AsyncSession, region_id: int, cell_id: int | None) -> None:
+    if cell_id is None:
+        return
+    cell = await session.get(UniversityCell, cell_id)
+    if cell is None or cell.region_id != region_id or not cell.is_active:
+        raise HTTPException(400, "Выберите действующую ячейку своего региона")
 
 
 @router.get("/search")
@@ -254,8 +263,14 @@ async def create_member(
     else:
         university_id = payload.university_id
         await _validate_university(session, payload.region_id, university_id)
-        resolved_cell = await resolve_member_cell(session, payload.region_id, university_id)
-        cell_id = resolved_cell.id if resolved_cell is not None else None
+        if "cell_id" in payload.model_fields_set:
+            await _validate_cell(session, payload.region_id, payload.cell_id)
+            cell_id = payload.cell_id
+        else:
+            # Совместимость со старыми клиентами: новый интерфейс всегда
+            # присылает cell_id явно, старый по-прежнему получит автопривязку.
+            resolved_cell = await resolve_member_cell(session, payload.region_id, university_id)
+            cell_id = resolved_cell.id if resolved_cell is not None else None
 
     member = Member(
         region_id=payload.region_id,
@@ -308,10 +323,12 @@ async def update_member(
         # Не даём руководителю ячейки перевесить человека на другой вуз —
         # он правит только свою ячейку.
         data.pop("university_id", None)
-    elif "university_id" in data:
-        await _validate_university(session, member.region_id, data["university_id"])
-        resolved_cell = await resolve_member_cell(session, member.region_id, data["university_id"])
-        data["cell_id"] = resolved_cell.id if resolved_cell is not None else None
+        data.pop("cell_id", None)
+    else:
+        if "university_id" in data:
+            await _validate_university(session, member.region_id, data["university_id"])
+        if "cell_id" in data:
+            await _validate_cell(session, member.region_id, data["cell_id"])
     if "status" in data and data["status"] is not None:
         _validate_status(data["status"])
     if "telegram_username" in data:

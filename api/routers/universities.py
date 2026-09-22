@@ -20,6 +20,7 @@ from database.models import (
     User,
 )
 from utils.access import AccessDenied
+from utils.permissions import has_any_role
 
 router = APIRouter(prefix="/universities", tags=["universities"])
 
@@ -46,7 +47,7 @@ async def _require_catalog_manager(
     region = await session.get(Region, region_id)
     if region is None or not region.is_active:
         raise HTTPException(400, "Регион не найден или архивирован")
-    if user.role in (ROLE_SUPERUSER, ROLE_FEDERAL):
+    if has_any_role(user, (ROLE_SUPERUSER, ROLE_FEDERAL)):
         return region
     if user.role == ROLE_LEADER and region.leader_user_id == user.id:
         return region
@@ -137,7 +138,7 @@ async def create_university(
     региона перехватить нельзя.
     """
     if payload.region_id is None:
-        if user.role not in (ROLE_FEDERAL, ROLE_SUPERUSER):
+        if not has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER)):
             raise HTTPException(403, "Создавать записи общего каталога может только федеральный координатор")
     else:
         await _require_catalog_manager(session, user, payload.region_id)
@@ -183,7 +184,7 @@ async def update_university(
     if university is None:
         raise HTTPException(404, "ВУЗ не найден")
     if university.region_id is None:
-        if user.role not in (ROLE_FEDERAL, ROLE_SUPERUSER):
+        if not has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER)):
             raise AccessDenied("Записи без региона доступны только федеральному руководству")
     else:
         await _require_catalog_manager(session, user, university.region_id)

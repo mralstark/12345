@@ -1,7 +1,8 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from config import WEBAPP_URL
-from database.models import ROLE_FEDERAL, ROLE_LEADER, User
+from database.models import ROLE_FEDERAL, ROLE_LEADER, ROLE_SUPERUSER, SUPERVISOR_ROLES, User
+from utils.permissions import has_any_role, has_role
 from utils.users import IMPERSONATOR_ROLES
 
 # Приветствие для незнакомого /start (план «Снизу вверх», §1) — два разных
@@ -66,7 +67,7 @@ def main_menu_keyboard(user: User, pending_applications: int = 0) -> InlineKeybo
     # федерального координатора, не у руководителя региона (план «Убираем
     # технического superuser» — руководители пока не подтверждают анкеты
     # сами, см. config.PRIMARY_REVIEWER_FULL_NAME).
-    if user.role == ROLE_FEDERAL:
+    if user.role == ROLE_LEADER or has_any_role(user, SUPERVISOR_ROLES):
         applications_label = f"📝 Подтверждения ({pending_applications})" if pending_applications else "📝 Подтверждения"
         rows.append([InlineKeyboardButton(text=applications_label, callback_data="apply:list")])
 
@@ -76,7 +77,7 @@ def main_menu_keyboard(user: User, pending_applications: int = 0) -> InlineKeybo
     if user.role == ROLE_LEADER:
         rows.append([InlineKeyboardButton(text="🔗 Ссылка для приглашения", callback_data="apply:link")])
 
-    if impersonated_by is None and user.role in IMPERSONATOR_ROLES:
+    if impersonated_by is None and has_role(user, ROLE_SUPERUSER):
         rows.append([InlineKeyboardButton(text="🕵 Войти как...", callback_data="menu:impersonate")])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)

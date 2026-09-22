@@ -22,6 +22,9 @@ from api.serializers import application_dict
 from database.models import (
     APPLICATION_STATE_PENDING,
     ROLE_SUPERUSER,
+    ROLE_LEADER,
+    SUPERVISOR_ROLES,
+    BureauMember,
     MembershipApplication,
     Region,
     University,
@@ -30,10 +33,24 @@ from database.models import (
 from services.applications import approve_application as svc_approve_application
 from services.applications import reject_application as svc_reject_application
 from utils.notify import notify_telegram, send_cabinet_welcome
+from utils.access import accessible_region_ids
+from utils.permissions import has_any_role
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
 _CAN_REVIEW = (ROLE_SUPERUSER,)
+
+
+async def _reviewable_regions(session: AsyncSession, user: User) -> list[int]:
+    in_bureau = (await session.execute(select(BureauMember.id).where(BureauMember.user_id == user.id))).first()
+    if user.role != ROLE_LEADER and not has_any_role(user, SUPERVISOR_ROLES) and in_bureau is None:
+        raise HTTPException(403, "Недоступно")
+    return await accessible_region_ids(session, user)
+
+
+async def _require_application_access(session: AsyncSession, user: User, application: MembershipApplication) -> None:
+    if application.region_id not in await _reviewable_regions(session, user):
+        raise HTTPException(403, "Заявка другого региона недоступна")
 
 
 class ApplicationPatch(BaseModel):
@@ -51,13 +68,12 @@ async def list_pending_applications(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role not in _CAN_REVIEW:
-        raise HTTPException(403, "Недоступно")
+    region_ids = await _reviewable_regions(session, user)
 
     rows = (
         await session.execute(
             select(MembershipApplication)
-            .where(MembershipApplication.state == APPLICATION_STATE_PENDING)
+            .where(MembershipApplication.state == APPLICATION_STATE_PENDING, MembershipApplication.region_id.in_(region_ids))
             .order_by(MembershipApplication.created_at)
             .offset(offset)
             .limit(limit)
@@ -94,12 +110,10 @@ async def edit_application(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role not in _CAN_REVIEW:
-        raise HTTPException(403, "Недоступно")
-
     application = await session.get(MembershipApplication, application_id)
     if application is None:
         raise HTTPException(404, "Анкета не найдена")
+    await _require_application_access(session, user, application)
     if application.state != APPLICATION_STATE_PENDING:
         raise HTTPException(400, "Анкета уже рассмотрена")
 
@@ -122,12 +136,10 @@ async def approve_application(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role not in _CAN_REVIEW:
-        raise HTTPException(403, "Недоступно")
-
     application = await session.get(MembershipApplication, application_id)
     if application is None:
         raise HTTPException(404, "Анкета не найдена")
+    await _require_application_access(session, user, application)
 
     approved_user = await svc_approve_application(session, application_id, user.id)
     await send_cabinet_welcome(approved_user)
@@ -140,12 +152,10 @@ async def reject_application(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role not in _CAN_REVIEW:
-        raise HTTPException(403, "Недоступно")
-
     application = await session.get(MembershipApplication, application_id)
     if application is None:
         raise HTTPException(404, "Анкета не найдена")
+    await _require_application_access(session, user, application)
 
     await svc_reject_application(session, application_id, user.id)
     await notify_telegram(

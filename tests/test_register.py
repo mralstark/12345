@@ -33,13 +33,13 @@ async def test_context_reports_already_registered(client, world):
     assert response.json() == {"already_registered": True}
 
 
-async def test_universities_requires_region_id(client, world):
+async def test_universities_can_be_searched_without_region(client, world):
     login_as_identity(999002)
     response = await client.get("/api/register/universities")
-    assert response.status_code == 422
+    assert response.status_code == 200
 
 
-async def test_universities_scoped_to_chosen_region(client, session, world):
+async def test_universities_are_global_for_cross_city_study(client, session, world):
     moscow_uni = University(name="МГУ им. М.В. Ломоносова", region_id=world["moscow"].id)
     tula_uni = University(name="Тульский государственный университет", region_id=world["tula"].id)
     session.add_all([moscow_uni, tula_uni])
@@ -48,7 +48,7 @@ async def test_universities_scoped_to_chosen_region(client, session, world):
     login_as_identity(999003)
     response = await client.get(f"/api/register/universities?region_id={world['moscow'].id}")
     names = [u["name"] for u in response.json()["items"]]
-    assert names == ["МГУ им. М.В. Ломоносова"]
+    assert names == ["МГУ им. М.В. Ломоносова", "Тульский государственный университет"]
 
 
 async def test_archived_university_is_hidden_and_cannot_be_submitted(client, session, world):
@@ -376,7 +376,7 @@ async def test_trusted_name_does_not_grant_federal_role(client, session, world, 
     assert application.state == APPLICATION_STATE_PENDING
 
 
-async def test_submit_rejects_university_from_another_region(client, session, world):
+async def test_submit_accepts_university_from_another_region(client, session, world):
     university = University(name="Тульский вуз", region_id=world["tula"].id)
     session.add(university)
     await session.commit()
@@ -397,5 +397,4 @@ async def test_submit_rejects_university_from_another_region(client, session, wo
             "status": "activist",
         },
     )
-    assert response.status_code == 400
-    assert "не принадлежит" in response.json()["detail"]
+    assert response.status_code == 200

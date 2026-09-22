@@ -169,7 +169,7 @@ if $BOOTSTRAP; then
   remote "bash $APP_DIR/deploy/setup_server.sh $ARGS"
 else
   echo "==> Обновление зависимостей и перезапуск"
-  remote "chown -R bratstvo:bratstvo $APP_DIR; test -f $APP_DIR/.env; chown root:bratstvo $APP_DIR/.env; chmod 640 $APP_DIR/.env; test -f $APP_DIR/requirements.lock; sudo -u bratstvo $APP_DIR/.venv/bin/pip install --quiet --require-hashes -r $APP_DIR/requirements.lock; cd $APP_DIR; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_security_constraints; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_university_active; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
+  remote "chown -R bratstvo:bratstvo $APP_DIR; test -f $APP_DIR/.env; chown root:bratstvo $APP_DIR/.env; chmod 640 $APP_DIR/.env; test -f $APP_DIR/requirements.lock; sudo -u bratstvo $APP_DIR/.venv/bin/pip install --quiet --require-hashes -r $APP_DIR/requirements.lock; cd $APP_DIR; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_security_constraints; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_university_active; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_operational_roles_and_reviews; sudo -u bratstvo $APP_DIR/.venv/bin/python -m scripts.migrate_gamification; systemctl restart bratstvo-api bratstvo-bot; sleep 3; systemctl is-active bratstvo-api bratstvo-bot"
 fi
 
 echo "Готово."

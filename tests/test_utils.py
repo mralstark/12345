@@ -46,12 +46,16 @@ def test_resolve_period_calendar():
     assert (start, end) == (date(2026, 6, 1), date(2026, 6, 30))
 
     start, end, label = resolve_period("semester", 0, today)
-    assert (start, end) == (date(2026, 7, 16), date(2026, 12, 31))
-    assert label == "2 семестр 2026"
+    assert (start, end) == (date(2026, 1, 1), date(2026, 6, 30))
+    assert label == "2 семестр 2025/26"
 
     start, end, label = resolve_period("semester", -1, today)
-    assert (start, end) == (date(2026, 1, 1), date(2026, 7, 15))
-    assert label == "1 семестр 2026"
+    assert (start, end) == (date(2025, 9, 1), date(2025, 12, 31))
+    assert label == "1 семестр 2025/26"
+
+    start, end, label = resolve_period("semester", 0, date(2026, 9, 22))
+    assert (start, end) == (date(2026, 9, 1), date(2026, 12, 31))
+    assert label == "1 семестр 2026/27"
 
     start, end, _ = resolve_period("year", 0, today)
     assert (start, end) == (date(2026, 1, 1), date(2026, 12, 31))

@@ -194,7 +194,7 @@ async def test_university_can_be_renamed_archived_and_restored(client, session, 
     assert search.json()["items"][0]["id"] == university.id
 
 
-async def test_member_rejects_archived_or_foreign_university(client, session, world):
+async def test_member_rejects_archived_but_accepts_foreign_university(client, session, world):
     archived = University(name="Архивный вуз", region_id=world["moscow"].id, is_active=False)
     foreign = University(name="Чужой вуз", region_id=world["tula"].id)
     session.add_all([archived, foreign])
@@ -203,16 +203,18 @@ async def test_member_rejects_archived_or_foreign_university(client, session, wo
     await session.refresh(foreign)
     login(world["leader_moscow"])
 
-    for university in (archived, foreign):
-        response = await client.post(
-            "/api/members",
-            json={
-                "region_id": world["moscow"].id,
-                "full_name": "Неверная привязка",
-                "university_id": university.id,
-            },
-        )
-        assert response.status_code == 400
+    archived_response = await client.post("/api/members", json={
+        "region_id": world["moscow"].id, "full_name": "Архивная привязка", "university_id": archived.id,
+    })
+    assert archived_response.status_code == 400
+    foreign_response = await client.post("/api/members", json={
+        "region_id": world["moscow"].id, "full_name": "Заочный студент", "university_id": foreign.id,
+        "cell_id": None,
+    })
+    assert foreign_response.status_code == 200
+    assert foreign_response.json()["region_id"] == world["moscow"].id
+    assert foreign_response.json()["university_id"] == foreign.id
+    assert foreign_response.json()["cell_id"] is None
 
 
 async def _self_register(session, region_id, full_name, telegram_id):

@@ -130,9 +130,23 @@ async def test_only_federal_can_edit(client, world, session):
     assert denied.status_code == 403
 
     login(world["federal"])
-    added = await client.post("/api/bureau", json={"member_id": member.id, "title": "Куратор Сибири"})
+    added = await client.post("/api/bureau", json={
+        "member_id": member.id,
+        "title": "Куратор Сибири",
+        "region_ids": [world["moscow"].id, world["tula"].id],
+    })
     assert added.status_code == 200, added.text
     assert added.json()["title"] == "Куратор Сибири"
+    assert set(added.json()["region_ids"]) == {world["moscow"].id, world["tula"].id}
+
+    added_user = (await session.execute(select(User).where(User.member_id == member.id))).scalar_one()
+    await session.refresh(added_user)
+    assert added_user.is_coordinator is True
+
+    removed = await client.delete(f"/api/bureau/{added.json()['id']}")
+    assert removed.status_code == 200
+    await session.refresh(added_user)
+    assert added_user.is_coordinator is False
 
 
 async def test_person_without_cabinet_cannot_be_added(client, world, session):

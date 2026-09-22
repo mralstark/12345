@@ -220,9 +220,11 @@ async def _cell_leader_target(session: AsyncSession, user: User, cell_id: int) -
     cell = await session.get(UniversityCell, cell_id)
     if cell is None:
         raise HTTPException(404, "Ячейка не найдена")
-    if user.role not in (ROLE_LEADER, ROLE_SUPERUSER):
+    from utils.permissions import has_role
+
+    if user.role != ROLE_LEADER and not has_role(user, ROLE_SUPERUSER):
         raise HTTPException(403, "Недоступно")
-    if user.role != ROLE_SUPERUSER:
+    if not has_role(user, ROLE_SUPERUSER):
         region = (await session.execute(select(Region).where(Region.leader_user_id == user.id))).scalar_one_or_none()
         if region is None or region.id != cell.region_id:
             raise HTTPException(403, "Доступно только руководителю этого региона")

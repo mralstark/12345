@@ -13,7 +13,7 @@
                  (дополнительный фильтр по cell_id поверх region_id).
 """
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
@@ -23,12 +23,15 @@ from database.models import (
     ROLE_FEDERAL,
     ROLE_LEADER,
     ROLE_SUPERUSER,
+    BureauMember,
+    BureauRegion,
     CoordinatorRegion,
     Member,
     Region,
     UniversityCell,
     User,
 )
+from utils.permissions import has_any_role, has_role
 
 
 class AccessDenied(Exception):
@@ -43,7 +46,7 @@ async def actor_cell(session: AsyncSession, user: User) -> UniversityCell | None
     ROLE_CELL_LEADER даёт доступ на уровень региона (иначе require_edit(region_id)
     не пройдёт), а actor_cell() — это второй, более узкий слой поверх него.
     """
-    if user.role != ROLE_CELL_LEADER:
+    if user.role != ROLE_CELL_LEADER or has_any_role(user, (ROLE_SUPERUSER, ROLE_FEDERAL, ROLE_COORDINATOR)):
         return None
     return (
         await session.execute(select(UniversityCell).where(UniversityCell.leader_user_id == user.id))
@@ -52,24 +55,33 @@ async def actor_cell(session: AsyncSession, user: User) -> UniversityCell | None
 
 async def accessible_region_ids(session: AsyncSession, user: User) -> list[int]:
     """Регионы, которые пользователь вправе видеть, по возрастанию id."""
-    if user.role in (ROLE_SUPERUSER, ROLE_FEDERAL):
+    if has_any_role(user, (ROLE_SUPERUSER, ROLE_FEDERAL)):
         result = await session.execute(select(Region.id).where(Region.is_active.is_(True)).order_by(Region.id))
         return list(result.scalars().all())
 
-    if user.role == ROLE_COORDINATOR:
+    region_ids: set[int] = set()
+    if has_role(user, ROLE_COORDINATOR):
         result = await session.execute(
             select(CoordinatorRegion.region_id)
             .join(Region, Region.id == CoordinatorRegion.region_id)
             .where(CoordinatorRegion.coordinator_user_id == user.id, Region.is_active.is_(True))
             .order_by(CoordinatorRegion.region_id)
         )
-        return list(result.scalars().all())
+        region_ids.update(result.scalars().all())
+
+    bureau_result = await session.execute(
+        select(BureauRegion.region_id)
+        .join(BureauMember, BureauMember.id == BureauRegion.bureau_member_id)
+        .join(Region, Region.id == BureauRegion.region_id)
+        .where(BureauMember.user_id == user.id, Region.is_active.is_(True))
+    )
+    region_ids.update(bureau_result.scalars().all())
 
     if user.role == ROLE_LEADER:
         result = await session.execute(
             select(Region.id).where(Region.leader_user_id == user.id, Region.is_active.is_(True))
         )
-        return list(result.scalars().all())
+        region_ids.update(result.scalars().all())
 
     if user.role == ROLE_CELL_LEADER:
         # Архив региона (или самой ячейки) обязан закрыть доступ и его
@@ -78,9 +90,10 @@ async def accessible_region_ids(session: AsyncSession, user: User) -> list[int]:
         if cell is None or not cell.is_active:
             return []
         region = await session.get(Region, cell.region_id)
-        return [cell.region_id] if region is not None and region.is_active else []
+        if region is not None and region.is_active:
+            region_ids.add(cell.region_id)
 
-    return []
+    return sorted(region_ids)
 
 
 async def accessible_regions(session: AsyncSession, user: User) -> list[Region]:
@@ -104,7 +117,7 @@ async def can_edit_region(session: AsyncSession, user: User, region_id: int) -> 
     иначе require_edit(region_id) отказал бы ему целиком. Сужение до его
     собственной ячейки (не всего региона) — отдельный, более узкий слой
     actor_cell() поверх этой проверки в самих роутерах (members/events/finance)."""
-    if user.role == ROLE_SUPERUSER:
+    if has_role(user, ROLE_SUPERUSER):
         return True
     if user.role == ROLE_LEADER:
         region = await session.get(Region, region_id)
@@ -187,13 +200,13 @@ async def correspondents(session: AsyncSession, user: User) -> list[User]:
 async def _correspondents_by_role(session: AsyncSession, user: User) -> list[User]:
     """Вертикаль по должности: вверх и вниз, без горизонтальных связей
     между регионами."""
-    if user.role == ROLE_SUPERUSER:
+    if has_role(user, ROLE_SUPERUSER):
         result = await session.execute(
             select(User).where(User.id != user.id, User.is_active.is_(True)).order_by(User.full_name)
         )
         return list(result.scalars().all())
 
-    if user.role in (ROLE_FEDERAL, ROLE_COORDINATOR):
+    if has_any_role(user, (ROLE_FEDERAL, ROLE_COORDINATOR)):
         region_ids = await accessible_region_ids(session, user)
         # Вниз: руководители доступных регионов.
         leaders_stmt = (
@@ -205,13 +218,13 @@ async def _correspondents_by_role(session: AsyncSession, user: User) -> list[Use
         people = {u.id: u for u in result.scalars().all()}
 
         # Вверх и вбок: федеральный видит всех координаторов, координатор — федерального.
-        if user.role == ROLE_FEDERAL:
+        if has_role(user, ROLE_FEDERAL):
             result = await session.execute(
-                select(User).where(User.role == ROLE_COORDINATOR, User.is_active.is_(True))
+                select(User).where(or_(User.role == ROLE_COORDINATOR, User.is_coordinator.is_(True)), User.is_active.is_(True))
             )
         else:
             result = await session.execute(
-                select(User).where(User.role == ROLE_FEDERAL, User.is_active.is_(True))
+                select(User).where(or_(User.role == ROLE_FEDERAL, User.is_federal.is_(True)), User.is_active.is_(True))
             )
         for u in result.scalars().all():
             people[u.id] = u
@@ -240,7 +253,7 @@ async def _correspondents_by_role(session: AsyncSession, user: User) -> list[Use
             )
             for u in result.scalars().all():
                 people[u.id] = u
-        result = await session.execute(select(User).where(User.role == ROLE_FEDERAL, User.is_active.is_(True)))
+        result = await session.execute(select(User).where(or_(User.role == ROLE_FEDERAL, User.is_federal.is_(True)), User.is_active.is_(True)))
         for u in result.scalars().all():
             people[u.id] = u
         people.pop(user.id, None)

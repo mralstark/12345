@@ -39,6 +39,7 @@ from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, shrink, suffix_for
 from services.moderation import check as check_text
 from utils.access import AccessDenied, accessible_region_ids, actor_cell
 from utils.storage import ensure_storage_capacity
+from utils.permissions import has_any_role, has_role
 
 # За сколько секунд повтор того же текста считается вторым нажатием, а не
 # второй новостью. С запасом: наблюдавшийся случай уложился в 32 секунды.
@@ -75,18 +76,18 @@ def short_name(full_name: str) -> str:
 
 def can_post_officially(user: User) -> bool:
     """От имени отделения или Братства говорят только руководители."""
-    return user.role in (
+    return has_any_role(user, (
         ROLE_SUPERUSER,
         ROLE_FEDERAL,
         ROLE_COORDINATOR,
         ROLE_LEADER,
         ROLE_CELL_LEADER,
-    )
+    ))
 
 
 async def official_byline(session: AsyncSession, author: User) -> str:
     """Официальная подпись по роли: от Братства или от своего отделения."""
-    if author.role in (ROLE_SUPERUSER, ROLE_FEDERAL, ROLE_COORDINATOR):
+    if has_any_role(author, (ROLE_SUPERUSER, ROLE_FEDERAL, ROLE_COORDINATOR)):
         return "Братство Академистов"
 
     if author.role == ROLE_CELL_LEADER:
@@ -117,7 +118,7 @@ def byline_kind_for(author: User, official: bool) -> str:
     у поста от Братства или отделения за подписью нет человека."""
     if not (official and can_post_officially(author)):
         return BYLINE_PERSONAL
-    if author.role in (ROLE_SUPERUSER, ROLE_FEDERAL, ROLE_COORDINATOR):
+    if has_any_role(author, (ROLE_SUPERUSER, ROLE_FEDERAL, ROLE_COORDINATOR)):
         return BYLINE_BRATSTVO
     return BYLINE_OTDELENIE
 
@@ -260,6 +261,14 @@ ROLE_LEVELS = {
 }
 
 
+def _role_level(user: User) -> int:
+    if has_any_role(user, (ROLE_SUPERUSER, ROLE_FEDERAL)):
+        return 4
+    if has_role(user, ROLE_COORDINATOR):
+        return 3
+    return ROLE_LEVELS.get(user.role, 0)
+
+
 async def _can_moderate(session: AsyncSession, user: User, author: User) -> bool:
     """Может ли этот руководитель убирать написанное этим автором.
 
@@ -272,10 +281,10 @@ async def _can_moderate(session: AsyncSession, user: User, author: User) -> bool
     Уровень автора берётся текущий, а не на момент публикации: понизили
     человека — его прежние посты становятся доступны модерации отделения.
     """
-    my_level = ROLE_LEVELS.get(user.role, 0)
+    my_level = _role_level(user)
     if my_level >= 4:
         return True
-    if my_level == 0 or my_level <= ROLE_LEVELS.get(author.role, 0):
+    if my_level == 0 or my_level <= _role_level(author):
         return False
 
     member = await session.get(Member, author.member_id) if author.member_id else None
@@ -304,7 +313,7 @@ async def can_delete_post(
         return False
     author = await session.get(User, post.author_user_id)
     if author is None:
-        return ROLE_LEVELS.get(user.role, 0) >= 4
+        return _role_level(user) >= 4
     return await _can_moderate(session, user, author)
 
 

@@ -164,10 +164,10 @@ async def test_superuser_can_edit_pending_application(client, session, world, ap
     assert application.phone == "+7 900 111-22-33"
 
 
-async def test_leader_cannot_edit_application(client, world, application):
+async def test_region_leader_can_edit_own_application(client, world, application):
     login(world["leader_moscow"])
     response = await client.patch(f"/api/applications/{application.id}", json={"full_name": "Кто-то"})
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 async def test_cannot_edit_already_reviewed_application(client, session, world, application):

@@ -43,6 +43,7 @@ from services.admin_actions import (
 )
 from utils.access import accessible_region_ids
 from utils.notify import send_role_assigned_notice, send_role_removed_notice
+from utils.permissions import has_any_role
 
 router = APIRouter(prefix="/regions", tags=["regions"])
 
@@ -63,12 +64,12 @@ async def list_regions(
 ) -> dict:
     """Полный список активных регионов с текущим руководителем/координатором
     — для вкладки «Регионы» (federal/coordinator/superuser)."""
-    if user.role not in _CAN_SEE_TAB:
+    if not has_any_role(user, _CAN_SEE_TAB):
         raise HTTPException(403, "Недоступно")
 
     assignable = set(await accessible_region_ids(session, user))
     regions_stmt = select(Region).order_by(Region.is_active.desc(), Region.name)
-    if user.role not in _CAN_CREATE_REGION:
+    if not has_any_role(user, _CAN_CREATE_REGION):
         regions_stmt = regions_stmt.where(Region.is_active.is_(True))
     regions = list((await session.execute(regions_stmt)).scalars().all())
 
@@ -114,8 +115,8 @@ async def list_regions(
         )
     return {
         "items": items,
-        "can_create_region": user.role in _CAN_CREATE_REGION,
-        "can_assign_coordinator": user.role in _CAN_ASSIGN_COORDINATOR,
+        "can_create_region": has_any_role(user, _CAN_CREATE_REGION),
+        "can_assign_coordinator": has_any_role(user, _CAN_ASSIGN_COORDINATOR),
     }
 
 
@@ -129,7 +130,7 @@ async def create_region_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role not in _CAN_CREATE_REGION:
+    if not has_any_role(user, _CAN_CREATE_REGION):
         raise HTTPException(403, "Создавать регионы вправе только федеральный координатор")
     try:
         region = await create_region(session, payload.name.strip())
@@ -149,7 +150,7 @@ async def rename_region_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role not in _CAN_EDIT_REGION:
+    if not has_any_role(user, _CAN_EDIT_REGION):
         raise HTTPException(403, "Переименовывать регионы вправе только федеральный координатор")
     try:
         region = await update_region(session, region_id, name=payload.name.strip())
@@ -165,7 +166,7 @@ async def delete_region_endpoint(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Архивирует регион и отзывает ссылку регистрации, сохраняя данные."""
-    if user.role not in _CAN_DELETE_REGION:
+    if not has_any_role(user, _CAN_DELETE_REGION):
         raise HTTPException(403, "Архивировать регионы вправе только федеральный координатор")
     try:
         await archive_region(session, region_id)
@@ -181,7 +182,7 @@ async def restore_region_endpoint(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Возвращает регион в рабочие списки и выпускает новую ссылку регистрации."""
-    if user.role not in _CAN_CREATE_REGION:
+    if not has_any_role(user, _CAN_CREATE_REGION):
         raise HTTPException(403, "Восстанавливать регионы вправе только федеральный координатор")
     region = await session.get(Region, region_id)
     if region is None:
@@ -209,7 +210,7 @@ async def assign_leader_endpoint(
     # Явная проверка роли — не полагаемся только на accessible_region_ids:
     # у ROLE_LEADER она тоже вернёт его собственный регион (это для
     # видимости/редактирования состава, а не для назначения руководителя).
-    if user.role not in _CAN_ASSIGN_LEADER:
+    if not has_any_role(user, _CAN_ASSIGN_LEADER):
         raise HTTPException(403, "Недоступно")
     if region_id not in await accessible_region_ids(session, user):
         raise HTTPException(403, "Регион недоступен для этой роли")
@@ -229,7 +230,7 @@ async def remove_leader_endpoint(
 ) -> dict:
     """Снять руководителя, не назначая нового. Раньше сменить его было можно,
     а просто убрать — нет, и регион нельзя было оставить без руководителя."""
-    if user.role not in _CAN_ASSIGN_LEADER:
+    if not has_any_role(user, _CAN_ASSIGN_LEADER):
         raise HTTPException(403, "Недоступно")
     if region_id not in await accessible_region_ids(session, user):
         raise HTTPException(403, "Регион недоступен для этой роли")
@@ -254,7 +255,7 @@ async def assign_coordinator_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role not in _CAN_ASSIGN_COORDINATOR:
+    if not has_any_role(user, _CAN_ASSIGN_COORDINATOR):
         raise HTTPException(403, "Назначать координаторов вправе только федеральный координатор")
     try:
         target = await create_coordinator(session, payload.region_ids, member_id=payload.member_id)
@@ -271,7 +272,7 @@ async def remove_coordinator_endpoint(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Снять координатора со всех его регионов."""
-    if user.role not in _CAN_ASSIGN_COORDINATOR:
+    if not has_any_role(user, _CAN_ASSIGN_COORDINATOR):
         raise HTTPException(403, "Снимать координаторов вправе только федеральный координатор")
     try:
         removed = await remove_coordinator(session, user_id)

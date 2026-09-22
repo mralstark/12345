@@ -97,10 +97,20 @@ async def _resolve_or_promote(
             f"У «{member.full_name}» ещё нет аккаунта — попросите его сначала пройти "
             "самостоятельную регистрацию по ссылке региона, затем назначьте роль."
         )
-    if existing.role == ROLE_SUPERUSER:
-        raise ValueError("Нельзя назначить управленческую роль техническому superuser")
+    # Федеральная, координаторская и техническая роли могут совмещаться.
+    # Основную роль меняем только у обычного участника; существующая
+    # федеральная/координаторская роль при новом назначении не теряется.
+    if role in (ROLE_COORDINATOR, ROLE_FEDERAL):
+        if role == ROLE_COORDINATOR:
+            existing.is_coordinator = True
+        else:
+            existing.is_federal = True
+        if existing.role == ROLE_PARTICIPANT:
+            existing.role = role
+        await session.flush()
+        return existing
     if existing.role != ROLE_PARTICIPANT:
-        raise ValueError("Сначала снимите с человека текущую управленческую роль")
+        raise ValueError("Сначала снимите с человека текущую должность руководителя")
     # Смена должна быть атомарной: два одновременных назначения не могут оба
     # увидеть participant и записать разные управленческие роли/привязки.
     promoted = await session.execute(
@@ -233,6 +243,7 @@ async def remove_coordinator(session: AsyncSession, user_id: int) -> User | None
         delete(CoordinatorRegion).where(CoordinatorRegion.coordinator_user_id == user_id)
     )
     await session.flush()
+    person.is_coordinator = False
     await _demote_if_nothing_left(session, user_id)
     await session.commit()
     await session.refresh(person)
@@ -301,6 +312,7 @@ async def create_coordinator(
         raise ValueError("Один из выбранных регионов не найден или неактивен")
 
     user = await _resolve_or_promote(session, ROLE_COORDINATOR, member_id)
+    user.is_coordinator = True
     if phone:
         user.phone = phone
     await session.flush()
@@ -332,6 +344,7 @@ async def create_federal(
     уникальность роли больше не проверяется — раньше здесь был запрет на
     второго федерального, сняли сознательно."""
     user = await _resolve_or_promote(session, ROLE_FEDERAL, member_id)
+    user.is_federal = True
     if phone:
         user.phone = phone
     await session.commit()

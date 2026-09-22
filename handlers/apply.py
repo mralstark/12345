@@ -30,6 +30,7 @@ from database.models import (
     MEMBER_STATUS_LABELS,
     ROLE_FEDERAL,
     ROLE_SUPERUSER,
+    ROLE_LEADER,
     MembershipApplication,
     Region,
     University,
@@ -39,9 +40,11 @@ from keyboards.main_menu import WELCOME_TEXT, register_welcome_keyboard
 from services.admin_actions import regenerate_application_code
 from services.applications import approve_application as svc_approve_application
 from services.applications import reject_application as svc_reject_application
+from utils.access import accessible_region_ids
 from utils.invites import application_link
 from utils.notify import escape_telegram_html, notify_telegram, send_cabinet_welcome
 from utils.parser import parse_date_hint
+from utils.permissions import has_any_role
 from utils.tz import today as tz_today
 from utils.users import resolve_user
 
@@ -73,7 +76,11 @@ async def _require_reviewer(callback: CallbackQuery, application: MembershipAppl
         if user is None:
             await callback.answer("Доступ не открыт", show_alert=True)
             return None
-        if user.role not in (ROLE_FEDERAL, ROLE_SUPERUSER):
+        region_ids = await accessible_region_ids(session, user)
+        if not has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER)) and (
+            not has_any_role(user, (ROLE_LEADER, "coordinator"))
+            or application.region_id not in region_ids
+        ):
             await callback.answer("Доступно только администраторам", show_alert=True)
             return None
         return user
@@ -123,10 +130,13 @@ async def _send_pending_applications(send, telegram_id: int, full_name: str) -> 
         user = await resolve_user(session, telegram_id, full_name)
         if user is None:
             return
-        if user.role not in (ROLE_FEDERAL, ROLE_SUPERUSER):
+        region_ids = await accessible_region_ids(session, user)
+        if not has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER, ROLE_LEADER, "coordinator")):
             await send("Доступно только администраторам.")
             return
         stmt = select(MembershipApplication).where(MembershipApplication.state == APPLICATION_STATE_PENDING)
+        if not has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER)):
+            stmt = stmt.where(MembershipApplication.region_id.in_(region_ids))
         pending = list(
             (
                 await session.execute(
