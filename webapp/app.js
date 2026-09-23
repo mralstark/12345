@@ -3826,7 +3826,7 @@
     const branchQuests = data.quests.filter((q) => q.branch_id === state.lobbyBranch);
     const questsHtml = branchQuests.map((q) => {
       const pct = q.next_target ? Math.max(0, Math.min(100, Math.round((q.count / q.next_target) * 100))) : 100;
-      return '<div class="row"><div class="row__main"><div class="row__title">' + esc(q.title) + '</div>' +
+      return '<div class="row quest quest--personal"><div class="row__main"><div class="row__title">' + esc(q.title) + '</div>' +
         (q.description ? '<div class="row__sub quest-description">' + esc(q.description) + '</div>' : '') +
         '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + pct + '%"></div></div>' +
         '<div class="row__sub">' + esc(q.progress_label) + '</div>' +
@@ -4795,11 +4795,15 @@
 
     const regions = data.regions || [];
     setView(
-      '<div class="card"><div class="card__title">Регистрация</div>' +
+      '<div class="card register-card"><div class="card__title">Создание личного кабинета</div>' +
+      '<div class="register-lead">Телефон — основной контакт. Telegram попросит разрешение передать боту ваш номер.</div>' +
       '<div class="field"><label>ФИО</label><input id="rName" placeholder="Иванов Иван Иванович" /></div>' +
       '<div class="field"><label>Дата рождения</label><input id="rBirth" placeholder="20.02.2000" inputmode="numeric" /></div>' +
-      '<div class="field"><label>Телефон</label><input id="rPhone" /></div>' +
-      '<div class="field"><label>Ник в Telegram</label><input id="rTelegram" placeholder="@qwerty" /></div>' +
+      '<div class="field"><label>Телефон</label><div class="phone-verify"><input id="rPhone" />' +
+      '<button type="button" class="btn btn--ghost" id="rVerifyPhone">Подтвердить через Telegram</button></div>' +
+      '<div class="field-hint" id="rPhoneStatus">Номер ещё не подтверждён</div></div>' +
+      '<div class="field"><label>Ник в Telegram <span class="label-optional">необязательно</span></label>' +
+      '<input id="rTelegram" placeholder="@qwerty, если есть" /></div>' +
       '<div class="field"><label>Регион участия</label><select id="rRegion"><option value="">Выберите регион</option>' +
       regions.map((r) => '<option value="' + r.id + '">' + esc(r.label) + '</option>').join('') +
       '</select></div>' +
@@ -4832,7 +4836,65 @@
       '</div>'
     , gen);
 
-    applyPhoneMask(document.getElementById('rPhone'));
+    const phoneInput = document.getElementById('rPhone');
+    const phoneStatus = document.getElementById('rPhoneStatus');
+    const phoneButton = document.getElementById('rVerifyPhone');
+    const submitButton = document.getElementById('rSubmit');
+    const inTelegram = Boolean(tg && tg.initData);
+    const canRequestContact = Boolean(inTelegram && typeof tg.requestContact === 'function');
+    let phoneVerified = Boolean(data.verified_phone);
+
+    applyPhoneMask(phoneInput);
+    function showPhoneState(phone) {
+      phoneVerified = Boolean(phone);
+      if (phone) phoneInput.value = phone;
+      phoneInput.readOnly = inTelegram;
+      phoneStatus.textContent = phoneVerified
+        ? '✓ Номер подтверждён Telegram'
+        : (canRequestContact
+          ? 'Нажмите кнопку — Telegram покажет системное подтверждение'
+          : (inTelegram ? 'Отправьте команду /phone в чат с ботом и снова откройте форму' : 'Введите номер телефона'));
+      phoneStatus.classList.toggle('field-hint--success', phoneVerified);
+      phoneButton.textContent = phoneVerified ? 'Обновить номер' : 'Подтвердить через Telegram';
+      phoneButton.hidden = !canRequestContact;
+      submitButton.disabled = inTelegram && !phoneVerified;
+    }
+    showPhoneState(data.verified_phone);
+
+    async function waitForVerifiedPhone() {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const status = await api('/register/phone');
+        if (status.verified && status.phone) {
+          showPhoneState(status.phone);
+          toast('Номер подтверждён');
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      phoneStatus.textContent = 'Не получили номер. Вернитесь в чат с ботом и попробуйте ещё раз.';
+      phoneButton.disabled = false;
+    }
+
+    phoneButton.onclick = () => {
+      phoneButton.disabled = true;
+      phoneStatus.textContent = 'Ожидаю подтверждение в Telegram…';
+      try {
+        tg.requestContact((granted) => {
+          if (!granted) {
+            phoneStatus.textContent = 'Доступ к номеру не предоставлен';
+            phoneButton.disabled = false;
+            return;
+          }
+          waitForVerifiedPhone().catch((error) => {
+            phoneButton.disabled = false;
+            fail(error);
+          });
+        });
+      } catch (error) {
+        phoneButton.disabled = false;
+        fail(error);
+      }
+    };
     applyDateMask(document.getElementById('rBirth'));
 
     const courseSelect = document.getElementById('rCourse');
@@ -4918,9 +4980,10 @@
       if (!/^\d{2}\.\d{2}\.\d{4}$/.test(birthRaw)) { toast('Введите дату рождения полностью — ДД.ММ.ГГГГ'); return; }
       const phone = document.getElementById('rPhone').value.trim();
       if (!phone) { toast('Введите телефон'); return; }
+      if (inTelegram && !phoneVerified) { toast('Сначала подтвердите номер через Telegram'); return; }
       let telegramUsername = document.getElementById('rTelegram').value.trim();
       if (telegramUsername && !telegramUsername.startsWith('@')) telegramUsername = '@' + telegramUsername;
-      if (!/^@[A-Za-z][A-Za-z0-9_]{2,31}$/.test(telegramUsername)) {
+      if (telegramUsername && !/^@[A-Za-z][A-Za-z0-9_]{2,31}$/.test(telegramUsername)) {
         toast('Ник в Telegram — латиницей, формат «@qwerty»'); return;
       }
       const uniName = uniInput.value.trim();

@@ -1950,6 +1950,90 @@ textarea {
   .tabs__marker { transition: none; }
 }
 
+/* --- Регистрация и узкие экраны ----------------------------------------- */
+html, body { max-width: 100%; overflow-x: hidden; }
+.view, .card, .row, .row__side { min-width: 0; max-width: 100%; }
+.btn {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  writing-mode: horizontal-tb;
+}
+.btn[hidden] { display: none; }
+.register-card { width: 100%; max-width: 620px; margin: 0 auto; }
+.register-lead {
+  margin: 0 0 var(--space-16);
+  padding: var(--space-12);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--hint);
+  line-height: 1.45;
+}
+.phone-verify { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-8); }
+.phone-verify .btn { min-height: 42px; }
+.field-hint { margin-top: var(--space-4); color: var(--hint); font-size: 12px; line-height: 1.35; }
+.field-hint--success { color: var(--success); }
+.label-optional { margin-left: var(--space-4); color: var(--hint); font-weight: 400; }
+
+@media (max-width: 520px) {
+  body { font-size: 14px; }
+  .view { padding: var(--space-8); gap: var(--space-8); }
+  .topbar { padding-left: var(--space-8); padding-right: var(--space-8); }
+  .topbar__row { gap: var(--space-8); }
+  .topbar__row > div:first-child { min-width: 0; }
+  .topbar__title, .topbar__subtitle { overflow-wrap: anywhere; }
+  .cabinet { max-width: 52%; padding-left: var(--space-8); padding-right: var(--space-8); }
+  .card { padding: var(--space-12); }
+  .modal { padding: var(--space-16) var(--space-12) var(--space-24); }
+  .modal__header {
+    margin-left: calc(var(--space-12) * -1);
+    margin-right: calc(var(--space-12) * -1);
+    padding-left: var(--space-12);
+    padding-right: var(--space-12);
+  }
+  .row { gap: var(--space-8); }
+  .row__side { flex-shrink: 1; }
+  .btn-row > .btn { flex: 1 1 128px; min-height: 42px; }
+  .phone-verify { grid-template-columns: 1fr; }
+  .phone-verify .btn { width: 100%; }
+  .quest {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .quest .row__side {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    align-self: stretch;
+    gap: var(--space-8);
+  }
+  .quest .row__side .btn {
+    flex: 1 1 112px;
+    min-height: 40px;
+    white-space: normal;
+  }
+  .quest .row__side .reward-badge { margin-left: 0; }
+  .quest .row__side .reward-skin { margin: 0 auto; }
+  .academy-member > .row { flex-wrap: wrap; align-items: flex-start; }
+  .academy-member > .btn { width: 100%; min-height: 42px; }
+  .stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+  .stats3 .card { padding: var(--space-8); }
+  .stats3 .row__sub { line-height: 1.2; }
+  .stat2__value { font-size: 20px; }
+  .tab { min-width: 0; padding-left: 2px; padding-right: 2px; }
+  .tab__label { font-size: 10px; }
+}
+
+@media (max-width: 340px) {
+  .stats3 { grid-template-columns: 1fr; }
+  .cabinet { max-width: 48%; }
+  .tab__label { font-size: 9px; }
+}
+
 /* Срок задачи в календаре — другим цветом, чем мероприятие: в клетке помещается
    только точка, и по ней должно быть видно, что именно там ждёт. */
 .calendar__dot--task { background: var(--danger); }

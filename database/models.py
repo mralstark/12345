@@ -138,6 +138,21 @@ APPLICATION_STATE_LABELS = {
 }
 
 
+class TelegramPhoneVerification(Base):
+    """Номер, которым владеет Telegram-пользователь.
+
+    Запись создаётся только из сообщения contact, где Telegram подтвердил,
+    что contact.user_id совпадает с отправителем. Поле используется до
+    создания кабинета и не заменяет подписанную авторизацию Mini App.
+    """
+
+    __tablename__ = "telegram_phone_verifications"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    phone: Mapped[str] = mapped_column(String(16), nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class User(Base):
     """Человек с ролью в системе. telegram_id появляется только через
     саморегистрацию (services/applications.py::approve_application) —

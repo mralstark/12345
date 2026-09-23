@@ -6,20 +6,84 @@ import logging
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (
+    CallbackQuery,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 from sqlalchemy import select
 
 from database.db import async_session
-from database.models import APPLICATION_STATE_PENDING, MembershipApplication, Region
+from database.models import (
+    APPLICATION_STATE_PENDING,
+    Member,
+    MembershipApplication,
+    Region,
+    TelegramPhoneVerification,
+)
 from handlers.apply import start_application
 from handlers.common import PENDING_APPLICATION_TEXT, show_main_menu
 from keyboards.main_menu import WELCOME_TEXT, register_welcome_keyboard
 from utils.counters import has_pending_application
 from utils.invites import parse_application_payload
+from utils.parser import normalize_phone
 from utils.users import resolve_user
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+
+@router.message(Command("phone"))
+async def request_verified_phone(message: Message) -> None:
+    """Запасной путь для старых клиентов без WebApp.requestContact."""
+    await message.answer(
+        "Нажмите кнопку ниже. Telegram передаст боту только ваш номер после подтверждения.",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="📱 Передать мой номер", request_contact=True)]],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+        ),
+    )
+
+
+@router.message(F.contact)
+async def save_verified_phone(message: Message) -> None:
+    """Принимает только собственный контакт пользователя.
+
+    Telegram сам проставляет ``contact.user_id`` для номера владельца. Это
+    отличает подтверждённый номер от произвольного контакта из адресной книги.
+    """
+    contact = message.contact
+    if contact is None or contact.user_id != message.from_user.id:
+        await message.answer("Отправьте именно свой номер телефона.", reply_markup=ReplyKeyboardRemove())
+        return
+    try:
+        phone = normalize_phone(contact.phone_number)
+    except ValueError:
+        await message.answer("Telegram передал номер в неизвестном формате.", reply_markup=ReplyKeyboardRemove())
+        return
+
+    async with async_session() as session:
+        verification = await session.get(TelegramPhoneVerification, message.from_user.id)
+        if verification is None:
+            verification = TelegramPhoneVerification(telegram_id=message.from_user.id, phone=phone)
+            session.add(verification)
+        else:
+            verification.phone = phone
+        user = await resolve_user(session, message.from_user.id, message.from_user.full_name)
+        if user is not None:
+            user.phone = phone
+            member = await session.get(Member, user.member_id) if user.member_id else None
+            if member is not None:
+                member.phone = phone
+        await session.commit()
+
+    await message.answer(
+        "✅ Номер подтверждён. Вернитесь в приложение — поле заполнится автоматически.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
 @router.message(CommandStart(deep_link=True))

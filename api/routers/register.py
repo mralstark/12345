@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import TelegramIdentity, get_db, get_telegram_identity
-from config import AUTO_FEDERAL_TELEGRAM_IDS, PRIMARY_REVIEWER_FULL_NAME
+from config import AUTO_FEDERAL_TELEGRAM_IDS, IS_PRODUCTION, PRIMARY_REVIEWER_FULL_NAME
 from database.models import (
     APPLICATION_STATE_PENDING,
     EDUCATION_LEVEL_LABELS,
@@ -30,6 +30,7 @@ from database.models import (
     CoordinatorRegion,
     MembershipApplication,
     Region,
+    TelegramPhoneVerification,
     University,
     UniversityCell,
     User,
@@ -37,7 +38,7 @@ from database.models import (
 from services.admin_actions import create_federal
 from services.applications import approve_application
 from utils.notify import escape_telegram_html, notify_telegram, send_cabinet_welcome
-from utils.parser import normalize_telegram_username
+from utils.parser import normalize_phone, normalize_telegram_username
 from utils.roles import region_display_name
 from utils.users import resolve_user
 
@@ -60,9 +61,23 @@ async def register_context(
         .scalars()
         .all()
     )
+    phone = await session.get(TelegramPhoneVerification, identity.telegram_id)
     return {
         "already_registered": False,
         "regions": [{"id": r.id, "label": region_display_name(r)} for r in regions],
+        "verified_phone": phone.phone if phone is not None else None,
+    }
+
+
+@router.get("/phone")
+async def register_phone(
+    identity: TelegramIdentity = Depends(get_telegram_identity),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    verification = await session.get(TelegramPhoneVerification, identity.telegram_id)
+    return {
+        "verified": verification is not None,
+        "phone": verification.phone if verification is not None else None,
     }
 
 
@@ -137,7 +152,7 @@ class RegisterSubmit(BaseModel):
     # Текстом в формате «20.02.2000», не native date picker (см. план §2).
     birth_date: str = Field(min_length=1, max_length=16)
     phone: str = Field(min_length=1, max_length=32)
-    telegram_username: str = Field(min_length=2, max_length=33)
+    telegram_username: str | None = Field(default=None, max_length=33)
     region_id: int
     cell_id: int | None = None
     university_id: int | None = None
@@ -188,9 +203,21 @@ async def register_submit(
         raise HTTPException(400, "Не удалось разобрать дату рождения — формат ДД.ММ.ГГГГ") from exc
 
     try:
-        telegram_username = normalize_telegram_username(payload.telegram_username)
+        submitted_phone = normalize_phone(payload.phone)
+        telegram_username = (
+            normalize_telegram_username(payload.telegram_username)
+            if (payload.telegram_username or "").strip()
+            else None
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+    verification = await session.get(TelegramPhoneVerification, identity.telegram_id)
+    if IS_PRODUCTION and verification is None:
+        raise HTTPException(400, "Подтвердите номер через Telegram")
+    phone = verification.phone if verification is not None else submitted_phone
+    if verification is not None and submitted_phone != verification.phone:
+        raise HTTPException(400, "Номер изменился — подтвердите его через Telegram ещё раз")
 
     if payload.status not in MEMBER_STATUS_LABELS:
         raise HTTPException(400, "Неизвестный статус")
@@ -245,7 +272,7 @@ async def register_submit(
         cell_id=cell.id if cell else None,
         telegram_id=identity.telegram_id,
         full_name=payload.full_name.strip(),
-        phone=payload.phone.strip(),
+        phone=phone,
         telegram_username=telegram_username,
         birth_date=birth_date,
         university=university,
@@ -283,7 +310,6 @@ async def register_submit(
     summary_lines = [
         f"ФИО: {escape_telegram_html(application.full_name)}",
         f"Телефон: {escape_telegram_html(application.phone)}",
-        f"Telegram: {escape_telegram_html(application.telegram_username)}",
         f"Дата рождения: {birth_date.strftime('%d.%m.%Y')}",
         f"ВУЗ: {escape_telegram_html(university.name if university else '?')}",
         f"Ячейка Братства: {escape_telegram_html(cell.name if cell else 'региональное отделение')}",
@@ -291,6 +317,8 @@ async def register_submit(
         f"Курс: {'окончил' if application.graduated_university else application.course}",
         f"Статус: {MEMBER_STATUS_LABELS[application.member_status]}",
     ]
+    if application.telegram_username:
+        summary_lines.insert(2, f"Telegram: {escape_telegram_html(application.telegram_username)}")
     if application.education_level:
         summary_lines.insert(-1, f"Уровень: {EDUCATION_LEVEL_LABELS[application.education_level]}")
     if application.workplace:

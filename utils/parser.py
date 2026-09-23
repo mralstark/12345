@@ -131,6 +131,23 @@ def normalize_keyword(word: str) -> str:
 TELEGRAM_USERNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{2,31}$")
 
 
+def normalize_phone(raw: str) -> str:
+    """Приводит номер из Telegram/формы к E.164 без разделителей.
+
+    Российскую восьмёрку заменяем на +7; десятизначный номер считаем
+    российским. Остальные международные номера принимаем с 10–15 цифрами.
+    """
+    value = raw.strip()
+    digits = re.sub(r"\D", "", value)
+    if len(digits) == 10:
+        digits = "7" + digits
+    elif len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+    if not 10 <= len(digits) <= 15 or digits.startswith("0"):
+        raise ValueError("Введите действующий номер телефона")
+    return "+" + digits
+
+
 def normalize_telegram_username(raw: str) -> str:
     """«qwerty» / «@qwerty» → «@qwerty», с проверкой формата (буквы/цифры/
     подчёркивание, начинается с буквы — как у настоящих ников Telegram).

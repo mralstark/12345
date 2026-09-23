@@ -9,6 +9,7 @@ from database.models import (
     APPLICATION_STATE_APPROVED,
     APPLICATION_STATE_PENDING,
     MembershipApplication,
+    TelegramPhoneVerification,
     University,
     User,
 )
@@ -128,6 +129,59 @@ async def test_submit_creates_pending_application(client, session, world):
     assert application.telegram_username == "@novikov"
 
 
+async def test_submit_works_without_telegram_username_and_uses_verified_phone(client, session, world):
+    university = await _moscow_university(session, world)
+    session.add(TelegramPhoneVerification(telegram_id=999205, phone="+79001112233"))
+    await session.commit()
+    login_as_identity(999205, "Безника Борис")
+
+    context = (await client.get("/api/register/context")).json()
+    assert context["verified_phone"] == "+79001112233"
+    response = await client.post(
+        "/api/register/submit",
+        json={
+            "full_name": "Безника Борис",
+            "birth_date": "20.02.2000",
+            "phone": "+7 900 111-22-33",
+            "region_id": world["moscow"].id,
+            "university_id": university.id,
+            "faculty": "Экономический",
+            "course": 2,
+            "education_level": "bachelor",
+            "status": "activist",
+        },
+    )
+    assert response.status_code == 200, response.text
+    application = (
+        await session.execute(select(MembershipApplication).where(MembershipApplication.telegram_id == 999205))
+    ).scalar_one()
+    assert application.phone == "+79001112233"
+    assert application.telegram_username is None
+
+
+async def test_submit_rejects_phone_different_from_telegram_contact(client, session, world):
+    university = await _moscow_university(session, world)
+    session.add(TelegramPhoneVerification(telegram_id=999206, phone="+79001112233"))
+    await session.commit()
+    login_as_identity(999206, "Подмена Номера")
+    response = await client.post(
+        "/api/register/submit",
+        json={
+            "full_name": "Подмена Номера",
+            "birth_date": "20.02.2000",
+            "phone": "+7 999 111-22-33",
+            "region_id": world["moscow"].id,
+            "university_id": university.id,
+            "faculty": "Экономический",
+            "course": 2,
+            "education_level": "bachelor",
+            "status": "activist",
+        },
+    )
+    assert response.status_code == 400
+    assert "подтвердите" in response.json()["detail"].lower()
+
+
 async def test_submit_can_add_missing_university_atomically(client, session, world):
     login_as_identity(999105, "Новый Пользователь")
     response = await client.post(
@@ -164,7 +218,7 @@ async def test_invalid_application_does_not_add_missing_university(client, sessi
         json={
             "full_name": "Новый Пользователь",
             "birth_date": "не дата",
-            "phone": "+7 900",
+            "phone": "+7 900 000-00-00",
             "telegram_username": "@new_user2",
             "region_id": world["moscow"].id,
             "university_name": "Вуз из невалидной заявки",
@@ -188,7 +242,7 @@ async def test_submit_rejects_all_fields_required(client, world):
     payload = {
         "full_name": "Пропусков Пётр",
         "birth_date": "01.01.2001",
-        "phone": "+7 900",
+        "phone": "+7 900 000-00-00",
         "region_id": world["moscow"].id,
         # university_id/faculty/course намеренно не заполнены.
     }
@@ -202,7 +256,7 @@ async def test_submit_graduated_requires_workplace(client, session, world):
     base = {
         "full_name": "Окончивший Олег",
         "birth_date": "01.01.1999",
-        "phone": "+7 900",
+        "phone": "+7 900 000-00-00",
         "telegram_username": "@oleg",
         "region_id": world["moscow"].id,
         "university_id": university.id,
@@ -230,7 +284,7 @@ async def test_submit_rejects_unknown_education_level_or_status(client, session,
     base = {
         "full_name": "Некорректов Некто",
         "birth_date": "01.01.2001",
-        "phone": "+7 900",
+        "phone": "+7 900 000-00-00",
         "telegram_username": "@nekto",
         "region_id": world["moscow"].id,
         "university_id": university.id,
@@ -257,7 +311,7 @@ async def test_submit_rejects_duplicate_pending(client, session, world):
     payload = {
         "full_name": "Дубликатов Данила",
         "birth_date": "01.01.2001",
-        "phone": "+7 900",
+        "phone": "+7 900 000-00-00",
         "telegram_username": "@danila",
         "region_id": world["moscow"].id,
         "university_id": university.id,
@@ -280,7 +334,7 @@ async def test_submit_rejects_unparseable_birth_date(client, session, world):
         json={
             "full_name": "Иванов Иван",
             "birth_date": "не дата",
-            "phone": "+7 900",
+            "phone": "+7 900 000-00-00",
             "telegram_username": "@ivan",
             "region_id": world["moscow"].id,
             "university_id": university.id,
@@ -301,7 +355,7 @@ async def test_submit_rejects_when_already_has_account(client, session, world):
         json={
             "full_name": "Кто-то",
             "birth_date": "01.01.2000",
-            "phone": "+7 900",
+            "phone": "+7 900 000-00-00",
             "telegram_username": "@ktoto",
             "region_id": world["moscow"].id,
             "university_id": university.id,
@@ -326,7 +380,7 @@ async def test_submit_auto_approves_and_promotes_allowlisted_telegram_id(client,
         json={
             "full_name": "Тестов Админ Админович",
             "birth_date": "01.01.1990",
-            "phone": "+7 900",
+            "phone": "+7 900 000-00-00",
             "telegram_username": "@admin",
             "region_id": world["moscow"].id,
             "university_id": university.id,
@@ -359,7 +413,7 @@ async def test_trusted_name_does_not_grant_federal_role(client, session, world, 
         json={
             "full_name": "Тестов Админ Админович",
             "birth_date": "01.01.1990",
-            "phone": "+7 900",
+            "phone": "+7 900 000-00-00",
             "telegram_username": "@admin2",
             "region_id": world["moscow"].id,
             "university_id": university.id,
@@ -387,7 +441,7 @@ async def test_submit_accepts_university_from_another_region(client, session, wo
         json={
             "full_name": "Проверяемый Пользователь",
             "birth_date": "01.01.2000",
-            "phone": "+7 900",
+            "phone": "+7 900 000-00-00",
             "telegram_username": "@checked",
             "region_id": world["moscow"].id,
             "university_id": university.id,
