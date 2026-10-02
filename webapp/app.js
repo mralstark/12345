@@ -753,6 +753,7 @@
     bureau: 'star',
     news: 'news',
     character: 'shield',
+    academyManage: 'shield',
     shop: 'bag',
     profile: 'person',
   };
@@ -2758,7 +2759,7 @@
     // стоит название мероприятия.
     const rows = data.items.length ? data.items.map((task) =>
       '<div class="row row--clickable" data-task="' + task.id + '">' +
-      '<div class="row__main"><div class="row__title">' + esc(task.title) + '</div>' +
+      '<div class="row__main"><div class="row__title">' + (task.is_unread ? '<span class="task-unread" aria-label="Новая задача"></span>' : '') + esc(task.title) + '</div>' +
       '<div class="row__sub">' +
       esc(task.kind === 'event'
         ? task.from_name || 'мероприятие'
@@ -2788,8 +2789,15 @@
     if (add) add.onclick = () => taskForm().catch(fail);
     on('[data-task]', 'click', (event) => {
       const task = data.items.find((t) => String(t.id) === event.currentTarget.dataset.task);
+      const dot = event.currentTarget.querySelector('.task-unread');
+      if (dot) dot.remove();
       if (task) taskCard(task);
     });
+    const unseen = data.items.filter((task) => task.is_unread);
+    if (unseen.length) {
+      await api('/tasks/seen', {method: 'POST', body: {items: unseen.map((task) => ({id: String(task.id), submitted_at: task.submitted_at || null}))}});
+      await refreshMe();
+    }
   }
 
   function taskCard(task) {

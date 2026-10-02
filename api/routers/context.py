@@ -99,7 +99,7 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
     events_by_region = dict((await session.execute(event_stmt.group_by(Event.region_id))).all()) if ids else {}
     region_counters = {str(r.id): {"academy": pending_by_region.get(r.id, 0), "events": events_by_region.get(r.id, 0)} for r in regions}
     reviews = (await session.execute(select(func.count(Task.id)).where(
-        Task.from_user_id == user.id, Task.status == "review",
+        Task.from_user_id == user.id, Task.status == "review", Task.review_is_read.is_(False),
     ))).scalar() or 0
     incoming = await new_tasks_count(session, user.id) + await new_event_tasks_count(session, user.member_id)
     return {
@@ -274,7 +274,7 @@ async def dashboard(
         "upcoming_events": upcoming,
         "birthdays": birthdays,
         "counters": {
-            "new_tasks": ((await session.execute(select(func.count(Task.id)).where(Task.from_user_id == user.id, Task.status == "review"))).scalar() or 0) + (await new_tasks_count(session, user.id) if user.member_id is None else 0),
+            "new_tasks": ((await session.execute(select(func.count(Task.id)).where(Task.from_user_id == user.id, Task.status == "review", Task.review_is_read.is_(False)))).scalar() or 0) + (await new_tasks_count(session, user.id) if user.member_id is None else 0),
             "open_tasks": await open_tasks_count(session, user.id),
         },
     }

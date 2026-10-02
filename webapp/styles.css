@@ -2055,3 +2055,4 @@ input::-webkit-date-and-time-value { text-align:left; }
   .modal .quest .row__side { max-width:100%; }
   .academy-member .radar-svg { width:100%; max-width:340px; }
 }
+.task-unread { display:inline-block; width:8px; height:8px; margin-right:8px; border-radius:50%; background:#e4483d; vertical-align:middle; flex-shrink:0; }

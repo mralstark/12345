@@ -6,11 +6,11 @@
 становится, с наградой по общей лесенке; задача — рядовая работа от
 руководителя. Стоя рядом, они делали лесенку похожей на договорённость."""
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
@@ -21,6 +21,7 @@ from database.models import (
     EVENT_STATUS_PLANNED,
     EVENT_TASK_STATUS_LABELS,
     TASK_STATUS_LABELS,
+    TASK_STATUSES_OPEN,
     Event,
     EventTask,
     EventTaskAssignee,
@@ -140,10 +141,16 @@ async def list_tasks(
     items = [task_dict(t, people.get(t.from_user_id), people.get(t.to_user_id)) for t in tasks]
     for item in items:
         item["kind"] = "task"
+    for item, task in zip(items, tasks):
+        item["is_unread"] = (box == "inbox" and not task.is_read and task.status in TASK_STATUSES_OPEN
+                             or box == "outbox" and task.status == "review" and not task.review_is_read)
     # Поставленные мной — только обычные: задачи мероприятия живут на своём
     # мероприятии, и оттуда ими и управляют.
     if box == "inbox" and user.member_id is not None and cabinet != "management" and region_id is None:
         items += await _event_task_items(session, user.member_id)
+    for item in items:
+        if item["kind"] == "event":
+            item["is_unread"] = not item["is_read"] and item["status"] != "done"
 
     return {
         "items": items,
@@ -153,6 +160,45 @@ async def list_tasks(
         # поставить, и только в кабинете управления.
         "can_assign": not personal and bool(await correspondents(session, user)),
     }
+
+
+class SeenTaskIn(BaseModel):
+    id: str = Field(pattern=r"^(event-)?[0-9]{1,18}$")
+    submitted_at: datetime | None = None
+
+
+class SeenTasksIn(BaseModel):
+    items: list[SeenTaskIn] = Field(max_length=400)
+
+
+@router.post("/seen")
+async def seen_tasks(payload: SeenTasksIn, user: User = Depends(get_current_user),
+                     session: AsyncSession = Depends(get_db)) -> dict:
+    # Подтверждаем только показанные записи, не новые задачи, созданные за время загрузки.
+    for item in payload.items:
+        if item.id.startswith("event-") and item.id[6:].isdigit():
+            row = (await session.execute(select(EventTaskAssignee).where(
+                EventTaskAssignee.task_id == int(item.id[6:]), EventTaskAssignee.member_id == user.member_id,
+            ))).scalar_one_or_none() if user.member_id else None
+            if row is None:
+                raise AccessDenied("Задача не ваша")
+            row.is_read = True
+        elif item.id.isdigit():
+            task = await session.get(Task, int(item.id))
+            if task is None or user.id not in (task.to_user_id, task.from_user_id):
+                raise AccessDenied("Задача не ваша")
+            if task.to_user_id == user.id:
+                task.is_read = True
+            if task.from_user_id == user.id:
+                # Повторная сдача после загрузки списка должна остаться непросмотренной.
+                await session.execute(update(Task).where(
+                    Task.id == task.id, Task.status == "review",
+                    Task.submitted_at == (item.submitted_at.replace(tzinfo=None) if item.submitted_at else None),
+                ).values(review_is_read=True))
+        else:
+            raise HTTPException(400, "Некорректный номер задачи")
+    await session.commit()
+    return {"ok": True}
 
 
 @router.post("")

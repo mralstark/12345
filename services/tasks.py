@@ -88,6 +88,7 @@ async def change_status(session: AsyncSession, task: Task, actor: User, new_stat
         task.submitted_at = task.updated_at
         task.reviewed_at = None
         task.review_note = None
+        task.review_is_read = False
     if new_status == TASK_STATUS_DONE:
         task.overdue_notified = False
         task.reviewed_at = task.updated_at
@@ -136,9 +137,12 @@ async def delete_task(session: AsyncSession, task: Task, actor: User) -> None:
 
 
 async def mark_read(session: AsyncSession, task: Task, reader_id: int) -> None:
-    if task.to_user_id != reader_id or task.is_read:
-        return
-    task.is_read = True
+    if reader_id not in (task.to_user_id, task.from_user_id):
+        raise AccessDenied("Задача не ваша")
+    if task.to_user_id == reader_id:
+        task.is_read = True
+    if task.from_user_id == reader_id and task.status == TASK_STATUS_REVIEW:
+        task.review_is_read = True
     await session.commit()
 
 

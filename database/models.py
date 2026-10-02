@@ -23,6 +23,7 @@ from sqlalchemy import (
     Time,
     UniqueConstraint,
     func,
+    false,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -591,6 +592,7 @@ class Task(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    review_is_read: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Дата, за которую исполнителю уже отправлено напоминание о приближении
     # дедлайна — чтобы не слать его повторно при каждом цикле нотификатора.
     deadline_notified_on: Mapped[date_ | None] = mapped_column(Date, nullable=True)

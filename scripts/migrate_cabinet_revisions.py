@@ -12,6 +12,7 @@ async def migrate() -> None:
         for table, column, ddl in (
             ("news_posts", "region_id", "INTEGER REFERENCES regions(id)"),
             ("member_quest_progress", "earned_stars_floor", "INTEGER NOT NULL DEFAULT 0"),
+            ("tasks", "review_is_read", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ):
             columns = await conn.run_sync(lambda c, t=table: {x["name"] for x in inspect(c).get_columns(t)})
             if column not in columns:

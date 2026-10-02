@@ -219,6 +219,7 @@ async def test_schema_migration_is_additive_and_repeatable(tmp_path, monkeypatch
                 "CREATE TABLE users (id INTEGER PRIMARY KEY)",
                 "CREATE TABLE members (id INTEGER PRIMARY KEY)",
                 "CREATE TABLE quests (id INTEGER PRIMARY KEY)",
+                "CREATE TABLE tasks (id INTEGER PRIMARY KEY)",
                 "CREATE TABLE news_posts (id INTEGER PRIMARY KEY, text TEXT)",
                 "CREATE TABLE member_quest_progress (id INTEGER PRIMARY KEY, count INTEGER)",
             ):
