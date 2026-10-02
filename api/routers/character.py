@@ -31,6 +31,7 @@ from database.models import (
     EventTask,
     EventTaskAssignee,
     Member,
+    MEMBER_STATUS_ACTIVIST,
     MemberQuestProgress,
     Quest,
     User,
@@ -83,12 +84,13 @@ BRANCHES = [
             "Стать наставником новичка",
             "Организовать добровольческую акцию",
             "Провести дискуссионный клуб",
+            "Принять участие в балу / танцевальном вечере",
         ],
     },
-    {"id": "media", "label": "Творчество", "titles": ["Написать пост в соцсети об отделении", "Сделать фотоисторию мероприятия"]},
+    {"id": "media", "label": "Творчество", "titles": ["Написать пост в соцсети об отделении", "Сделать фотоисторию мероприятия", "Подготовить анонс мероприятия", "Написать пост в паблик регионального отделения"]},
     {"id": "catechist", "label": "Духовность", "titles": ["Сходить на службу с Академистами"]},
     {"id": "knowledge", "label": "Знание", "titles": ["Прочитать книгу", "Провести экскурсию по истории города", "Выступить с короткой лекцией"]},
-    {"id": "honor", "label": "Честь", "titles": ["Помочь другому участнику Братства"]},
+    {"id": "honor", "label": "Честь", "titles": ["Помочь другому участнику Братства", "Выручить корпоранта"]},
 ]
 _BRANCH_BY_TITLE = {title: b for b in BRANCHES for title in b["titles"]}
 # Задания, чья награда — конкретный образ, а не звёзды (см. OUTFITS выше) —
@@ -128,6 +130,7 @@ def _quest_dict(
     quest: Quest, count: int, stars_claimed: int = 0,
     pending_count: int = 0, submitted_note: str | None = None,
     assigned_by_user_id: int | None = None, assignment_note: str | None = None,
+    earned_stars_floor: int = 0,
 ) -> dict:
     thresholds = quest.thresholds_list()
     rewards = quest.rewards_list()
@@ -153,7 +156,7 @@ def _quest_dict(
         # звёзды назад не отбирают — иначе после отмены выходило бы «−3 ★».
         "claimable_stars": (
             0 if quest.title in _OUTFIT_BY_QUEST_TITLE
-            else max(0, _earned_stars(thresholds, rewards, count) - stars_claimed)
+            else max(0, max(earned_stars_floor, _earned_stars(thresholds, rewards, count)) - stars_claimed)
         ),
         "stars_claimed": stars_claimed,
         "pending_count": pending_count,
@@ -194,9 +197,15 @@ async def _character_payload(session: AsyncSession, member: Member) -> dict:
                     (progress_by_quest[q.id].pending_count if q.id in progress_by_quest else 0),
                     (progress_by_quest[q.id].submitted_note if q.id in progress_by_quest else None),
                     (progress_by_quest[q.id].assigned_by_user_id if q.id in progress_by_quest else None),
-                    (progress_by_quest[q.id].assignment_note if q.id in progress_by_quest else None))
+                    (progress_by_quest[q.id].assignment_note if q.id in progress_by_quest else None),
+                    (progress_by_quest[q.id].earned_stars_floor if q.id in progress_by_quest else 0))
         for q in quests
     ]
+    retired = list((await session.execute(select(Quest).where(Quest.is_active.is_(False)))).scalars())
+    legacy_quests = [_quest_dict(q, progress_by_quest[q.id].count, progress_by_quest[q.id].stars_claimed,
+                                earned_stars_floor=progress_by_quest[q.id].earned_stars_floor)
+                     for q in retired if q.id in progress_by_quest]
+    legacy_quests = [q for q in legacy_quests if q["claimable_stars"] > 0]
     touched = sum(1 for item in quest_items if item["count"] > 0)
     total = len(quest_items)
     if total and touched >= total:
@@ -248,22 +257,11 @@ async def _character_payload(session: AsyncSession, member: Member) -> dict:
     # ограниченная потолком лесенки, к сумме потолков всех заданий роли, 0-100.
     # Задачи мероприятий сюда больше не входят: радар про склонность человека,
     # а поручение говорит о том, что дал руководитель, а не к чему тянет.
-    radar = []
-    branch_summaries = []
-    for b in BRANCHES:
-        branch_quests = [q for q in quest_items if q["branch_id"] == b["id"]]
-        if not branch_quests:
-            continue
-        earned = sum(min(q["count"], max(q["thresholds"]) if q["thresholds"] else 0) for q in branch_quests)
-        possible = sum(max(q["thresholds"]) if q["thresholds"] else 0 for q in branch_quests)
-        radar.append({"id": b["id"], "label": b["label"], "value": round(earned / possible * 100) if possible else 0})
-        branch_summaries.append({
-            "id": b["id"],
-            "label": b["label"],
-            "claimable_stars": sum(q["claimable_stars"] for q in branch_quests),
-        })
+    radar, branch_summaries = quest_radar(quest_items)
 
     return {
+        "legacy_quests": legacy_quests,
+        "academy_enabled": member.is_active and member.status == MEMBER_STATUS_ACTIVIST,
         "outfits": outfits,
         "active_outfit": active_outfit,
         "quests": quest_items,
@@ -335,7 +333,7 @@ async def claim_quest_stars(
     if row is None:
         raise HTTPException(400, "По этому заданию ещё нечего получать")
 
-    claimable = _earned_stars(quest.thresholds_list(), quest.rewards_list(), row.count) - row.stars_claimed
+    claimable = max(row.earned_stars_floor or 0, _earned_stars(quest.thresholds_list(), quest.rewards_list(), row.count)) - row.stars_claimed
     if claimable <= 0:
         raise HTTPException(400, "По этому заданию ещё нечего получать")
 
@@ -353,6 +351,8 @@ async def submit_quest_for_review(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     member = await _own_member(user, session, lock=True)
+    from services.academy import require_student, log_activity
+    require_student(member)
     quest = await session.get(Quest, quest_id)
     if quest is None or not quest.is_active:
         raise HTTPException(404, "Задание не найдено")
@@ -365,11 +365,33 @@ async def submit_quest_for_review(
     if row is None:
         row = MemberQuestProgress(member_id=member.id, quest_id=quest_id, count=0)
         session.add(row)
+    if row.count >= max(quest.thresholds_list(), default=0):
+        raise HTTPException(409, "Задание уже выполнено полностью")
     if row.pending_count:
         raise HTTPException(409, "Выполнение уже ждёт проверки")
+    log_activity(session, user, row, "submitted", (payload.note or "").strip() or None)
     row.pending_count = 1
     row.submitted_note = (payload.note or "").strip() or None
     from utils.tz import now as tz_now
     row.submitted_at = tz_now().replace(tzinfo=None)
     await session.commit()
     return await _character_payload(session, member)
+
+
+def quest_radar(quest_items: list[dict]) -> tuple[list[dict], list[dict]]:
+    radar = []
+    branch_summaries = []
+    for b in BRANCHES:
+        branch_quests = [q for q in quest_items if q["branch_id"] == b["id"]]
+        if not branch_quests:
+            continue
+        earned = sum(min(q["count"], max(q["thresholds"]) if q["thresholds"] else 0) for q in branch_quests)
+        possible = sum(max(q["thresholds"]) if q["thresholds"] else 0 for q in branch_quests)
+        radar.append({"id": b["id"], "label": b["label"], "value": round(earned / possible * 100) if possible else 0})
+        branch_summaries.append({
+            "id": b["id"],
+            "label": b["label"],
+            "claimable_stars": sum(q["claimable_stars"] for q in branch_quests),
+        })
+
+    return radar, branch_summaries

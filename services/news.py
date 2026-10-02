@@ -137,7 +137,7 @@ async def byline_for(session: AsyncSession, author: User, official: bool = False
 
 
 async def create_news(
-    session: AsyncSession, author: User, text: str, official: bool = False
+    session: AsyncSession, author: User, text: str, official: bool = False, region_id: int | None = None
 ) -> NewsPost:
     text = text.strip()
     if not text:
@@ -149,6 +149,11 @@ async def create_news(
     if official and not can_post_officially(author):
         raise AccessDenied("От имени отделения публикует только руководитель")
 
+    if region_id is not None:
+        from utils.access import require_view
+        await require_view(session, author, region_id)
+        if not official:
+            raise AccessDenied("Регион выбирается только для официальной подписи")
     # Мат до ленты не доходит вовсе, спорное выходит с уведомлением
     # руководству — решение о нём принимает вызывающий (api/routers/news.py).
     flagged = await check_text(session, text)
@@ -164,6 +169,8 @@ async def create_news(
             select(NewsPost).where(
                 NewsPost.author_user_id == author.id,
                 NewsPost.text == text,
+                NewsPost.region_id == region_id,
+                NewsPost.byline_kind == (BYLINE_OTDELENIE if region_id is not None else byline_kind_for(author, official)),
                 # Именно всемирное время: created_at пишет база (func.now()),
                 # а она в UTC. Со временем машины окно уезжало бы на часовой
                 # пояс — и защита не срабатывала бы вовсе.
@@ -180,8 +187,9 @@ async def create_news(
     post = NewsPost(
         author_user_id=author.id,
         text=text,
-        byline=await byline_for(session, author, official),
-        byline_kind=byline_kind_for(author, official),
+        byline=(f"Академисты | {(await session.get(Region, region_id)).name}" if region_id is not None else await byline_for(session, author, official)),
+        byline_kind=BYLINE_OTDELENIE if region_id is not None else byline_kind_for(author, official),
+        region_id=region_id,
     )
     session.add(post)
     await session.commit()
@@ -221,7 +229,11 @@ async def news_audience_telegram_ids(session: AsyncSession, post: NewsPost) -> l
         # деление, по которому official_byline составляет саму подпись.
         query = query.join(Member, Member.id == User.member_id)
         cell = await actor_cell(session, author)
-        if cell is not None:
+        if post.region_id is not None:
+            query = query.where(Member.region_id == post.region_id)
+            if cell is not None:
+                query = query.where(Member.cell_id == cell.id)
+        elif cell is not None:
             query = query.where(Member.cell_id == cell.id)
         else:
             region_ids = await accessible_region_ids(session, author)

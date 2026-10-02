@@ -25,10 +25,11 @@ from database.models import (
     EventTask,
     EventTaskAssignee,
     Task,
+    Member,
     User,
 )
 from services.tasks import change_status, create_task, delete_task, mark_read
-from utils.access import AccessDenied, correspondents
+from utils.access import AccessDenied, correspondents, require_view
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -111,13 +112,23 @@ async def list_tasks(
     # там получает работу, а не раздаёт. Раздают из кабинета управления, куда
     # заходят именно за этим.
     personal: bool = False,
+    cabinet: str | None = None,
+    region_id: int | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
+    if box not in ("inbox", "outbox") or cabinet not in (None, "management"):
+        raise HTTPException(400, "Неизвестный ящик задач")
+    if personal and box != "inbox":
+        raise HTTPException(400, "Личные задачи находятся во входящих")
     column = Task.to_user_id if box == "inbox" else Task.from_user_id
-    result = await session.execute(
-        select(Task).where(column == user.id).order_by(Task.created_at.desc(), Task.id.desc()).limit(200)
-    )
+    stmt = select(Task).where(column == user.id)
+    if cabinet == "management" and box == "inbox" and user.member_id is not None:
+        stmt = stmt.where(Task.id < 0)  # Входящие доступны один раз, в личном кабинете.
+    if region_id is not None:
+        await require_view(session, user, region_id)
+        stmt = stmt.join(User, User.id == Task.to_user_id).join(Member, Member.id == User.member_id).where(Member.region_id == region_id)
+    result = await session.execute(stmt.order_by(Task.created_at.desc(), Task.id.desc()).limit(200))
     tasks = list(result.scalars().all())
 
     people_ids = {t.from_user_id for t in tasks} | {t.to_user_id for t in tasks}
@@ -131,11 +142,12 @@ async def list_tasks(
         item["kind"] = "task"
     # Поставленные мной — только обычные: задачи мероприятия живут на своём
     # мероприятии, и оттуда ими и управляют.
-    if box == "inbox" and user.member_id is not None:
+    if box == "inbox" and user.member_id is not None and cabinet != "management" and region_id is None:
         items += await _event_task_items(session, user.member_id)
 
     return {
         "items": items,
+        "has_inbox": cabinet != "management" or user.member_id is None,
         "statuses": [{"value": k, "label": v} for k, v in TASK_STATUS_LABELS.items()],
         # Кнопку «Поставить задачу» показываем только тому, кому есть кому её
         # поставить, и только в кабинете управления.

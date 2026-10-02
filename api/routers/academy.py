@@ -5,8 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
-from database.models import MEMBER_STATUS_LABELS, Member, MemberQuestProgress, Quest, User
-from utils.access import actor_cell, require_view
+from database.models import MEMBER_STATUS_ACTIVIST, MEMBER_STATUS_LABELS, Member, MemberQuestProgress, Quest, User
+from utils.access import AccessDenied, actor_cell, require_view
+from services.academy import can_manage_academy
+from api.routers.character import _quest_dict, quest_radar
 
 router = APIRouter(prefix="/academy", tags=["academy"])
 
@@ -17,8 +19,10 @@ async def academy_overview(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
+    if not can_manage_academy(user):
+        raise AccessDenied("Академией управляют руководитель региона и координаторы")
     await require_view(session, user, region_id)
-    member_stmt = select(Member).where(Member.region_id == region_id, Member.is_active.is_(True))
+    member_stmt = select(Member).where(Member.region_id == region_id, Member.is_active.is_(True), Member.status == MEMBER_STATUS_ACTIVIST)
     cell = await actor_cell(session, user)
     if cell is not None:
         member_stmt = member_stmt.where(Member.cell_id == cell.id)
@@ -56,7 +60,10 @@ async def academy_overview(
                     "title": quest.title,
                     "note": row.submitted_note,
                 })
+        quest_items = [_quest_dict(q, progress[q.id].count if q.id in progress else 0) for q in quests]
+        radar, _ = quest_radar(quest_items)
         items.append({
+            "radar": radar,
             "id": member.id,
             "full_name": member.full_name,
             "status_label": MEMBER_STATUS_LABELS.get(member.status, member.status),

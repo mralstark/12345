@@ -223,6 +223,7 @@ echo "==> Миграции безопасности"
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_security_constraints)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_university_active)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_operational_roles_and_reviews)
+(cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_cabinet_revisions)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_gamification)
 
 echo "==> systemd"

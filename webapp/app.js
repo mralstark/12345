@@ -299,6 +299,7 @@
         } catch (e) { /* тело не JSON — оставляем код ответа */ }
         throw new Error(detail);
       }
+      if (mutating && state.me && path !== '/me/seen') scheduleCountersRefresh();
       if (response.status === 204) return null;
       return response.json();
     })();
@@ -515,7 +516,16 @@
     return b > a ? 'right' : 'left';
   }
   function on(selector, event, handler, root) {
-    (root || document).querySelectorAll(selector).forEach((node) => node.addEventListener(event, handler));
+    (root || document).querySelectorAll(selector).forEach((node) => {
+      if (event !== 'click' || node.tagName !== 'BUTTON') { node.addEventListener(event, handler); return; }
+      let busy = false;
+      node.addEventListener(event, async (action) => {
+        if (busy) return;
+        busy = true; const disabled = node.disabled; node.disabled = true;
+        try { await handler(action); } catch (error) { if (error !== STALE_RENDER) fail(error); }
+        finally { busy = false; if (node.isConnected) node.disabled = disabled; }
+      });
+    });
   }
 
   // --- Модальные окна -------------------------------------------------------
@@ -627,9 +637,9 @@
       // под «Ещё» — за ними ходят реже, чем за своими задачами, и лишние
       // значки внизу мешают больше, чем лишнее нажатие.
       return [
-        { id: 'home', label: 'Главная' },
-        { id: 'myEvents', label: 'Мероприятия' },
-        { id: 'character', label: 'Академия' },
+        { id: 'home', label: 'Главная', badge: (state.me.counters || {}).news },
+        { id: 'myEvents', label: 'Мероприятия', badge: (state.me.counters || {}).personal_events },
+        { id: 'character', label: state.me.academy_enabled ? 'Академия' : 'Мои награды', badge: (state.me.counters || {}).personal_academy },
         { id: 'tasks', label: 'Задачи', badge: (state.me && state.me.counters || {}).new_tasks },
         { id: 'profile', label: 'Профиль' },
         { id: 'shop', label: 'Магазин' },
@@ -641,7 +651,7 @@
     if (state.cabinetMode === 'own') {
       const items = [
         { id: 'analytics', label: 'Аналитика' },
-        { id: 'news', label: 'Новости' },
+        { id: 'news', label: 'Новости', badge: counters.news },
         { id: 'regions', label: 'Регионы' },
       ];
       // Подтверждение анкет в Mini App — пока только у superuser, обкатываем
@@ -652,7 +662,7 @@
         items.push({ id: 'applications', label: 'Заявки', badge: counters.pending_applications });
       }
       items.push({ id: 'bureau', label: 'Бюро' });
-      items.push({ id: 'tasks', label: 'Задачи', badge: counters.new_tasks });
+      items.push({ id: 'tasks', label: 'Задачи', badge: counters.management_tasks });
       return items;
     }
 
@@ -665,15 +675,15 @@
     const items = [
       { id: 'dashboard', label: 'Сводка' },
       { id: 'members', label: 'Состав', badge: counters.new_purchases },
-      { id: 'academyManage', label: 'Академия' },
-      { id: 'events', label: 'Мероприятия' },
+      ...(state.me.can_manage_academy ? [{ id: 'academyManage', label: 'Академия', badge: ((counters.regions || {})[state.regionId] || {}).academy }] : []),
+      { id: 'events', label: 'Мероприятия', badge: ((counters.regions || {})[state.regionId] || {}).events },
     ];
     // У federal/coordinator/superuser задачи — в их собственном кабинете
     // (cabinetMode 'own'), не здесь, где они бы мешались с данными
     // просматриваемого региона. У leader/cell_leader отдельного «своего»
     // кабинета нет — задачи остаются прямо тут же, как и раньше.
     if (!hasOwnCabinet()) {
-      items.push({ id: 'tasks', label: 'Задачи', badge: counters.new_tasks });
+      items.push({ id: 'tasks', label: 'Задачи', badge: counters.management_tasks });
       if (state.me && state.me.role === 'leader') {
         items.push({ id: 'applications', label: 'Заявки', badge: counters.pending_applications });
       }
@@ -697,7 +707,7 @@
     // «Новости»: руководителю региона и ячейки публиковать больше негде,
     // а у federal/coordinator для этого есть свой кабинет.
     if (!hasOwnCabinet()) {
-      items.push({ id: 'news', label: 'Новости' });
+      items.push({ id: 'news', label: 'Новости', badge: counters.news });
     }
     return items;
   }
@@ -873,7 +883,7 @@
         // На кнопке в шапке — коротко: рядом с именем человека места мало, а
         // какого рода кабинет, уже сказал значок.
         short: 'Личный',
-        badge: counters.new_tasks || 0,
+        badge: (counters.new_tasks || 0) + (counters.personal_academy || 0) + (counters.personal_events || 0) + (counters.news || 0),
         active: state.cabinetMode === 'personal',
       });
     }
@@ -885,7 +895,7 @@
         label: ownCabinetLabel(),
         short: 'Управление',
         // У federal/coordinator/superuser «Задачи» живут именно здесь.
-        badge: (counters.new_tasks || 0) + (counters.pending_applications || 0),
+        badge: (counters.management_tasks || 0) + (counters.pending_applications || 0) + (counters.news || 0),
         active: state.cabinetMode === 'own',
       });
     }
@@ -903,7 +913,7 @@
         short: cell ? cell.name : region.name,
         // У руководителя отделения своего «верхнего» кабинета нет, и задачи
         // лежат прямо здесь — значит и считать их надо здесь.
-        badge: (counters.new_purchases || 0) + (hasOwnCabinet() ? 0 : counters.new_tasks || 0),
+        badge: (counters.new_purchases || 0) + (((counters.regions || {})[region.id] || {}).academy || 0) + (((counters.regions || {})[region.id] || {}).events || 0) + (hasOwnCabinet() ? 0 : counters.management_tasks || 0),
         active: state.cabinetMode === 'region' && region.id === state.regionId,
       });
     });
@@ -1097,6 +1107,7 @@
     ).join('') : '<div class="empty">В этом регионе пока нет вузов</div>';
 
     setView(
+      '<div class="card"><div class="card__title">Каталог вузов</div><p>Вузы используются при регистрации и в карточках образования. Вузовская ячейка — отдельная группа участников: ею можно управлять в разделе «Вузовские ячейки».</p></div>' +
       '<button class="btn btn--block" id="addUniversity">Добавить ВУЗ</button>' +
       '<div class="card">' + rows + '</div>' +
       '<div class="card__note">Архивный ВУЗ остаётся в карточках участников, но больше не предлагается при регистрации и редактировании состава.</div>',
@@ -1261,7 +1272,7 @@
       '<div class="field"><label>Комментарий</label><input id="mComment" value="' + esc(member ? member.comment || '' : '') + '" ' + (editable ? '' : 'disabled') + ' /></div>' +
       '<div class="btn-row">' +
       (editable ? '<button class="btn" id="mSave">Сохранить</button>' : '') +
-      (member ? '<button class="btn btn--ghost" id="mQuests">Задания</button>' : '') +
+      (member && state.me.can_manage_academy ? '<button class="btn btn--ghost" id="mQuests">Академия</button>' : '') +
       (member ? '<button class="btn btn--ghost" id="mPurchases">Покупки' +
         (member.has_unseen_purchases ? ' <span class="dot dot--alert"></span>' : '') + '</button>' : '') +
       (editable && member ? '<button class="btn btn--danger" id="mDelete">Исключить</button>' : '') +
@@ -1288,7 +1299,7 @@
         updateMilestoneFields();
 
         document.getElementById('mClose').onclick = closeModal;
-        if (member) document.getElementById('mQuests').onclick = () => memberQuestsModal(member, editable);
+        if (member && state.me.can_manage_academy) document.getElementById('mQuests').onclick = () => memberQuestsModal(member, true);
         if (member) document.getElementById('mPurchases').onclick = () => memberPurchasesModal(member, editable);
         if (!editable) return;
 
@@ -1419,6 +1430,7 @@
 
     const draw = async () => {
       const data = await api('/members/' + member.id + '/quests');
+      editable = editable && data.academy_enabled && data.can_review;
       const body = document.getElementById('mqBody');
       if (!body) return;
 
@@ -1459,6 +1471,10 @@
 
         '<div class="btn-row"><button class="btn btn--ghost" id="mqClose">Закрыть</button></div>';
 
+      if (data.history && data.history.length) {
+        const labels = {assigned:'Выдано', updated:'Комментарий изменён', cancelled:'Назначение снято', approved:'Выполнение принято', rejected:'Возвращено на доработку', corrected:'Отметка исправлена', submitted:'Отправлено на проверку'};
+        body.insertAdjacentHTML('beforeend', '<details class="card"><summary>История заданий</summary>' + data.history.map((h) => '<div class="row__sub">' + timeRu(h.created_at) + ' · ' + esc(labels[h.action] || h.action) + ': ' + esc(h.quest) + (h.note ? '<br>' + esc(h.note) : '') + '</div>').join('') + '</details>');
+      }
       wire(data);
     };
 
@@ -1474,6 +1490,7 @@
         // (api/routers/character.py::_earned_stars).
         '<div class="row__sub">' + esc(done
           ? 'Выполнено полностью · отмечено ' + q.count
+          : q.reward_outfit ? 'После выполнения откроется образ «' + q.reward_outfit.label + '»'
           : q.count + ' из ' + q.next_target + ' — на ступени откроется ' + q.next_reward + ' ★') + '</div>' +
         (q.pending_count
           ? '<div class="quest-review"><strong>Ждёт проверки</strong>' +
@@ -1493,9 +1510,10 @@
         '</div>' +
         (editable
           ? '<div class="row__side">' +
-            (!q.pending_count && !q.assigned ? '<button class="btn btn--small" data-quest-assign="' + q.id + '">Выдать</button>' : '') +
-            '<button class="btn btn--small' + (!q.pending_count ? ' btn--ghost' : '') + '" data-quest-mark="' + q.id + '">' +
-            (q.pending_count ? 'Одобрить' : (done ? 'Ещё' : 'Отметить')) + '</button>' +
+            (!done && !q.pending_count && !q.assigned ? '<button class="btn btn--small" data-quest-assign="' + q.id + '">Выдать</button>' : '') +
+            (!done ? '<button class="btn btn--small' + (!q.pending_count ? ' btn--ghost' : '') + '" data-quest-mark="' + q.id + '">' +
+            (q.pending_count ? 'Одобрить' : 'Отметить') + '</button>' : '') +
+            (q.assigned ? '<button class="btn btn--ghost btn--small" data-quest-assign="' + q.id + '">Комментарий</button><button class="duty__act duty__act--drop" data-quest-cancel="' + q.id + '">Снять задание</button>' : '') +
             (q.pending_count ? '<button class="duty__act duty__act--drop" data-quest-reject="' + q.id + '">Вернуть</button>' : '') + '</div>'
           : '') +
         '</div>';
@@ -1518,6 +1536,9 @@
     };
 
     const wire = (data) => {
+      on('[data-quest-cancel]', 'click', async (event) => {
+        try { await api('/members/' + member.id + '/quests/' + event.currentTarget.dataset.questCancel + '/cancel', {method:'POST'}); toast('Назначение снято'); await draw(); } catch (error) { fail(error); }
+      });
       document.getElementById('mqClose').onclick = closeModal;
       on('[data-quest-mark]', 'click', (event) =>
         step(Number(event.currentTarget.dataset.questMark), 'increment', 1, data));
@@ -1529,7 +1550,7 @@
         modal('Выдать задание',
           '<p><strong>' + esc(quest.title) + '</strong></p>' +
           '<div class="field"><label>Комментарий участнику</label>' +
-          '<textarea id="questAssignNote" placeholder="Что важно учесть, срок или ожидаемый результат"></textarea></div>' +
+          '<textarea id="questAssignNote" maxlength="500" placeholder="Что важно учесть, срок или ожидаемый результат">' + esc(quest.assignment_note || '') + '</textarea></div>' +
           '<div class="btn-row"><button class="btn" id="questAssignSave">Выдать</button>' +
           '<button class="btn btn--ghost" id="questAssignCancel">Отмена</button></div>', () => {
             document.getElementById('questAssignCancel').onclick = () => memberQuestsModal(member, editable);
@@ -1551,7 +1572,7 @@
       });
     };
 
-    modal('Задания', '<div id="mqBody" class="stack"><div class="loader">Загружаю…</div></div>', () => { draw().catch(fail); });
+    modal('Академия — ' + member.full_name, '<div id="mqBody" class="stack"><div class="loader">Загружаю…</div></div>', () => { draw().catch(fail); });
   }
 
   function declOtmetka(n) {
@@ -1567,10 +1588,9 @@
       '<div class="row"><div class="row__main"><div class="row__title">' + esc(member.full_name) + '</div>' +
       '<div class="row__sub">' + esc(member.status_label) + '</div></div>' +
       (member.pending_count ? '<span class="badge badge--review">На проверке: ' + member.pending_count + '</span>' : '') +
-      '</div><div class="academy-member__numbers"><span>' + member.progress_percent + '% общего прогресса</span>' +
-      '<span>' + member.completed + ' из ' + member.total + ' завершено</span>' +
+      '</div><div class="academy-member__numbers">' +
       '<span>' + member.assigned_count + ' выдано</span></div>' +
-      '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + member.progress_percent + '%"></div></div>' +
+      buildRadarSvg(member.radar) +
       (member.pending.length ? '<div class="academy-member__pending">' + member.pending.map((item) =>
         '<div><strong>' + esc(item.title) + '</strong>' + (item.note ? '<br><span>' + esc(item.note) + '</span>' : '') + '</div>'
       ).join('') + '</div>' : '') +
@@ -1583,7 +1603,9 @@
       '<div class="stats3"><div class="card stat2"><div class="row__sub">Участников</div><div class="stat2__value">' + data.items.length + '</div></div>' +
       '<div class="card stat2"><div class="row__sub">Ждут проверки</div><div class="stat2__value stat2__value--accent">' + data.pending_count + '</div></div>' +
       '<div class="card stat2"><div class="row__sub">Выдано</div><div class="stat2__value">' + data.assigned_count + '</div></div></div>' +
-      '<div class="field"><label>Найти участника</label><input id="academySearch" placeholder="Фамилия или имя" /></div>' +
+      '<div class="field"><label for="academySearch">ФИО</label><input id="academySearch" placeholder="Начните вводить фамилию, имя или отчество" list="academyNames" autocomplete="off" />' +
+      '<datalist id="academyNames">' + data.items.map((m) => '<option value="' + esc(m.full_name) + '"></option>').join('') + '</datalist></div>' +
+      '<div id="academySearchEmpty" class="empty" hidden>Участник не найден</div>' +
       '<div id="academyMembers" class="stack">' + (rows || '<div class="empty">В регионе пока нет участников</div>') + '</div>', gen);
     const byId = new Map(data.items.map((member) => [String(member.id), member]));
     on('[data-academy-open]', 'click', (event) => {
@@ -1594,8 +1616,9 @@
       const query = event.currentTarget.value.trim().toLocaleLowerCase('ru');
       document.querySelectorAll('[data-academy-member]').forEach((card) => {
         const member = byId.get(card.dataset.academyMember);
-        card.hidden = Boolean(query && !member.full_name.toLocaleLowerCase('ru').includes(query));
+        card.hidden = Boolean(query && !member.full_name.toLocaleLowerCase('ru').replace(/ё/g, 'е').includes(query.replace(/ё/g, 'е')));
       });
+      document.getElementById('academySearchEmpty').hidden = Array.from(document.querySelectorAll('[data-academy-member]')).some((card) => !card.hidden);
     });
   }
 
@@ -1900,9 +1923,9 @@
   // его люди. Раньше календарь везде показывал одни входящие, и у того, кто
   // задачи только раздаёт, он был пуст — сроков нет, хотя задачи есть.
   async function taskDeadlines(withOutbox) {
-    const boxes = withOutbox ? ['inbox', 'outbox'] : ['inbox'];
+    const boxes = withOutbox ? ['outbox'] : ['inbox'];
     try {
-      const results = await Promise.all(boxes.map((box) => api('/tasks?box=' + box)));
+      const results = await Promise.all(boxes.map((box) => api('/tasks?box=' + box + (withOutbox ? '&cabinet=management&region_id=' + state.regionId : '&personal=true'))));
       const seen = new Set();
       const items = [];
       results.forEach((data, i) => {
@@ -2028,6 +2051,7 @@
         onCreate: (day) => eventForm(null, day),
       }),
     });
+    acknowledgeSection('events', calendarData.seen_cursor, state.regionId);
     on('[data-scope]', 'click', (event) => {
       state.eventsScope = event.currentTarget.dataset.scope;
       startRender(renderEvents);
@@ -2091,6 +2115,7 @@
         },
       }),
     });
+    acknowledgeSection('events', data.seen_cursor);
     on('[data-my-scope]', 'click', (event) => {
       state.myEventsScope = event.currentTarget.dataset.myScope;
       startRender(renderParticipantEvents);
@@ -2126,8 +2151,9 @@
       '</div>' +
       (event.description ? '<div class="card">' + esc(event.description) + '</div>' : '') +
       (event.status === 'planned'
-        ? '<div class="btn-row"><button class="btn" id="rsvpYes">✅ Иду</button>' +
-          '<button class="btn btn--ghost" id="rsvpNo">❌ Не иду</button></div>'
+        ? (event.going === null || event.going === undefined
+          ? '<div class="btn-row"><button class="btn" id="rsvpYes">✅ Иду</button><button class="btn btn--ghost" id="rsvpNo">❌ Не иду</button></div>'
+          : '<div class="btn-row"><button class="btn btn--ghost" id="rsvpCancel">Отменить выбор</button></div>')
         : '') +
       '<div class="btn-row"><button class="btn btn--ghost" id="evClose">Закрыть</button></div>',
       () => {
@@ -2141,9 +2167,13 @@
             startRender(renderParticipantEvents);
           } catch (error) { fail(error); }
         };
-        // Повторный клик по уже выбранному варианту снимает отметку.
-        document.getElementById('rsvpYes').onclick = () => rsvp(event.going === true ? null : true);
-        document.getElementById('rsvpNo').onclick = () => rsvp(event.going === false ? null : false);
+        // После выбора ответ снимается отдельной кнопкой.
+        const yes = document.getElementById('rsvpYes');
+        if (yes) yes.onclick = () => rsvp(true);
+        const cancel = document.getElementById('rsvpCancel');
+        if (cancel) cancel.onclick = () => rsvp(null);
+        const no = document.getElementById('rsvpNo');
+        if (no) no.onclick = () => rsvp(false);
       });
   }
 
@@ -2269,7 +2299,7 @@
       // Дату набирают руками, как везде в кабинете: календарь на телефоне
       // рисуется системным шрифтом и вылезал за край (см. applyDateMask).
       '<div class="field"><label>Срок</label><input id="etDate" placeholder="20.02.2026" inputmode="numeric" value="' +
-      esc(isoToRuDate(task ? task.due_date : todayIsoLocal())) + '" /></div>' +
+      esc(isoToRuDate(task ? task.due_date : todayIsoLocal())) + '" /><input id="etDateCalendar" type="date" aria-label="Выбрать срок в календаре" value="' + esc(task ? task.due_date : todayIsoLocal()) + '" /></div>' +
       '<div class="field"><label>Исполнитель</label><select id="etAssignee">' +
       '<option value="">— не назначен</option>' +
       event.members.map((m) =>
@@ -2280,6 +2310,7 @@
       '<button class="btn btn--ghost" id="etCancel">Отмена</button></div>',
       () => {
         applyDateMask(document.getElementById('etDate'));
+        syncDateInputs('etDate', 'etDateCalendar');
         document.getElementById('etCancel').onclick = closeModal;
         document.getElementById('etSave').onclick = async () => {
           const title = document.getElementById('etTitle').value.trim();
@@ -2704,8 +2735,14 @@
   // Из какого кабинета смотрят «Задачи». В личном это почтовый ящик: работу
   // там получают, а не раздают. Сервер решает то же самое сам
   // (api/routers/tasks.py), это лишь говорит ему, откуда пришли.
+  function syncDateInputs(textId, calendarId) {
+    const text = document.getElementById(textId), calendar = document.getElementById(calendarId);
+    calendar.addEventListener('change', () => { text.value = isoToRuDate(calendar.value); });
+    text.addEventListener('input', () => { calendar.value = ruDateToIso(text.value.trim()) || ''; });
+  }
+
   function tasksScope() {
-    return state.cabinetMode === 'personal' ? 'personal=true' : '';
+    return state.cabinetMode === 'personal' ? 'personal=true' : 'cabinet=management';
   }
 
   async function renderTasks(gen) {
@@ -2713,6 +2750,7 @@
     // ушёл сюда из управления, оставив «Поставленные мной», он оказался бы в
     // пустом ящике без кнопки вернуться.
     if (state.cabinetMode === 'personal') state.tasksBox = 'inbox';
+    else if (state.me.has_personal_cabinet) state.tasksBox = 'outbox';
     const data = await api('/tasks?box=' + state.tasksBox + '&' + tasksScope());
 
     // Задача мероприятия и обычная лежат в одном ящике: для человека это
@@ -2734,7 +2772,7 @@
       // кабинете этот ящик всегда пуст, и у корпоранта он выглядел загадкой.
       (data.can_assign
         ? '<div class="chips">' +
-          '<button class="chip' + (state.tasksBox === 'inbox' ? ' chip--active' : '') + '" data-box="inbox">Мои задачи</button>' +
+          (data.has_inbox ? '<button class="chip' + (state.tasksBox === 'inbox' ? ' chip--active' : '') + '" data-box="inbox">Мои задачи</button>' : '') +
           '<button class="chip' + (state.tasksBox === 'outbox' ? ' chip--active' : '') + '" data-box="outbox">Поставленные мной</button>' +
           '</div>'
         : '') +
@@ -2853,9 +2891,7 @@
       '<button class="btn btn--ghost" id="tCancel">Отмена</button></div>',
       () => {
         applyDateMask(document.getElementById('tDeadline'));
-        document.getElementById('tDeadlineCalendar').addEventListener('change', (event) => {
-          document.getElementById('tDeadline').value = isoToRuDate(event.currentTarget.value);
-        });
+        syncDateInputs('tDeadline', 'tDeadlineCalendar');
         document.getElementById('tCancel').onclick = closeModal;
         document.getElementById('tSave').onclick = async () => {
           const title = document.getElementById('tTitle').value.trim();
@@ -2902,6 +2938,7 @@
 
     setView(
       periodControls(period, 'an') +
+      '<div class="card__note">Новых — действующие участники, у которых дата вступления корпорантом попадает в выбранный период. После одобрения анкеты и сохранения этой даты показатель обновляется. Создание аккаунта само по себе его не меняет.</div>' +
       '<div class="grid">' +
       '<div class="stat"><div class="stat__label">Регионов</div><div class="stat__value">' + data.items.length + '</div></div>' +
       '<div class="stat"><div class="stat__label">Всего людей</div><div class="stat__value">' + (data.totals.members || 0) + '</div></div>' +
@@ -3521,7 +3558,7 @@
         '<div class="card card--rows">' +
         '<div class="row"><div class="row__main">' +
         '<div class="row__title">Телеграм</div>' +
-        '<div class="row__sub">По нему с вами свяжется руководство</div></div>' +
+        '</div>' +
         '<div class="row__side">' +
         (profile.telegram_username ? esc(profile.telegram_username) : '<span class="row__sub">не указан</span>') +
         '</div></div>' +
@@ -3531,7 +3568,7 @@
         (profile.phone ? esc(profile.phone) : '<span class="row__sub">не указан</span>') +
         '</div></div>' +
         '</div>' +
-        '<div class="card__note">Эти данные видит руководство — в разделе «Состав». ' +
+        '<div class="card__note">Эти данные видит руководство. ' +
         'Если что-то устарело, поправьте кнопкой выше.</div>' +
         (profile.telegram_username ? '' :
           '<div class="notice">' +
@@ -3813,7 +3850,7 @@
     const questsCompleted = data.quests.filter((q) => q.completed).length;
     return esc(active.label) +
       (data.tier ? ' · Уровень: ' + TIER_LABELS[data.tier] : '') +
-      '<br>Заданий выполнено: ' + questsCompleted + '/' + data.quests.length + ' · ⭐ ' + data.stars;
+      '<br>⭐ ' + data.stars;
   }
 
   function renderQuestsCard(data) {
@@ -3823,7 +3860,7 @@
       (b.claimable_stars > 0 ? ' <span class="dot dot--alert"></span>' : '') + '</button>'
     ).join('');
 
-    const branchQuests = data.quests.filter((q) => q.branch_id === state.lobbyBranch);
+    const branchQuests = data.academy_enabled ? data.quests.filter((q) => q.branch_id === state.lobbyBranch) : data.quests.filter((q) => q.claimable_stars > 0);
     const questsHtml = branchQuests.map((q) => {
       const pct = q.next_target ? Math.max(0, Math.min(100, Math.round((q.count / q.next_target) * 100))) : 100;
       return '<div class="row quest quest--personal"><div class="row__main"><div class="row__title">' + esc(q.title) + '</div>' +
@@ -3835,20 +3872,20 @@
           (q.assignment_note ? '<br>' + esc(q.assignment_note) : '') + '</div>' : '') +
         '</div>' +
         '<div class="row__side">' +
-        (q.reward_outfit
-          ? '<div class="reward-skin"><img src="' + q.reward_outfit.image + '" alt="' + esc(q.reward_outfit.label) + '"><span>' + esc(q.reward_outfit.label) + '</span></div>'
-          : q.claimable_stars > 0
-            ? '<button class="btn btn--small btn--claim" data-claim-quest="' + q.id + '">Получить <span class="reward-badge">' + q.claimable_stars + ' ⭐</span></button>'
-            : q.next_target !== null
-              ? (q.pending_count
-                ? '<span class="reward-badge reward-badge--pending">Проверяется</span>'
-                : '<button class="btn btn--small btn--ghost" data-submit-quest="' + q.id + '">Сдать</button>')
-              : '') +
+        (q.claimable_stars > 0
+          ? '<button class="btn btn--small btn--claim" data-claim-quest="' + q.id + '">Получить <span class="reward-badge">' + q.claimable_stars + ' ⭐</span></button>'
+          : q.next_target !== null && data.academy_enabled
+            ? (q.pending_count
+              ? '<span class="reward-badge reward-badge--pending">Проверяется</span>'
+              : '<button class="btn btn--small btn--ghost" data-submit-quest="' + q.id + '">Сдать</button>')
+            : '') +
+        (q.reward_outfit ? '<div class="reward-skin"><img src="' + q.reward_outfit.image + '" alt="' + esc(q.reward_outfit.label) + '"><span>' + esc(q.reward_outfit.label) + '</span></div>' : '') +
         '</div></div>';
     }).join('');
 
-    return '<div class="chips" style="margin-bottom:var(--space-12)">' + branchTabs + '</div>' +
-      (questsHtml || '<div class="empty">Заданий пока нет</div>');
+    const legacy = (data.legacy_quests || []).map((q) => '<div class="row quest"><div class="row__main">' + esc(q.title) + '<div class="row__sub">Награда за прежнее задание</div></div><button class="btn btn--small" data-claim-quest="' + q.id + '">Получить ' + q.claimable_stars + ' ⭐</button></div>').join('');
+    return (data.academy_enabled ? '<div class="chips" style="margin-bottom:var(--space-12)">' + branchTabs + '</div>' : '<p>Сохранились ваши образы, баланс и заработанные награды.</p>') +
+      (questsHtml || '<div class="empty">' + (data.academy_enabled ? 'Заданий пока нет' : 'Все награды получены') + '</div>') + (legacy ? '<h3>Прежние награды</h3>' + legacy : '');
   }
 
   function wireQuestsCard(data) {
@@ -3919,11 +3956,9 @@
       '<div class="row__sub" id="avatarMeta" style="margin-top:var(--space-8)">' + renderAvatarMeta(data, active) + '</div>' +
       '<button class="btn" id="avatarEdit" style="margin-top:var(--space-12)">Сменить образ</button>' +
       '</div>' +
-      '<div class="card academy-progress"><div class="card__title">Мой прогресс</div>' +
-      '<div class="academy-progress__number">' + data.quests.filter((q) => q.completed).length + ' из ' + data.quests.length + '</div>' +
-      '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + (data.quests.length ? Math.round(data.quests.filter((q) => q.completed).length / data.quests.length * 100) : 0) + '%"></div></div>' +
-      '<div class="row__sub">Диаграмма показывает сильные стороны по направлениям Академии.</div>' + buildRadarSvg(data.radar) + '</div>' +
-      '<div class="card"><div class="card__title">Задания</div><div id="questsCard">' + renderQuestsCard(data) + '</div></div>'
+      (data.academy_enabled ? '<div class="card academy-progress"><div class="card__title">Мой прогресс</div>' +
+      '<div class="row__sub">Диаграмма показывает развитие твоих навыков при выполнении заданий</div>' + buildRadarSvg(data.radar) + '</div>' : '') +
+      '<div class="card"><div class="card__title">' + (data.academy_enabled ? 'Задания' : 'Награды') + '</div><div id="questsCard">' + renderQuestsCard(data) + '</div></div>'
     , gen);
 
     if (showWave) {
@@ -3971,8 +4006,8 @@
     // Образцы одежды убраны: рядом с настоящими футболками выдуманное худи со
     // ссылкой на главную Ozon выглядело обманом. В «Книгах» настоящих товаров
     // пока нет, там образцы остаются — и помечены как образцы.
-    { category: 'books', sample: true, icon: '📖', title: 'Молитвослов Братства', price: 600, oldPrice: null, rating: '5.0', reviews: 6, url: 'https://www.ozon.ru' },
-    { category: 'books', sample: true, icon: '📚', title: 'Книга «История Братства»', price: 950, oldPrice: 1200, rating: '4.8', reviews: 9, url: 'https://www.ozon.ru' },
+    { id: 'ozon-books', category: 'books', icon: '📚', title: 'Книги на Ozon', price: null, shop: 'Ozon', fit: 'Подборка книг', fabric: 'Цена на странице магазина', url: 'https://ozon.ru/t/v0uWGiY' },
+    { id: 'empire-malofeev', category: 'books', icon: '📖', title: 'Империя. Книга 1 — К. В. Малофеев', price: null, shop: 'Литрес', fit: 'Электронная книга', fabric: 'Цена на странице магазина', url: 'https://www.litres.ru/book/konstantin-malofeev/imperiya-kniga-1-66834413/' },
   ];
   const RUBLE_FILTERS = [['clothing', 'Одежда'], ['books', 'Книги']];
   const TOKEN_FILTERS = [['outfit', 'Скины'], ['physical', 'Мерч']];
@@ -4065,7 +4100,7 @@
       (item.sample ? '<span class="ozon-card__discount ozon-card__discount--sample">образец</span>'
         : discountPct ? '<span class="ozon-card__discount">-' + discountPct + '%</span>' : '') + '</div>' +
       '<div class="ozon-card__price">' +
-      '<span class="ozon-card__price-now">' + item.price + ' ₽</span>' +
+      '<span class="ozon-card__price-now">' + (item.price == null ? esc(item.shop) : item.price + ' ₽') + '</span>' +
       (item.oldPrice ? '<span class="ozon-card__price-old">' + item.oldPrice + ' ₽</span>' : '') +
       '</div>' +
       '<div class="ozon-card__title">' + esc(item.title) + '</div>' +
@@ -4171,6 +4206,14 @@
     return state.cabinetMode === 'personal' ? '?personal=true' : '';
   }
 
+  async function acknowledgeSection(section, cursor, regionId) {
+    if (!cursor) return;
+    try {
+      await api('/me/seen', {method:'POST', body:{section:section, cursor:cursor, region_id:regionId || null}});
+      state.me = await api('/me'); renderTabs(); renderCabinetSwitch();
+    } catch (error) { console.warn('Не удалось сохранить просмотр раздела'); }
+  }
+
   async function renderFeed(gen) {
     renderedPosts = 0;
     const data = await api('/news' + feedScope());
@@ -4187,6 +4230,7 @@
 
     if (data.can_post) document.getElementById('addNews').onclick = () => newsForm().catch(fail);
     wireFeed(data);
+    acknowledgeSection('news', data.seen_cursor);
   }
 
   function newsPostHtml(item, reactionSet) {
@@ -4665,7 +4709,11 @@
     // Братство. Личных записей в ней больше нет, поэтому и выбирать не из
     // чего — прежняя развилка «из личного кабинета от себя, из управления от
     // отделения» исчезла вместе с личными постами.
-    const identities = await Promise.all([api('/news/byline?official=true'), api('/news/byline?official=false')]);
+    const choices = [{key:'false', official:false}];
+    if (meHasRole('superuser') || meHasRole('federal')) choices.unshift({key:'true', official:true});
+    if (state.me.cell) choices.unshift({key:'true', official:true});
+    else (state.me.regions || []).forEach((r) => choices.push({key:'region:' + r.id, official:true, regionId:r.id}));
+    const identities = await Promise.all(choices.map((c) => api('/news/byline?official=' + c.official + (c.regionId ? '&region_id=' + c.regionId : ''))));
     let info = identities[0];
     const limit = info.photo_limit || 10;
 
@@ -4680,8 +4728,7 @@
       // И сразу говорим, кого потревожит уведомление: раньше об этом узнавали
       // уже после публикации.
       '<div class="field"><label>Опубликовать от лица</label><select id="newsIdentity">' +
-      '<option value="true">' + esc(identities[0].byline) + '</option>' +
-      '<option value="false">' + esc(identities[1].byline) + ' · от себя</option></select></div>' +
+      choices.map((c,i) => '<option value="' + c.key + '">' + esc(identities[i].byline) + (c.official ? '' : ' · от себя') + '</option>').join('') + '</select></div>' +
       '<div class="compose-as" id="newsIdentityPreview">' + avatarHtml(info.avatar, info.byline) +
       '<span class="compose-as__text"><span class="compose-as__name">' + esc(info.byline) + '</span>' +
       (info.audience ? '<span class="row__sub">' + esc(info.audience) + '</span>' : '') +
@@ -4697,7 +4744,7 @@
         const picker = document.getElementById('newsPhotos');
         const album = document.getElementById('newsAlbum');
         document.getElementById('newsIdentity').addEventListener('change', (event) => {
-          info = identities[event.currentTarget.value === 'true' ? 0 : 1];
+          info = identities[choices.findIndex((c) => c.key === event.currentTarget.value)];
           document.getElementById('newsIdentityPreview').innerHTML = avatarHtml(info.avatar, info.byline) +
             '<span class="compose-as__text"><span class="compose-as__name">' + esc(info.byline) + '</span>' +
             (info.audience ? '<span class="row__sub">' + esc(info.audience) + '</span>' : '<span class="row__sub">Личная подпись</span>') + '</span>';
@@ -4758,7 +4805,9 @@
           // multipart — текст и файлы одним запросом (api/routers/news.py::publish)
           const form = new FormData();
           form.append('text', text);
-          form.append('official', document.getElementById('newsIdentity').value);
+          const identity = choices.find((c) => c.key === document.getElementById('newsIdentity').value);
+          form.append('official', String(identity.official));
+          if (identity.regionId) form.append('region_id', String(identity.regionId));
           // Кабинет передаём и здесь: сервер отказывает личному, а не только
           // приложение прячет кнопку.
           form.append('personal', state.cabinetMode === 'personal' ? 'true' : 'false');
@@ -5046,6 +5095,12 @@
     } else {
       banner.hidden = true;
     }
+  }
+
+  let countersRefreshTimer = null;
+  function scheduleCountersRefresh() {
+    clearTimeout(countersRefreshTimer);
+    countersRefreshTimer = setTimeout(() => { refreshMe().then(() => { if (state.tab === 'academyManage') startRender(renderAcademyManage); }).catch(() => {}); }, 200);
   }
 
   async function refreshMe() {

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Bratstvo encrypted backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+Unit=bratstvo-backup.service
+
+[Install]
+WantedBy=timers.target

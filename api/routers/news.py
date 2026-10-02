@@ -35,6 +35,7 @@ from database.models import (
     NewsPhoto,
     NewsPost,
     User,
+    Region,
 )
 from services.news import (
     BYLINE_BRATSTVO,
@@ -153,6 +154,7 @@ async def list_news(
     # Свой аватар и имя — для строки «Что нового?» над лентой.
     return {
         "items": items,
+        "seen_cursor": max((post.id for post in posts), default=0),
         # Из личного кабинета не пишет никто, кем бы ни был: лента — голос
         # организации, а личный кабинет — место, где человек читатель.
         # Кнопку прячем здесь, отказ на сам запрос — в publish ниже.
@@ -166,6 +168,7 @@ async def list_news(
 @router.get("/byline")
 async def my_byline(
     official: bool = False,
+    region_id: int | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -175,7 +178,14 @@ async def my_byline(
     (services/news.py::byline_for). Про уведомление форма раньше молчала, и
     человек не знал, что официальный пост разойдётся всем в бот.
     """
-    kind = byline_kind_for(user, official)
+    label = await byline_for(session, user, official)
+    if region_id is not None:
+        from utils.access import require_view
+        await require_view(session, user, region_id)
+        if not official or not can_post_officially(user):
+            raise AccessDenied("Подпись отделения доступна руководителю")
+        label = f"Академисты | {(await session.get(Region, region_id)).name}"
+    kind = BYLINE_OTDELENIE if region_id is not None else byline_kind_for(user, official)
     audience = {
         BYLINE_BRATSTVO: "Уведомление придёт всем",
         BYLINE_OTDELENIE: "Уведомление придёт вашему отделению",
@@ -183,7 +193,7 @@ async def my_byline(
     # незачем — строка сообщала бы об отсутствии события.
     }.get(kind)
     return {
-        "byline": await byline_for(session, user, official),
+        "byline": label,
         "byline_kind": kind,
         "avatar": BYLINE_LOGOS.get(kind) or await avatar_url_for_user(session, user),
         "audience": audience,
@@ -269,6 +279,7 @@ async def publish(
     background_tasks: BackgroundTasks,
     text: str = Form(..., min_length=1, max_length=4000),
     official: bool = Form(default=False),
+    region_id: int | None = Form(default=None),
     # Из какого кабинета пишут. Из личного — ни от кого не принимаем: см.
     # can_post в list_news выше. Приходит частью той же формы, что текст и
     # фотографии, — запрос multipart, и query-параметр тут был бы вразнобой.
@@ -288,7 +299,7 @@ async def publish(
     if len([f for f in (files or []) if f is not None]) > PHOTO_LIMIT:
         raise ValueError(f"К одной новости можно приложить не больше {PHOTO_LIMIT} фотографий")
 
-    post = await create_news(session, user, text, official=official)
+    post = await create_news(session, user, text, official=official, region_id=region_id)
     photos = await attach_photos(session, post, files)
     # Уведомление ставим в очередь после того, как фотографии легли на диск:
     # человек нажмёт кнопку в уведомлении и увидит пост целиком, а не текст

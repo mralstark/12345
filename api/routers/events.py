@@ -135,7 +135,9 @@ async def list_events(
         fact = await get_event_fact(session, event.id) if event.planned_budget else None
         items.append(event_dict(event, responsible_name=responsible, fact=fact))
 
-    return {"items": items, "statuses": [{"value": k, "label": v} for k, v in EVENT_STATUS_LABELS.items()]}
+    return {"items": items,
+            "seen_cursor": max((e["id"] for e in items if e["status"] == "planned" and e["date"] >= tz_today().isoformat()), default=0),
+            "statuses": [{"value": k, "label": v} for k, v in EVENT_STATUS_LABELS.items()]}
 
 
 @router.get("/mine")
@@ -193,7 +195,8 @@ async def list_my_events(
                 responsible_telegram=responsible.telegram_username if responsible else None,
             )
         )
-    return {"items": items}
+    return {"items": items,
+            "seen_cursor": max((e["id"] for e in items if e["status"] == "planned" and e["date"] >= tz_today().isoformat()), default=0)}
 
 
 @router.get("/{event_id}")

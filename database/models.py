@@ -626,6 +626,8 @@ class NewsPost(Base):
     # подписи: по строке это гадание, а от вида зависят и аватар, и то,
     # открывается ли профиль (api/routers/news.py).
     byline_kind: Mapped[str] = mapped_column(String(16), default="personal")
+    # Область публикации фиксируется при создании, независимо от будущих ролей автора.
+    region_id: Mapped[int | None] = mapped_column(ForeignKey("regions.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     author: Mapped["User"] = relationship()
@@ -939,6 +941,8 @@ class MemberQuestProgress(Base):
     # api/routers/character.py::claim_quest_stars. Руководитель, отмечая
     # «+1», прогресс двигает, но звёзды не начисляет — забирает сам человек.
     stars_claimed: Mapped[int] = mapped_column(Integer, default=0)
+    # Сохраняет заработанную награду при изменении/архивации каталога.
+    earned_stars_floor: Mapped[int] = mapped_column(Integer, default=0)
     # Исполнитель сначала отправляет выполнение на проверку. Счётчик
     # прогресса увеличивается только после решения руководителя.
     pending_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -952,6 +956,27 @@ class MemberQuestProgress(Base):
     member: Mapped["Member"] = relationship(back_populates="quest_progress")
     quest: Mapped["Quest"] = relationship()
     assigned_by: Mapped["User | None"] = relationship(foreign_keys=[assigned_by_user_id])
+
+
+class QuestActivity(Base):
+    __tablename__ = "quest_activity"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id"), index=True)
+    quest_id: Mapped[int] = mapped_column(ForeignKey("quests.id"), index=True)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    action: Mapped[str] = mapped_column(String(24))
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class SectionRead(Base):
+    __tablename__ = "section_reads"
+    __table_args__ = (UniqueConstraint("user_id", "section", "scope_id", name="uq_section_read"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    section: Mapped[str] = mapped_column(String(16))
+    scope_id: Mapped[int] = mapped_column(Integer, default=0)
+    last_item_id: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class ShopPurchase(Base):

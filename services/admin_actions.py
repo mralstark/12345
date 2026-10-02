@@ -38,6 +38,8 @@ from database.models import (
     NewsPost,
     NewsReaction,
     NewsView,
+    QuestActivity,
+    SectionRead,
     Region,
     ShopPurchase,
     Task,
@@ -462,6 +464,8 @@ EXCLUDE_HANDLES_USER_REFS = frozenset({
     "news_comments.author_user_id",
     "news_reactions.user_id",
     "news_views.user_id",
+    "quest_activity.actor_user_id",
+    "section_reads.user_id",
     "tasks.from_user_id",
     "tasks.to_user_id",
     "documents.author_id",
@@ -476,6 +480,7 @@ EXCLUDE_HANDLES_MEMBER_REFS = frozenset({
     "shop_purchases.member_id",
     "event_attendance.member_id",
     "event_task_assignees.member_id",
+    "quest_activity.member_id",
 })
 
 
@@ -504,6 +509,7 @@ async def exclude_member(
     # уходит вместе с человеком, оставлять эти строки не за кем.
     await _delete_all(session, BirthdayNotice, BirthdayNotice.member_id == member_id)
     await _delete_all(session, MemberQuestProgress, MemberQuestProgress.member_id == member_id)
+    await _delete_all(session, QuestActivity, QuestActivity.member_id == member_id)
     await _delete_all(session, ShopPurchase, ShopPurchase.member_id == member_id)
     await _delete_all(session, EventAttendance, EventAttendance.member_id == member_id)
     await _delete_all(session, EventTaskAssignee, EventTaskAssignee.member_id == member_id)
@@ -539,6 +545,8 @@ async def exclude_member(
         await _delete_all(session, NewsComment, NewsComment.author_user_id == user.id)
         await _delete_all(session, NewsReaction, NewsReaction.user_id == user.id)
         await _delete_all(session, NewsView, NewsView.user_id == user.id)
+        await _delete_all(session, SectionRead, SectionRead.user_id == user.id)
+        await _delete_all(session, QuestActivity, QuestActivity.actor_user_id == user.id)
         for task in (
             await session.execute(select(Task).where((Task.from_user_id == user.id) | (Task.to_user_id == user.id)))
         ).scalars().all():
@@ -602,6 +610,9 @@ async def delete_region_permanently(session: AsyncSession, region_id: int) -> No
 
     # Остальное — то, что не привязано к конкретному человеку из состава.
     await session.execute(delete(MembershipApplication).where(MembershipApplication.region_id == region_id))
+    # Публичные новости сохраняют подпись, но больше не ссылаются на удалённый регион.
+    await session.execute(update(NewsPost).where(NewsPost.region_id == region_id).values(region_id=None))
+    await session.execute(delete(SectionRead).where(SectionRead.section == "events", SectionRead.scope_id.in_([region_id, -region_id])))
 
     event_ids = select(Event.id).where(Event.region_id == region_id)
     category_ids = select(Category.id).where(Category.region_id == region_id)

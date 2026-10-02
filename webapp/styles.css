@@ -2037,3 +2037,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Срок задачи в календаре — другим цветом, чем мероприятие: в клетке помещается
    только точка, и по ней должно быть видно, что именно там ждёт. */
 .calendar__dot--task { background: var(--danger); }
+
+
+/* hidden must win over card/stack layout, including academy search and mobile fields. */
+[hidden] { display: none !important; }
+.field, .field input, .field select, .field textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+input[type="date"], input[type="time"], input[type="datetime-local"] { display:block; width:100%; min-width:0; max-width:100%; }
+input::-webkit-date-and-time-value { text-align:left; }
+.academy-member .radar { margin: 8px auto; max-width: 100%; }
+.academy-member details .row__sub { margin: 8px 0; }
+.quest .row__side { gap:8px; }
+.quest .duty__act { white-space:normal; line-height:1.4; }
+@media(max-width:520px) {
+  .field input[type="date"], .field input[type="time"] { min-height:44px; padding:10px; }
+  .modal .grid2, .modal .form-grid { grid-template-columns:minmax(0,1fr); }
+  .modal .row__side { max-width:60%; overflow-wrap:anywhere; }
+  .modal .quest .row__side { max-width:100%; }
+  .academy-member .radar-svg { width:100%; max-width:340px; }
+}

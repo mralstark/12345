@@ -1,0 +1,7 @@
+[Unit]
+Description=Encrypted backup of Bratstvo PostgreSQL and storage
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/bratstvo/deploy/backup.sh

@@ -87,7 +87,8 @@ async def test_cell_leader_search_and_quest_read_stay_in_own_cell(client, sessio
     searched = await client.get("/api/members/search", params={"q": "Иван", "region_id": world["moscow"].id})
     assert searched.status_code == 200
     assert {item["id"] for item in searched.json()["items"]} == {own.id}
-    assert (await client.get(f"/api/members/{own.id}/quests")).status_code == 200
+    # Академию ведёт региональный руководитель и выше; ячейка не проверяет задания.
+    assert (await client.get(f"/api/members/{own.id}/quests")).status_code == 403
     assert (await client.get(f"/api/members/{foreign.id}/quests")).status_code == 403
 
     login(world["leader_moscow"])

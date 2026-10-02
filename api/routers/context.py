@@ -3,7 +3,10 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from pydantic import BaseModel, Field
+from services.academy import can_manage_academy
+from services.navigation import mark_seen, unseen_count
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
@@ -14,6 +17,11 @@ from database.models import (
     APPLICATION_STATE_PENDING,
     EVENT_STATUS_PLANNED,
     MEMBER_STATUS_LABELS,
+    MEMBER_STATUS_ACTIVIST,
+    MemberQuestProgress,
+    Quest,
+    Task,
+    SectionRead,
     ROLE_SUPERUSER,
     SUPERVISOR_ROLES,
     Event,
@@ -62,10 +70,38 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
     # доступна с первого экрана («Академия»), не только после «Личной информации».
     my_cell = await actor_cell(session, user)
     personal_status_label = None
+    member = None
     if user.member_id is not None:
         member = await session.get(Member, user.member_id)
         if member is not None:
             personal_status_label = MEMBER_STATUS_LABELS.get(member.status, member.status)
+    from api.routers.character import _quest_dict
+    progress = [] if member is None else (await session.execute(select(MemberQuestProgress, Quest).join(
+        Quest, Quest.id == MemberQuestProgress.quest_id,
+    ).where(MemberQuestProgress.member_id == member.id))).all()
+    academy_alerts = sum(int(bool(q.is_active and row.assigned_by_user_id and not row.pending_count)) + int(
+        _quest_dict(q, row.count, row.stars_claimed, earned_stars_floor=row.earned_stars_floor or 0)["claimable_stars"] > 0
+    ) for row, q in progress)
+    ids = [r.id for r in regions]
+    pending_by_region = {}
+    if ids and can_manage_academy(user):
+        pending_by_region = dict((await session.execute(select(Member.region_id, func.count(MemberQuestProgress.id))
+            .select_from(MemberQuestProgress).join(Member).join(Quest).where(
+                Member.region_id.in_(ids), Member.is_active.is_(True), Member.status == MEMBER_STATUS_ACTIVIST,
+                Quest.is_active.is_(True), MemberQuestProgress.pending_count > 0,
+            ).group_by(Member.region_id))).all())
+    event_stmt = select(Event.region_id, func.count(Event.id)).outerjoin(SectionRead, and_(
+        SectionRead.user_id == user.id, SectionRead.section == "events", SectionRead.scope_id == Event.region_id,
+    )).where(Event.region_id.in_(ids), Event.date >= tz_today(), Event.status == EVENT_STATUS_PLANNED,
+             Event.id > func.coalesce(SectionRead.last_item_id, 0))
+    if my_cell is not None:
+        event_stmt = event_stmt.where(Event.cell_id == my_cell.id)
+    events_by_region = dict((await session.execute(event_stmt.group_by(Event.region_id))).all()) if ids else {}
+    region_counters = {str(r.id): {"academy": pending_by_region.get(r.id, 0), "events": events_by_region.get(r.id, 0)} for r in regions}
+    reviews = (await session.execute(select(func.count(Task.id)).where(
+        Task.from_user_id == user.id, Task.status == "review",
+    ))).scalar() or 0
+    incoming = await new_tasks_count(session, user.id) + await new_event_tasks_count(session, user.member_id)
     return {
         "id": user.id,
         "full_name": user.full_name,
@@ -89,16 +125,19 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
         # веб решает по этому полю, показывать ли переключатель кабинетов.
         "has_personal_cabinet": user.member_id is not None,
         "personal_status_label": personal_status_label,
-        # Новость может опубликовать любой руководитель; аудиторию он не
-        # выбирает — её задаёт его роль (services/news.py::audience_for).
+        "academy_enabled": bool(member and member.is_active and member.status == MEMBER_STATUS_ACTIVIST),
+        "can_manage_academy": can_manage_academy(user),
+        # Подпись и область рассылки проверяются сервером по доступным регионам.
         "can_post_news": can_post_news(user),
         "counters": {
+            "personal_academy": academy_alerts,
+            "news": await unseen_count(session, user, "news"),
+            "personal_events": await unseen_count(session, user, "events") if member and member.is_active else 0,
+            "regions": region_counters,
+            "management_tasks": reviews + (incoming if user.member_id is None else 0),
             # Одна цифра на всю работу: задачи мероприятий теперь приходят
             # в тот же ящик, что и обычные, — значит и кружок у них общий.
-            "new_tasks": (
-                await new_tasks_count(session, user.id)
-                + await new_event_tasks_count(session, user.member_id)
-            ),
+            "new_tasks": incoming,
             "open_tasks": await open_tasks_count(session, user.id),
             "new_purchases": await new_purchases_count(session, user),
             # Вкладка «Заявки» пока только у superuser (api/routers/applications.py) —
@@ -235,7 +274,19 @@ async def dashboard(
         "upcoming_events": upcoming,
         "birthdays": birthdays,
         "counters": {
-            "new_tasks": await new_tasks_count(session, user.id),
+            "new_tasks": ((await session.execute(select(func.count(Task.id)).where(Task.from_user_id == user.id, Task.status == "review"))).scalar() or 0) + (await new_tasks_count(session, user.id) if user.member_id is None else 0),
             "open_tasks": await open_tasks_count(session, user.id),
         },
     }
+
+
+class SeenIn(BaseModel):
+    section: str = Field(max_length=16)
+    cursor: int = Field(ge=0)
+    region_id: int | None = None
+
+
+@router.post("/me/seen")
+async def seen(payload: SeenIn, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
+    await mark_seen(session, user, payload.section, payload.cursor, payload.region_id)
+    return {"ok": True}
