@@ -53,7 +53,12 @@ def main():
             else:
                 for path in source_files():
                     if path.is_file() and include(path):
-                        output.add(path, arcname=path.relative_to(ROOT).as_posix())
+                        data = path.read_bytes()
+                        if path.suffix in {".sh", ".conf", ".service", ".socket", ".timer"}:
+                            data = data.replace(b"\r\n", b"\n")
+                        member = output.gettarinfo(str(path), arcname=path.relative_to(ROOT).as_posix())
+                        member.size = len(data)
+                        output.addfile(member, io.BytesIO(data))
         checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
         remote = f"/root/.cache/bratstvo-deploy/code-{checksum[:16]}.tar.gz"
         subprocess.run(["ssh", server, "umask 077; mkdir -p /root/.cache/bratstvo-deploy; chmod 700 /root/.cache/bratstvo-deploy"], check=True)
