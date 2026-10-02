@@ -5,6 +5,7 @@ python deploy/update_vps.py root@31.129.98.217
 В Git-копии отправляются только отслеживаемые файлы.
 """
 import hashlib
+import io
 from pathlib import Path
 import re
 import subprocess
@@ -36,9 +37,23 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bratstvo-update-") as temporary:
         archive = Path(temporary) / "code.tar.gz"
         with tarfile.open(archive, "w:gz") as output:
-            for path in source_files():
-                if path.is_file() and include(path):
-                    output.add(path, arcname=path.relative_to(ROOT).as_posix())
+            if (ROOT / ".git").exists():
+                # Git отдаёт канонические LF, а не CRLF рабочей копии Windows.
+                # Это также гарантирует, что отправлен именно проверенный коммит.
+                status = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
+                                        check=True, capture_output=True)
+                if status.stdout.strip():
+                    raise SystemExit("Сначала закоммитьте изменения проекта")
+                snapshot = subprocess.run(["git", "archive", "--format=tar", "HEAD"],
+                                          cwd=ROOT, check=True, capture_output=True)
+                with tarfile.open(fileobj=io.BytesIO(snapshot.stdout)) as source:
+                    for member in source:
+                        if member.isfile() and include(ROOT / member.name):
+                            output.addfile(member, source.extractfile(member))
+            else:
+                for path in source_files():
+                    if path.is_file() and include(path):
+                        output.add(path, arcname=path.relative_to(ROOT).as_posix())
         checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
         remote = f"/root/.cache/bratstvo-deploy/code-{checksum[:16]}.tar.gz"
         subprocess.run(["ssh", server, "umask 077; mkdir -p /root/.cache/bratstvo-deploy; chmod 700 /root/.cache/bratstvo-deploy"], check=True)
@@ -66,6 +81,7 @@ rollback() {
   chown -R bratstvo:bratstvo /opt/bratstvo
   chown root:bratstvo /opt/bratstvo/.env
   chmod 640 /opt/bratstvo/.env
+  bash /opt/bratstvo/deploy/sync_units.sh
   systemctl start bratstvo-api.socket bratstvo-api bratstvo-bot
   exit "$code"
 }
@@ -83,7 +99,8 @@ done
 systemctl start bratstvo-api.socket bratstvo-api bratstvo-bot
 sleep 3
 systemctl is-active --quiet bratstvo-api bratstvo-bot
-curl --fail --silent --output /dev/null http://127.0.0.1:8000/
+PUBLIC_HOST=$(/opt/bratstvo/.venv/bin/python -c 'from urllib.parse import urlsplit; from config import WEBAPP_URL; print(urlsplit(WEBAPP_URL).hostname)')
+curl --fail --silent --header "Host: $PUBLIC_HOST" --output /dev/null http://127.0.0.1:8000/healthz
 trap - ERR
 rm -f "$ARCHIVE"
 # Staging is a mktemp directory created above, outside application data.
