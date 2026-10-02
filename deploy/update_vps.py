@@ -44,7 +44,7 @@ def main():
                                         check=True, capture_output=True)
                 if status.stdout.strip():
                     raise SystemExit("Сначала закоммитьте изменения проекта")
-                snapshot = subprocess.run(["git", "archive", "--format=tar", "HEAD"],
+                snapshot = subprocess.run(["git", "-c", "core.autocrlf=false", "archive", "--format=tar", "HEAD"],
                                           cwd=ROOT, check=True, capture_output=True)
                 with tarfile.open(fileobj=io.BytesIO(snapshot.stdout)) as source:
                     for member in source:
