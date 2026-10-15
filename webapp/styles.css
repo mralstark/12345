@@ -1,24 +1,52 @@
-/* Кабинет Братства Академистов — Mini App.
-   Фирменная палитра в тонах сайта academists.ru (тёмный фон + золото,
-   Playfair Display в заголовках), а не тема Telegram: пользователь сам
-   выбирает светлый/тёмный вариант тумблером в шапке (см. app.js), выбор
-   хранится в localStorage. --tg-theme-* используется только как подсказка
-   для начального выбора темы при самом первом открытии (см. initTheme в app.js). */
+/* Кабинет Братства: графит, тёплое золото, локальные Forum и Google Sans.
+   Общие компоненты сохраняют сценарии всех личных и управленческих кабинетов. */
+
+@font-face {
+  font-family: "Google Sans";
+  src: url("/static/fonts/google-sans-regular-v1.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Google Sans";
+  src: url("/static/fonts/google-sans-medium-v1.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Forum";
+  src: url("/static/fonts/forum-regular-v1.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+}
 
 :root,
 [data-theme="dark"] {
-  --bg: #141414;
-  --secondary-bg: #1e1b17;
-  --text: #ece6dc;
-  --hint: #9c9082;
+  --bg: #101111;
+  --secondary-bg: #1b1d1c;
+  --text: #f3efe7;
+  --hint: #b1b2ab;
   --link: #d9b57b;
   --button: #d9b57b;
   --button-text: #201a12;
   --accent: #d9b57b;
-  --danger: #c0392b;
-  --success: #4e8b5d;
-  --radius: 12px;
-  --border: rgba(217, 181, 123, 0.22);
+  --danger: #ef9285;
+  --alert: #b74336;
+  --success: #95c6a4;
+  --radius: 18px;
+  --border: rgba(243, 239, 231, 0.10);
+  --surface: #1b1d1c;
+  --surface-raised: #242725;
+  --field-bg: #151716;
+  --accent-soft: rgba(217, 181, 123, .11);
+  --danger-bg: #542f2a;
+  --success-bg: #233d2c;
+  --nav-bg: #151716;
+  --rule-strong: rgba(243, 239, 231, .20);
+  color-scheme: dark;
 }
 
 [data-theme="light"] {
@@ -30,10 +58,20 @@
   --button: #8f6530;
   --button-text: #ffffff;
   --accent: #8f6530;
-  --danger: #c0392b;
-  --success: #2f855a;
-  --radius: 12px;
-  --border: rgba(143, 101, 48, 0.2);
+  --danger: #a93226;
+  --alert: #b74336;
+  --success: #27683f;
+  --radius: 18px;
+  --border: rgba(32, 29, 25, .13);
+  --surface: #ffffff;
+  --surface-raised: #eee9e0;
+  --field-bg: #faf7f1;
+  --accent-soft: rgba(143, 101, 48, .10);
+  --danger-bg: #fae8e4;
+  --success-bg: #e2efe5;
+  --nav-bg: #faf7f1;
+  --rule-strong: rgba(32, 29, 25, .26);
+  color-scheme: light;
 }
 
 /* Шкала отступов — шаг 4px, одна и та же для margin/padding/gap/позиционирования
@@ -65,7 +103,7 @@
    своим синим — на тёмном фоне он и нечитаем, и чужой. Пока такая ссылка была
    одна (страница ВКонтакте у ячейки), это не бросалось в глаза. */
 a { color: var(--link); }
-a:hover { color: var(--accent); }
+a:not(.btn):hover { color: var(--accent); }
 
 /* Сколько сверху занято не нами — складывается из двух разных вещей.
    Первое: чёлка и строка состояния самого телефона. Её сообщают сразу двое —
@@ -87,24 +125,22 @@ a:hover { color: var(--accent); }
 
 body {
   margin: 0;
-  /* Единый веб-шрифт для всего кабинета — иначе на разных ОС (Segoe UI на
-     Windows, San Francisco на Mac, Roboto на Android) вид расходится и
-     ощущается "дёшево", даже когда сама вёрстка одна и та же. Системный
-     стек остаётся только запасным, если Google Fonts недоступен. */
-  font-family: "PT Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 15px;
-  line-height: 1.45;
+  /* Шрифты отдаются вместе с приложением, без внешнего CDN. */
+  font-family: "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--text);
   background: var(--bg);
   /* место под фиксированную нижнюю панель */
-  padding-bottom: calc(56px + var(--space-24) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(76px + var(--space-24) + max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)));
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
-.topbar__title,
 .card__title,
-.modal__title,
-.section-title {
-  font-family: "Playfair Display", Georgia, serif;
+.modal__title {
+  font-family: "Forum", Georgia, serif;
+  color: var(--text);
 }
 
 /* --- Интро --------------------------------------------------------------- */
@@ -172,11 +208,12 @@ body {
 }
 
 .intro__greeting-text {
-  font-family: "Playfair Display", Georgia, serif;
-  font-size: 28px;
-  font-weight: 600;
+  font-family: "Forum", Georgia, serif;
+  font-size: 34px;
+  font-weight: 400;
   color: #fff;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  line-height: 1.2;
 }
 
 /* Подпись-цитата снизу кадра (в духе Сбербанка) — та же логика появления,
@@ -228,18 +265,27 @@ body {
   border-bottom: 1px solid var(--border);
   /* Сверху добавляем занятое телефоном и Telegram: иначе первое, что стоит в
      шапке, уезжает под чёлку — заметнее всего с баннером «Вы смотрите как». */
-  padding: calc(var(--space-12) + var(--top-inset)) var(--space-12) var(--space-12);
+  padding: calc(var(--space-20) + var(--top-inset)) var(--space-20) var(--space-16);
 }
 
 .topbar__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-12);
+  gap: var(--space-16);
 }
 
-.topbar__title { font-weight: 600; }
-.topbar__subtitle { font-size: 12px; color: var(--hint); }
+.topbar__title { font-weight: 500;
+  font-family: "Google Sans", sans-serif;
+  font-size: 20px;
+  line-height: 1.28;
+  letter-spacing: -.025em;
+  overflow-wrap: break-word;
+}
+.topbar__subtitle { font-size: 12px; color: var(--hint);
+  margin-top: var(--space-4);
+  line-height: 1.4;
+}
 
 /* --- Переключатель кабинетов ---------------------------------------------- */
 /* Был системный <select>: на телефоне открывает окно операционной системы и
@@ -250,16 +296,17 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--space-8);
-  max-width: 60%;
-  min-height: 40px;
+  max-width: 48%;
+  min-height: 44px;
   padding: var(--space-8) var(--space-12);
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--secondary-bg);
+  background: var(--surface);
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
+  font-weight: 500;
 }
 .cabinet[hidden] { display: none; }
 .cabinet__icon { width: 17px; height: 17px; flex: none; color: var(--accent); }
@@ -275,7 +322,7 @@ body {
   min-width: 17px;
   padding: 0 var(--space-4);
   border-radius: 999px;
-  background: var(--danger);
+  background: var(--alert);
   color: #fff;
   font-size: 11px;
   line-height: 17px;
@@ -313,14 +360,16 @@ body {
   margin-bottom: var(--space-12);
   padding: var(--space-8) var(--space-12);
   border-radius: var(--radius);
-  background: var(--accent);
-  color: var(--button-text);
+  background: var(--accent-soft);
+  color: var(--text);
   font-size: 13px;
+  border: 1px solid var(--rule-strong);
+  flex-wrap: wrap;
 }
 .impersonation-banner .btn--ghost {
   background: transparent;
-  border: 1px solid var(--button-text);
-  color: var(--button-text);
+  border: 1px solid var(--rule-strong);
+  color: var(--text);
 }
 
 
@@ -341,11 +390,11 @@ body {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  background: var(--bg);
-  border-top: 1px solid var(--border);
+  background: var(--nav-bg);
+  border-top: 1px solid var(--rule-strong);
   /* Домашний индикатор на iPhone перекрывает нижние пиксели — отступ по
      safe-area (в index.html для этого стоит viewport-fit=cover). */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
 }
 
 .tab {
@@ -354,28 +403,31 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4);
-  min-height: 56px;
-  padding: var(--space-8) var(--space-4);
+  gap: 6px;
+  min-height: 72px;
+  padding: var(--space-12) var(--space-4);
   border: none;
   background: none;
   color: var(--hint);
   font-family: inherit;
   font-size: 11px;
-  line-height: 1.15;
+  line-height: 1.25;
   text-align: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: color .2s ease;
 }
 
-.tab__icon { flex: none; width: 24px; height: 24px; }
+.tab__icon { flex: none; width: 22px; height: 22px; }
 .tab__label {
   display: block;
   max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  font-weight: 500;
 }
 .tab--active { color: var(--accent); }
 .tab__badge {
@@ -386,7 +438,7 @@ body {
   min-width: 17px;
   padding: 0 var(--space-4);
   border-radius: 999px;
-  background: var(--danger);
+  background: var(--alert);
   color: #fff;
   font-size: 11px;
   line-height: 17px;
@@ -412,14 +464,14 @@ body {
   align-items: center;
   gap: var(--space-12);
   width: 100%;
-  min-height: 52px;
-  padding: var(--space-12) var(--space-4);
+  min-height: 56px;
+  padding: var(--space-16) var(--space-4);
   border: none;
   border-bottom: 1px solid var(--border);
   background: none;
   color: var(--text);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   text-align: left;
   cursor: pointer;
 }
@@ -433,7 +485,7 @@ body {
   min-width: 17px;
   padding: 0 var(--space-4);
   border-radius: 999px;
-  background: var(--danger);
+  background: var(--alert);
   color: #fff;
   font-size: 11px;
   line-height: 17px;
@@ -443,7 +495,7 @@ body {
 /* --- Общая раскладка ----------------------------------------------------- */
 /* Симметричный горизонтальный отступ основного контейнера — одно и то же
    значение слева/справа на всех экранах, ничего не «съезжает» на мобильных. */
-.view { padding: var(--space-12); display: flex; flex-direction: column; gap: var(--space-12); }
+.view { padding: var(--space-24) var(--space-20); display: flex; flex-direction: column; gap: var(--space-20); }
 .loader, .empty { color: var(--hint); text-align: center; padding: var(--space-24) var(--space-8); }
 
 /* --- «Открыть на ПК» (keyboards/main_menu.py, ?layout=desktop) ------------
@@ -453,7 +505,7 @@ body {
 .layout-desktop .topbar__row,
 .layout-desktop .tabs,
 .layout-desktop .view {
-  max-width: 1100px;
+  max-width: 1000px;
   margin-left: auto;
   margin-right: auto;
   width: 100%;
@@ -462,27 +514,40 @@ body {
 .card {
   background: var(--secondary-bg);
   border-radius: var(--radius);
-  padding: var(--space-12);
+  padding: var(--space-20);
+  border: 1px solid var(--border);
 }
-.card__title { font-weight: 600; margin-bottom: var(--space-8); }
+.card__title { font-weight: 400; margin-bottom: var(--space-16);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -.015em;
+  overflow-wrap: break-word;
+}
 
 .section-title {
+  font-family: "Google Sans", sans-serif;
   font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: .015em;
   color: var(--hint);
-  margin: var(--space-4) 0 calc(var(--space-4) * -1);
+  margin: var(--space-12) 0 0;
 }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-8); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr)); gap: var(--space-12); }
 
 .stat {
   background: var(--secondary-bg);
   border-radius: var(--radius);
-  padding: var(--space-12) var(--space-12);
+  padding: var(--space-16);
+  border: 1px solid var(--border);
 }
 .stat__label { font-size: 12px; color: var(--hint); }
-.stat__value { font-size: 19px; font-weight: 600; margin-top: var(--space-4); }
+.stat__value { font-size: 28px; font-weight: 500; margin-top: var(--space-4);
+  letter-spacing: -.025em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
 .stat__value--income { color: var(--success); }
 .stat__value--expense { color: var(--danger); }
 
@@ -490,8 +555,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-12);
-  padding: var(--space-12) 0;
+  gap: var(--space-16);
+  padding: var(--space-16) 0;
   border-bottom: 1px solid var(--border);
 }
 .row:last-child { border-bottom: none; }
@@ -500,8 +565,13 @@ body {
    в разных строках: категория с длинным названием получает более широкий
    контейнер и её полоска визуально длиннее при меньшем реальном проценте. */
 .row__main { min-width: 0; flex: 1 1 auto; }
-.row__title { font-weight: 500; overflow-wrap: anywhere; }
-.row__sub { font-size: 12px; color: var(--hint); overflow-wrap: anywhere; }
+.row__title { font-weight: 500; overflow-wrap: break-word;
+  line-height: 1.4;
+}
+.row__sub { font-size: 13px; color: var(--hint); overflow-wrap: break-word;
+  line-height: 1.5;
+  margin-top: var(--space-4);
+}
 /* nowrap оставлен только для коротких значений — сумм, дат, счётчиков. Длинное
    название вуза при нём вылезало за карточку, поэтому текст переносится, а
    ужиматься строке не даёт min-width: 0 у соседа. */
@@ -523,15 +593,22 @@ body {
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-8); }
 .chip {
-  padding: var(--space-4) var(--space-12);
+  padding: var(--space-8) var(--space-16);
   border-radius: 999px;
-  background: var(--secondary-bg);
+  background: transparent;
   border: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   color: var(--text);
+  min-height: 40px;
+  font: inherit;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.3;
 }
-.chip--active { background: var(--button); color: var(--button-text); border-color: transparent; }
+.chip--active { background: var(--accent-soft); color: var(--accent); border-color: rgba(217, 181, 123, .30); }
 
 /* --- Календарь мероприятий ------------------------------------------------ */
 .calendar__nav {
@@ -540,14 +617,16 @@ body {
   justify-content: space-between;
   padding: var(--space-4) var(--space-4) var(--space-12);
 }
-.calendar__nav-title { font-weight: 600; font-family: "Playfair Display", Georgia, serif; }
+.calendar__nav-title { font-weight: 500; font-family: "Google Sans", sans-serif;
+  font-size: 17px;
+}
 .calendar__nav button {
   background: var(--secondary-bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 8px;
-  width: 32px;
-  height: 32px;
+  border-radius: 12px;
+  width: 44px;
+  height: 44px;
   font-size: 16px;
   cursor: pointer;
 }
@@ -555,9 +634,9 @@ body {
 .calendar__weekday { text-align: center; font-size: 11px; color: var(--hint); padding-bottom: var(--space-4); }
 .calendar__day {
   aspect-ratio: 1;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--secondary-bg);
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: var(--field-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -566,11 +645,14 @@ body {
   cursor: pointer;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 .calendar__day--outside { opacity: 0.35; }
 .calendar__day--empty { cursor: default; }
-.calendar__day--today { border-color: var(--accent); border-width: 2px; }
-.calendar__day-num { font-size: 13px; }
+.calendar__day--today { border-color: var(--accent); border-width: 1px;
+  background: var(--accent-soft);
+}
+.calendar__day-num { font-size: 14px; }
 .calendar__day-dots { display: flex; gap: var(--space-4); }
 .calendar__dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .calendar__day-count { font-size: 10px; color: var(--hint); }
@@ -587,16 +669,21 @@ body {
 
 .outfit-grid { display: flex; flex-wrap: wrap; gap: var(--space-12); justify-content: center; }
 .outfit-card {
-  width: 120px;
+  width: clamp(104px, 28vw, 152px);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  background: var(--secondary-bg);
+  background: var(--field-bg);
   text-align: center;
+  padding: var(--space-8);
 }
-.outfit-card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
-.outfit-card__label { font-size: 12px; padding: var(--space-8) var(--space-4) var(--space-4); }
+.outfit-card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block;
+  border-radius: 10px;
+}
+.outfit-card__label { font-size: 13px; padding: var(--space-8) var(--space-4) var(--space-4);
+  font-weight: 500;
+}
 .outfit-card__hint { font-size: 11px; color: var(--hint); padding: 0 var(--space-8) var(--space-8); }
 .outfit-card--active { border-color: var(--button); border-width: 2px; }
 .outfit-card--locked { cursor: default; }
@@ -607,23 +694,41 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--space-8);
-  padding: var(--space-12) var(--space-16);
-  border: none;
-  border-radius: 10px;
+  padding: var(--space-12) var(--space-20);
+  border: 1px solid transparent;
+  border-radius: 12px;
   background: var(--button);
   color: var(--button-text);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   /* .btn бывает и ссылкой (например, «Написать в Телеграм» ведёт на t.me):
      без этого она приезжает с подчёркиванием от глобального стиля ссылок. */
   text-decoration: none;
   cursor: pointer;
+  min-height: 48px;
+  font-family: inherit;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  writing-mode: horizontal-tb;
 }
-.btn--ghost { background: var(--secondary-bg); color: var(--text); }
-.btn--danger { background: var(--danger); color: #fff; }
+.btn--ghost { background: var(--surface-raised); color: var(--text);
+  border-color: var(--border);
+}
+.btn--danger { background: var(--danger-bg); color: var(--danger);
+  border-color: rgba(239, 146, 133, .25);
+}
 .btn--block { width: 100%; }
-.btn--small { padding: var(--space-8) var(--space-12); font-size: 13px; }
-.btn--claim { background: #c9932f; color: #fff; }
+.btn--small { padding: var(--space-8) var(--space-12); font-size: 13px;
+  min-height: 40px;
+  border-radius: 10px;
+}
+.btn--claim { background: var(--button); color: var(--button-text); }
 .btn:disabled { opacity: .5; cursor: default; }
 
 /* Иконка-кнопка без текстового паддинга .btn — рядом с select в задаче
@@ -631,20 +736,20 @@ body {
    за карточку на узких экранах. */
 .btn-icon {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 8px;
-  background: var(--secondary-bg);
+  border-radius: 12px;
+  background: var(--surface-raised);
   color: var(--text);
   font-size: 14px;
   cursor: pointer;
 }
-.btn-icon--danger { background: var(--danger); color: #fff; }
+.btn-icon--danger { background: var(--danger-bg); color: var(--danger); }
 
 /* Строка задачи мероприятия — статус вынесен на всю ширину под заголовок,
    иначе select с длинным текстом ("Отменена") плюс две кнопки не влезали
@@ -658,7 +763,7 @@ body {
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: var(--space-4); vertical-align: middle; }
 .dot--alert { background: #d64545; }
 
-.quest-bar { height: 6px; border-radius: 3px; background: var(--secondary-bg); overflow: hidden; margin: var(--space-4) 0; }
+.quest-bar { height: 5px; border-radius: 999px; background: var(--rule-strong); overflow: hidden; margin: var(--space-4) 0; }
 .quest-bar__fill { height: 100%; background: var(--button); border-radius: 3px; transition: width .3s ease; }
 
 .reward-badge {
@@ -667,10 +772,10 @@ body {
   gap: var(--space-4);
   padding: var(--space-4) var(--space-8);
   border-radius: 999px;
-  background: #c9932f;
-  color: #fff;
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 .reward-badge--pending { background: var(--secondary-bg); color: var(--text); border: 1px solid var(--border); }
@@ -678,15 +783,16 @@ body {
 .reward-skin img { width: 40px; height: 53px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--secondary-bg); }
 .reward-skin span { font-size: 10px; color: var(--hint); text-align: center; line-height: 1.1; }
 
-.ozon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-12); }
+.ozon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-16); }
 .ozon-card {
   display: block;
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: var(--space-12);
   text-decoration: none;
   color: var(--text);
+  min-width: 0;
 }
 .ozon-card__img {
   position: relative;
@@ -751,10 +857,12 @@ body {
   scroll-snap-align: center;
 }
 
-.ozon-card__price { display: flex; align-items: baseline; gap: var(--space-8); }
+.ozon-card__price { display: flex; align-items: baseline; gap: var(--space-8);
+  flex-wrap: wrap;
+}
 .ozon-card__price-now { font-size: 16px; font-weight: 700; color: var(--text); }
 .ozon-card__price-old { font-size: 12px; color: var(--hint); text-decoration: line-through; }
-.ozon-card__title { font-size: 13px; margin-top: var(--space-4); line-height: 1.3; }
+.ozon-card__title { font-size: 14px; margin-top: var(--space-4); line-height: 1.45; }
 .ozon-card__rating { font-size: 11px; color: var(--hint); margin-top: var(--space-4); }
 .btn--claim .reward-badge { background: rgba(255,255,255,.25); }
 
@@ -762,15 +870,18 @@ body {
 
 input, select, textarea {
   width: 100%;
-  padding: var(--space-8) var(--space-12);
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  padding: var(--space-12) var(--space-16);
+  border-radius: 12px;
+  border: 1px solid var(--rule-strong);
+  background: var(--field-bg);
   color: var(--text);
   /* iOS зумит страницу при фокусе на поле с font-size < 16px — 15px и был
      причиной "приближается экран, потом отдалять надо" при вводе. */
   font-size: 16px;
   font-family: inherit;
+  line-height: 1.4;
+  min-height: 48px;
+  transition: border-color 160ms ease;
 }
 textarea { min-height: 90px; resize: vertical; }
 
@@ -791,8 +902,11 @@ select {
 [data-theme="light"] select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%237d7368' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
-label { display: block; font-size: 12px; color: var(--hint); margin-bottom: var(--space-4); }
-.field { margin-bottom: var(--space-12); }
+label { display: block; font-size: 13px; color: var(--hint); margin-bottom: var(--space-8);
+  font-weight: 500;
+  line-height: 1.4;
+}
+.field { margin-bottom: var(--space-20); }
 
 /* Стрелки number-инпута у разных браузеров рисуются по-разному — глушим,
    чтобы поле "Курс" не выбивалось стилем из остальной формы. */
@@ -834,11 +948,11 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
      и «а», и плашка превращалась в две строки поперёк. */
   white-space: nowrap;
 }
-.badge--new { background: #e8f0fe; color: #1a56b8; }
-.badge--in_progress { background: #fff3cd; color: #8a6d00; }
+.badge--new { background: rgba(126, 170, 214, .13); color: #abcbed; }
+.badge--in_progress { background: var(--accent-soft); color: var(--accent); }
 .badge--review { background: rgba(217,181,123,.2); color: var(--accent); }
-.badge--done { background: #d7f2e3; color: #1d6b45; }
-.badge--overdue { background: #fde2e0; color: #a02c22; }
+.badge--done { background: var(--success-bg); color: var(--success); }
+.badge--overdue { background: var(--danger-bg); color: var(--danger); }
 .badge--cancelled { background: var(--border); color: var(--hint); }
 
 .progress {
@@ -861,22 +975,28 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, .45);
+  background: rgba(0, 0, 0, .66);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   z-index: 50;
+  padding-top: max(var(--space-16), var(--top-inset));
 }
 .modal {
   width: 100%;
-  max-width: 560px;
+  max-width: 620px;
   max-height: 92vh;
+  max-height: min(92vh, calc(100dvh - max(var(--space-16), var(--top-inset))));
   overflow-y: auto;
-  background: var(--bg);
-  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
   /* По бокам просторнее, чем у обычного экрана: окно шире (до 560 точек), и
      на этой ширине те же 16 читались как «текст прижат к краю». */
-  padding: var(--space-20) var(--space-20) var(--space-24);
+  padding: var(--space-24) var(--space-24) calc(var(--space-24) + env(safe-area-inset-bottom, 0px));
+  border: 1px solid var(--rule-strong);
+  border-bottom: 0;
+  overscroll-behavior: contain;
+  scroll-padding-block: var(--space-24);
 }
 /* Тело модалки — это просто конкатенированные строки HTML (см. app.js::modal),
    не форма с общим gap: без этого правила соседние блоки вроде .card +
@@ -890,28 +1010,31 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    содержимое в одной обёртке — и внутри неё блоки слипались. */
 .stack > * + * { margin-top: var(--space-12); }
 .stack > .section-title + * { margin-top: var(--space-8); }
-.modal__title { font-weight: 600; font-size: 17px; margin-bottom: var(--space-12); }
+.modal__title { font-weight: 400; font-size: 26px; margin-bottom: var(--space-12);
+  line-height: 1.2;
+}
 .modal__header {
   position: sticky;
-  top: calc(var(--space-16) * -1);
+  top: calc(var(--space-24) * -1);
   z-index: 1;
-  margin: calc(var(--space-16) * -1) calc(var(--space-16) * -1) var(--space-12);
-  padding: var(--space-16) var(--space-16) var(--space-8);
-  background: var(--bg);
+  margin: calc(var(--space-24) * -1) calc(var(--space-24) * -1) var(--space-20);
+  padding: var(--space-20) var(--space-24) var(--space-16);
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-12);
+  border-bottom: 1px solid var(--border);
 }
 .modal__header .modal__title { margin-bottom: 0; }
 .modal__close {
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: none;
-  background: var(--secondary-bg);
+  background: var(--surface-raised);
   border-radius: 50%;
-  font-size: 20px;
+  font-size: 24px;
   line-height: 1;
   cursor: pointer;
   color: var(--text);
@@ -920,14 +1043,18 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: var(--space-20);
+  bottom: calc(88px + max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)));
   transform: translateX(-50%);
-  background: var(--accent);
-  color: #fff;
-  padding: var(--space-8) var(--space-16);
-  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: var(--space-12) var(--space-16);
+  border-radius: 14px;
   font-size: 13px;
   z-index: 100;
+  border: 1px solid var(--rule-strong);
+  max-width: calc(100% - 32px);
+  width: max-content;
+  line-height: 1.4;
 }
 
 .checklist { max-height: 45vh; overflow-y: auto; }
@@ -977,8 +1104,8 @@ body.viewer-open { overflow: hidden; }
 }
 .viewer__counter { font-size: 14px; font-variant-numeric: tabular-nums; }
 .viewer__close {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: none;
   border-radius: 50%;
   background: rgba(255, 255, 255, .16);
@@ -1010,12 +1137,15 @@ body.viewer-open { overflow: hidden; }
 .post {
   position: relative;
   background: var(--secondary-bg);
-  border-radius: 14px;
+  border-radius: 20px;
   overflow: hidden;
+  border: 1px solid var(--border);
 }
 
-.post__body { padding: var(--space-12); }
-.post__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.post__body { padding: var(--space-12) var(--space-20) var(--space-20); }
+.post__text { white-space: pre-wrap; overflow-wrap: anywhere;
+  line-height: 1.65;
+}
 
 .post__meta {
   display: flex;
@@ -1099,14 +1229,15 @@ body.viewer-open { overflow: hidden; }
 .post__comments { border-top: 1px solid var(--border); }
 .post__comments-toggle {
   width: 100%;
-  padding: var(--space-12);
+  padding: var(--space-12) var(--space-20);
   border: none;
   background: none;
   color: var(--accent);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
   cursor: pointer;
+  min-height: 48px;
 }
 .post__thread { padding: 0 var(--space-12) var(--space-12); }
 
@@ -1211,8 +1342,8 @@ input:checked + .switch__track .switch__dot {
 .post__head {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-12) var(--space-12) var(--space-8);
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20) var(--space-8);
 }
 .post__author {
   display: flex;
@@ -1231,8 +1362,8 @@ input:checked + .switch__track .switch__dot {
 /* У поста от Братства или отделения профиля нет — курсор не обещает перехода. */
 .post__author--static { cursor: default; }
 .post__byline {
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 500;
+  font-size: 15px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1264,14 +1395,14 @@ input:checked + .switch__track .switch__dot {
   display: flex;
   align-items: center;
   gap: var(--space-16);
-  padding: var(--space-8) var(--space-12) var(--space-12);
+  padding: var(--space-8) var(--space-20) var(--space-16);
 }
 
 .act {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
-  min-height: 32px;
+  min-height: 44px;
   border: none;
   background: none;
   padding: 0;
@@ -1323,9 +1454,15 @@ input:checked + .switch__track .switch__dot {
    один человек показан двумя разными способами. */
 
 .profile-top { display: flex; align-items: center; gap: var(--space-12); }
-.profile-top__main { min-width: 0; }
-.profile-top__name { display: flex; align-items: center; gap: var(--space-4); }
-.pf-name { font-family: "Playfair Display", Georgia, serif; font-size: 20px; line-height: 1.2; }
+.profile-top__main { min-width: 0;
+  flex: 1 1 auto;
+}
+.profile-top__name { display: flex; align-items: flex-start; gap: var(--space-4); }
+.pf-name { font-family: "Google Sans", sans-serif; font-size: 24px; line-height: 1.25;
+  font-weight: 500;
+  overflow-wrap: break-word;
+  letter-spacing: -.02em;
+}
 
 .avatar--lg { width: 72px; height: 72px; font-size: 26px; }
 
@@ -1342,7 +1479,9 @@ input:checked + .switch__track .switch__dot {
   margin-top: var(--space-4);
   color: var(--accent);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 500;
+  flex-wrap: wrap;
+  line-height: 1.4;
 }
 .role-line svg { width: 15px; height: 15px; flex: none; }
 
@@ -1360,10 +1499,10 @@ textarea {
   align-items: center;
   gap: var(--space-12);
   width: 100%;
-  min-height: 56px;
-  padding: var(--space-8) var(--space-12);
-  border: none;
-  border-radius: 14px;
+  min-height: 64px;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--border);
+  border-radius: 16px;
   background: var(--secondary-bg);
   color: var(--text);
   font-family: inherit;
@@ -1377,8 +1516,8 @@ textarea {
 /* Действия с постом — под троеточием в углу, а не словом в ряду счётчиков. */
 .post__menu {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: none;
   padding: 0;
@@ -1429,7 +1568,7 @@ textarea {
   font-size: 14px;
   cursor: pointer;
 }
-.ptab--on { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
+.ptab--on { color: var(--text); font-weight: 500; border-bottom-color: var(--accent); }
 .ptab__count {
   display: inline-flex;
   align-items: center;
@@ -1455,7 +1594,7 @@ textarea {
 
 /* Карточка-список: отступ по бокам есть, сверху и снизу его дают сами
    строки, иначе первая и последняя строка отбиваются вдвое. */
-.card--rows { padding: 0 var(--space-12); }
+.card--rows { padding: 0 var(--space-20); }
 /* Пояснение к настройке — внутри её же карточки, а не отдельной строкой
    под ней: оно объясняет тумблер, а не экран. */
 .card__note {
@@ -1468,10 +1607,11 @@ textarea {
 .pstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); }
 .pstat { text-align: center; }
 .pstat__num {
-  font-family: "Playfair Display", Georgia, serif;
-  font-size: 20px;
+  font-family: "Google Sans", sans-serif;
+  font-size: 24px;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 .pstat__label { font-size: 12px; color: var(--hint); }
 
@@ -1501,7 +1641,9 @@ textarea {
 }
 .pempty .btn { margin-top: var(--space-8); }
 .pempty__icon { width: 32px; height: 32px; color: var(--accent); margin-bottom: var(--space-8); }
-.pempty__title { font-family: "Playfair Display", Georgia, serif; font-size: 17px; }
+.pempty__title { font-family: "Forum", Georgia, serif; font-size: 24px;
+  font-weight: 400;
+}
 
 .pabout { white-space: pre-wrap; overflow-wrap: anywhere; }
 
@@ -1510,11 +1652,12 @@ textarea {
   display: flex;
   align-items: flex-start;
   gap: var(--space-8);
-  padding: var(--space-12);
+  padding: var(--space-16);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: rgba(217, 181, 123, 0.10);
-  font-size: 13px;
+  background: var(--accent-soft);
+  font-size: 14px;
+  line-height: 1.5;
 }
 .notice svg { width: 18px; height: 18px; flex: none; margin-top: 2px; color: var(--accent); }
 .notice .btn { margin-top: var(--space-8); }
@@ -1589,6 +1732,7 @@ textarea {
 .duty__name--empty { color: var(--hint); }
 .duty__acts { display: flex; gap: var(--space-4); flex: none; }
 .duty__act {
+  min-height: 40px;
   padding: var(--space-4) var(--space-8);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1630,6 +1774,7 @@ textarea {
    действий, которая уже сбросила фон и рамку, а здесь она сама по себе — без
    сброса выходил белый прямоугольник. */
 .bureau__act {
+  min-height: 40px;
   padding: var(--space-4) var(--space-8);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -1805,7 +1950,9 @@ textarea {
 
 .stats2 { display: flex; gap: var(--space-8); }
 .stats2 .stat2 { flex: 1 1 0; }
-.stat2__value { font-size: 20px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat2__value { font-size: 26px; font-weight: 500; margin-top: 2px; font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
 .stat2__value--accent { color: var(--accent); }
 
 /* Полоска внутри строки задания — уже, чем в «Академии»: там она главный
@@ -1872,18 +2019,25 @@ textarea {
 .date-choice input[type="date"]::-webkit-datetime-edit { display: none; }
 .date-choice input[type="date"]::-webkit-calendar-picker-indicator { width: 24px; height: 24px; margin: auto; opacity: .9; }
 
-.academy-progress__number { color: var(--accent); font-size: 28px; font-weight: 700; margin: var(--space-8) 0; }
+.academy-progress__number { color: var(--accent); font-size: 32px; font-weight: 500; margin: var(--space-8) 0;
+  letter-spacing: -.03em;
+}
 .quest-description { margin-top: var(--space-4); line-height: 1.4; }
-.quest-review { margin-top: var(--space-8); padding: 7px 9px; border-radius: 9px; background: rgba(217,181,123,.12); color: var(--accent); font-size: 12px; line-height: 1.4; }
-.quest-assigned { margin-top: var(--space-8); padding: 7px 9px; border-radius: 9px; background: rgba(95,134,181,.13); color: #9fc5ed; font-size: 12px; line-height: 1.4; }
+.quest-review { margin-top: var(--space-8); padding: var(--space-8) var(--space-12); border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 13px; line-height: 1.4; }
+.quest-assigned { margin-top: var(--space-8); padding: var(--space-8) var(--space-12); border-radius: 10px; background: rgba(95,134,181,.13); color: #9fc5ed; font-size: 13px; line-height: 1.4; }
 
-.hero-card { margin-bottom: var(--space-16); padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: radial-gradient(circle at top right, rgba(217,181,123,.13), transparent 52%), var(--surface); }
-.hero-card h2 { margin: 5px 0 7px; }
+.hero-card { margin-bottom: var(--space-16); padding: var(--space-24); border: 1px solid var(--border); border-radius: 20px; background: var(--surface); }
+.hero-card h2 { margin: var(--space-8) 0 var(--space-12);
+  font-family: "Forum", Georgia, serif;
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.15;
+}
 .hero-card p { margin: 0; color: var(--hint); line-height: 1.45; }
 .stats3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); margin-bottom: var(--space-16); }
 .academy-member { display: grid; gap: var(--space-12); }
-.academy-member__numbers { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--hint); font-size: 12px; }
-.academy-member__pending { display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: rgba(217,181,123,.09); color: var(--hint); font-size: 12px; line-height: 1.4; }
+.academy-member__numbers { display: flex; flex-wrap: wrap; gap: var(--space-8) var(--space-16); color: var(--hint); font-size: 13px; }
+.academy-member__pending { display: grid; gap: var(--space-8); padding: var(--space-12); border-radius: 12px; background: var(--accent-soft); color: var(--hint); font-size: 13px; line-height: 1.4; }
 .academy-member__pending strong { color: var(--text); }
 @media (max-width: 430px) { .stats3 { grid-template-columns: 1fr; } }
 
@@ -1953,51 +2107,50 @@ textarea {
 /* --- Регистрация и узкие экраны ----------------------------------------- */
 html, body { max-width: 100%; overflow-x: hidden; }
 .view, .card, .row, .row__side { min-width: 0; max-width: 100%; }
-.btn {
-  min-width: 0;
-  max-width: 100%;
-  line-height: 1.25;
-  text-align: center;
-  white-space: normal;
-  word-break: normal;
-  overflow-wrap: break-word;
-  writing-mode: horizontal-tb;
-}
 .btn[hidden] { display: none; }
-.register-card { width: 100%; max-width: 620px; margin: 0 auto; }
+.register-card { width: 100%; max-width: 620px; margin: 0 auto;
+  padding: var(--space-24);
+}
 .register-lead {
   margin: 0 0 var(--space-16);
-  padding: var(--space-12);
+  padding: var(--space-16);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--hint);
   line-height: 1.45;
+  background: var(--field-bg);
+  font-size: 14px;
 }
 .phone-verify { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-8); }
-.phone-verify .btn { min-height: 42px; }
-.field-hint { margin-top: var(--space-4); color: var(--hint); font-size: 12px; line-height: 1.35; }
+.phone-verify .btn { min-height: 44px; }
+.field-hint { margin-top: var(--space-4); color: var(--hint); font-size: 13px; line-height: 1.5; }
 .field-hint--success { color: var(--success); }
 .label-optional { margin-left: var(--space-4); color: var(--hint); font-weight: 400; }
 
 @media (max-width: 520px) {
-  body { font-size: 14px; }
-  .view { padding: var(--space-8); gap: var(--space-8); }
-  .topbar { padding-left: var(--space-8); padding-right: var(--space-8); }
+  body { font-size: 15px; }
+  .view { padding: var(--space-20) var(--space-16); gap: var(--space-16); }
+  .topbar { padding-left: var(--space-16); padding-right: var(--space-16); }
   .topbar__row { gap: var(--space-8); }
   .topbar__row > div:first-child { min-width: 0; }
-  .topbar__title, .topbar__subtitle { overflow-wrap: anywhere; }
-  .cabinet { max-width: 52%; padding-left: var(--space-8); padding-right: var(--space-8); }
-  .card { padding: var(--space-12); }
-  .modal { padding: var(--space-16) var(--space-12) var(--space-24); }
+  .topbar__title { font-size: 18px; }
+  .topbar__title, .topbar__subtitle { overflow-wrap: break-word; }
+  .cabinet { max-width: 46%; padding-inline: var(--space-12); }
+  .card { padding: var(--space-16); }
+  .card--rows { padding-block: 0; }
+  .pcard { padding: 0; }
+  .modal { padding: var(--space-20) var(--space-16) calc(var(--space-24) + env(safe-area-inset-bottom, 0px)); }
   .modal__header {
-    margin-left: calc(var(--space-12) * -1);
-    margin-right: calc(var(--space-12) * -1);
-    padding-left: var(--space-12);
-    padding-right: var(--space-12);
+    margin-left: calc(var(--space-16) * -1);
+    margin-right: calc(var(--space-16) * -1);
+    margin-top: calc(var(--space-20) * -1);
+    top: calc(var(--space-20) * -1);
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
   }
   .row { gap: var(--space-8); }
   .row__side { flex-shrink: 1; }
-  .btn-row > .btn { flex: 1 1 128px; min-height: 42px; }
+  .btn-row > .btn { flex: 1 1 128px; min-height: 44px; }
   .phone-verify { grid-template-columns: 1fr; }
   .phone-verify .btn { width: 100%; }
   .quest {
@@ -2013,25 +2166,25 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
   .quest .row__side .btn {
     flex: 1 1 112px;
-    min-height: 40px;
+    min-height: 44px;
     white-space: normal;
   }
   .quest .row__side .reward-badge { margin-left: 0; }
   .quest .row__side .reward-skin { margin: 0 auto; }
   .academy-member > .row { flex-wrap: wrap; align-items: flex-start; }
-  .academy-member > .btn { width: 100%; min-height: 42px; }
-  .stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+  .academy-member > .btn { width: 100%; min-height: 44px; }
+  .stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); }
   .stats3 .card { padding: var(--space-8); }
-  .stats3 .row__sub { line-height: 1.2; }
+  .stats3 .row__sub { font-size: 12px; line-height: 1.4; }
   .stat2__value { font-size: 20px; }
   .tab { min-width: 0; padding-left: 2px; padding-right: 2px; }
-  .tab__label { font-size: 10px; }
+  .tab__label { font-size: 11px; }
 }
 
 @media (max-width: 340px) {
   .stats3 { grid-template-columns: 1fr; }
   .cabinet { max-width: 48%; }
-  .tab__label { font-size: 9px; }
+  .tab__label { font-size: 10px; }
 }
 
 /* Срок задачи в календаре — другим цветом, чем мероприятие: в клетке помещается
@@ -2055,4 +2208,62 @@ input::-webkit-date-and-time-value { text-align:left; }
   .modal .quest .row__side { max-width:100%; }
   .academy-member .radar-svg { width:100%; max-width:340px; }
 }
-.task-unread { display:inline-block; width:8px; height:8px; margin-right:8px; border-radius:50%; background:#e4483d; vertical-align:middle; flex-shrink:0; }
+.task-unread { display:inline-block; width:8px; height:8px; margin-right:8px; border-radius:50%; background:var(--danger); vertical-align:middle; flex-shrink:0; }
+
+
+/* Shared interaction states. No extra motion or network work is introduced. */
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button { touch-action: manipulation; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input::placeholder, textarea::placeholder { color: var(--hint); opacity: .85; }
+::selection { background: var(--accent); color: var(--button-text); }
+.topbar__row > div:first-child { min-width: 0; flex: 1 1 auto; }
+.card, .post, .stat, .hero-card, .ozon-card, .academy-member { min-width: 0; }
+.layout-desktop .bottom-nav { max-width: 1000px; margin-inline: auto; }
+.layout-desktop .view { padding-top: var(--space-32); }
+body[data-cabinet-mode="personal"] .profile-top { padding-block: var(--space-8); }
+body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padding-block: var(--space-12); }
+.viewer__close, .modal__close, .btn-icon { display: inline-flex; align-items: center; justify-content: center; }
+.register-card .card__title { font-size: 30px; }
+.academy-member > .row { align-items: flex-start; }
+.academy-member summary { min-height: 44px; padding-block: var(--space-8); cursor: pointer; }
+.radar-svg { display: block; width: 100%; max-width: 320px; height: auto; margin: var(--space-16) auto; overflow: hidden; }
+.bureau__acts, .bureau__name { overflow-wrap: break-word; }
+.row__side:has(.btn, .btn-icon) { flex-wrap: wrap; }
+.table-wrap { max-width: 100%; }
+
+@media (hover: hover) {
+  .btn:not(:disabled):not(.btn--off):hover { background: #e4c48f; color: var(--button-text); }
+  .btn--ghost:not(:disabled):hover { background: var(--surface-raised); color: var(--text); border-color: var(--rule-strong); }
+  .btn--danger:not(:disabled):hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+  .btn--dashed:not(:disabled):hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .row--clickable:hover, .more-list__item:hover { background: var(--accent-soft); }
+  .chip:not(.chip--active):hover, .cabinet:hover { border-color: var(--rule-strong); }
+}
+@media (max-width: 380px) {
+  .view { padding-inline: var(--space-12); }
+  .topbar { padding-inline: var(--space-12); }
+  .topbar__title { font-size: 17px; }
+  .cabinet { max-width: 46%; font-size: 12px; gap: var(--space-4); }
+  .ozon-grid { gap: var(--space-8); }
+  .ozon-card { padding: var(--space-8); }
+  .stats3 { grid-template-columns: 1fr; }
+  .post__body { padding-inline: var(--space-16); }
+  .post__head { padding-inline: var(--space-16); }
+}
+@media (max-width: 520px) {
+  .duty { flex-wrap: wrap; }
+  .duty__body { flex-basis: calc(100% - 48px); }
+  .duty__acts { flex-wrap: wrap; margin-left: 40px; }
+  .row:has(.bureau__acts) { flex-wrap: wrap; }
+  .bureau__acts { flex-direction: row; flex-wrap: wrap; width: 100%; padding-left: 48px; }
+  .duty__act, .bureau__act { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

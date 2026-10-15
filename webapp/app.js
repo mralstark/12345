@@ -5,6 +5,9 @@
 (function () {
   'use strict';
 
+  // Visual system: locally hosted Forum + Google Sans, graphite / warm gold.
+  // Keep a JS revision so Telegram's existing version check refreshes old CSS too.
+
   // Самопроверка версии: у некоторых клиентов Telegram (замечено на
   // телефонах) WebView конкретного открытого чата с ботом не перезагружается
   // заново даже после закрытия/переоткрытия и очистки кэша Telegram в
@@ -1006,6 +1009,8 @@
   }
 
   function renderTab() {
+    document.body.dataset.cabinetMode = state.cabinetMode || 'personal';
+    document.body.dataset.screen = state.tab || 'home';
     const renderers = {
       dashboard: renderDashboard,
       members: renderMembers,
@@ -1717,10 +1722,10 @@
       '<div class="stat"><div class="stat__label">Итог периода</div><div class="stat__value">' + money(overview.net) + '</div></div>' +
       '</div>' +
       (canEdit()
-        ? '<div class="btn-row"><button class="btn" id="addTx">➕ Операция</button>' +
+        ? '<div class="btn-row"><button class="btn" id="addTx"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Операция</button>' +
           '<button class="btn btn--ghost" id="manageCats">📁 Категории</button>' +
-          '<button class="btn btn--ghost" id="exportCsv">⬇️ CSV</button></div>'
-        : '<div class="btn-row"><button class="btn btn--ghost" id="exportCsv">⬇️ CSV</button></div>') +
+          '<button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> CSV</button></div>'
+        : '<div class="btn-row"><button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> CSV</button></div>') +
       '<div class="card"><div class="card__title">Расходы по категориям</div>' + breakdown + '</div>' +
       '<div class="card"><div class="card__title">Операции · ' + esc(transactions.period_label) + '</div>' + list + '</div>'
     , gen);
@@ -1982,7 +1987,7 @@
 
     modal(dateRu(iso),
       '<div class="card">' + rows + '</div>' +
-      (options.canCreate ? '<button class="btn btn--block" id="agendaAdd">➕ Создать на этот день</button>' : '') +
+      (options.canCreate ? '<button class="btn btn--block" id="agendaAdd"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Создать на этот день</button>' : '') +
       '<div class="btn-row"><button class="btn btn--ghost" id="agendaClose">Закрыть</button></div>',
       () => {
         document.getElementById('agendaClose').onclick = closeModal;
@@ -2033,7 +2038,7 @@
     const calendarItems = calendarData.items.concat(deadlines);
 
     setView(
-      (canEdit() ? '<button class="btn btn--block" id="addEvent">➕ Создать мероприятие</button>' : '') +
+      (canEdit() ? '<button class="btn btn--block" id="addEvent"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Создать мероприятие</button>' : '') +
       '<div class="card" id="calRoot"></div>' +
       '<div class="chips">' +
       [['upcoming', 'Предстоящие'], ['past', 'Прошедшие'], ['all', 'Все']].map((s2) =>
@@ -2153,7 +2158,7 @@
       (event.description ? '<div class="card">' + esc(event.description) + '</div>' : '') +
       (event.status === 'planned'
         ? (event.going === null || event.going === undefined
-          ? '<div class="btn-row"><button class="btn" id="rsvpYes">✅ Иду</button><button class="btn btn--ghost" id="rsvpNo">❌ Не иду</button></div>'
+          ? '<div class="btn-row"><button class="btn" id="rsvpYes"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Иду</button><button class="btn btn--ghost" id="rsvpNo"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>Не иду</button></div>'
           : '<div class="btn-row"><button class="btn btn--ghost" id="rsvpCancel">Отменить выбор</button></div>')
         : '') +
       '<div class="btn-row"><button class="btn btn--ghost" id="evClose">Закрыть</button></div>',
@@ -2206,7 +2211,7 @@
       (event.description ? '<div class="card">' + esc(event.description) + '</div>' : '') +
       '<div class="btn-row">' +
       '<button class="btn" id="evTasks">📋 Задачи' + (event.tasks.length ? ' (' + tasksDone + '/' + event.tasks.length + ')' : '') + '</button>' +
-      (editable ? '<button class="btn" id="evAttendance">✅ Участники</button>' : '') +
+      (editable ? '<button class="btn" id="evAttendance"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Участники</button>' : '') +
       (editable ? '<button class="btn btn--ghost" id="evEdit">✏️ Изменить</button>' : '') +
       (editable ? '<button class="btn btn--danger" id="evDelete">Удалить</button>' : '') +
       '<button class="btn btn--ghost" id="evClose">Закрыть</button></div>',
@@ -2445,7 +2450,7 @@
       '<div class="row__sub">' + esc(doc.doc_type || 'Без типа') + ' · ' + Math.max(1, Math.round(doc.size_bytes / 1024)) + ' КБ' +
       (doc.event_title ? ' · 🎪 ' + esc(doc.event_title) : '') +
       (doc.author_name ? ' · ' + esc(doc.author_name) : '') + '</div></div>' +
-      '<div class="row__side"><button class="btn btn--ghost btn--small" data-doc-download="' + doc.id + '" data-name="' + esc(doc.original_name) + '">⬇️</button>' +
+      '<div class="row__side"><button class="btn btn--ghost btn--small" aria-label="Скачать документ" data-doc-download="' + doc.id + '" data-name="' + esc(doc.original_name) + '"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg></button>' +
       (canEdit() ? '<button class="btn btn--ghost btn--small" data-doc-delete="' + doc.id + '">✕</button>' : '') +
       '</div></div>').join('') : '<div class="empty">Документов нет</div>';
 
@@ -2777,7 +2782,7 @@
           '<button class="chip' + (state.tasksBox === 'outbox' ? ' chip--active' : '') + '" data-box="outbox">Поставленные мной</button>' +
           '</div>'
         : '') +
-      (data.can_assign ? '<button class="btn btn--block" id="addTask">➕ Поставить задачу</button>' : '') +
+      (data.can_assign ? '<button class="btn btn--block" id="addTask"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Поставить задачу</button>' : '') +
       '<div class="card">' + rows + '</div>'
     , gen);
 
@@ -2983,8 +2988,8 @@
       '<option value="semester">Текущий семестр</option>' +
       '<option value="year" selected>Текущий год</option>' +
       '<option value="all">За всё время</option></select></div>' +
-      '<div class="btn-row"><button class="btn" id="rpXlsx">⬇️ Excel (.xlsx)</button>' +
-      '<button class="btn btn--ghost" id="rpPdf">⬇️ PDF</button></div></div>'
+      '<div class="btn-row"><button class="btn" id="rpXlsx"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> Excel (.xlsx)</button>' +
+      '<button class="btn btn--ghost" id="rpPdf"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> PDF</button></div></div>'
     , gen);
 
     const build = (format) => {
@@ -3293,7 +3298,7 @@
     setView(
       (rows || '<div class="empty">Активных отделений нет</div>') + archivedRows +
       (data.can_create_region
-        ? '<button class="btn btn--block btn--dashed" id="regionsCreate">➕ Создать отделение</button>'
+        ? '<button class="btn btn--block btn--dashed" id="regionsCreate"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Создать отделение</button>'
         : '')
     , gen);
 
@@ -3405,7 +3410,7 @@
         '<div class="row__sub">' + esc(eduLine) + '</div>' +
         (a.workplace ? '<div class="row__sub">' + esc(a.workplace) + '</div>' : '') +
         '<div class="btn-row">' +
-        '<button class="btn" data-approve="' + a.id + '">✅ Подтвердить</button>' +
+        '<button class="btn" data-approve="' + a.id + '"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Подтвердить</button>' +
         '<button class="btn btn--ghost" data-edit-application="' + a.id + '">✏️ Исправить</button>' +
         '<button class="btn btn--danger" data-reject="' + a.id + '">❌ Отклонить</button>' +
         '</div></div>';
@@ -3775,7 +3780,7 @@
   function buildRadarSvg(points) {
     const n = points.length;
     if (!n) return '';
-    const size = 220, cx = size / 2, cy = size / 2, r = size / 2 - 52;
+    const width = 280, height = 240, cx = width / 2, cy = height / 2, r = 60;
     const angleFor = (i) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
     const ringPoints = (frac) => points.map((_, i) => {
       const a = angleFor(i);
@@ -3796,14 +3801,13 @@
     const labels = points.map((p, i) => {
       const a = angleFor(i);
       const cosA = Math.cos(a);
-      const lx = (cx + cosA * (r + 20)).toFixed(1), ly = (cy + Math.sin(a) * (r + 20)).toFixed(1);
-      const anchor = cosA > 0.3 ? 'start' : cosA < -0.3 ? 'end' : 'middle';
-      return '<text x="' + lx + '" y="' + ly + '" text-anchor="' + anchor + '" dominant-baseline="middle" font-size="11" fill="var(--text)">' +
+      const lx = (cx + cosA * (r + 28)).toFixed(1), ly = (cy + Math.sin(a) * (r + 28)).toFixed(1);
+      return '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="var(--hint)">' +
         esc(p.label) + '</text>';
     }).join('');
-    return '<svg viewBox="0 0 ' + size + ' ' + size + '" style="width:100%;max-width:260px;display:block;margin:0 auto;overflow:visible">' +
+    return '<svg class="radar-svg" role="img" aria-label="Прогресс по направлениям Академии" viewBox="0 0 ' + width + ' ' + height + '">' +
       grid + axes +
-      '<polygon points="' + dataPoly + '" fill="var(--button)" fill-opacity="0.35" stroke="var(--button)" stroke-width="2"/>' +
+      '<polygon points="' + dataPoly + '" fill="var(--button)" fill-opacity="0.16" stroke="var(--button)" stroke-width="2"/>' +
       labels + '</svg>';
   }
 
