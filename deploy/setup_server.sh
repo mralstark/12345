@@ -221,12 +221,12 @@ chmod 640 "$APP_DIR/.env"
 
 echo "==> Миграции безопасности"
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_security_constraints)
+(cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_articles)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_university_active)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_operational_roles_and_reviews)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_cabinet_revisions)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_gamification)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_service_reliability)
-(cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_articles)
 
 echo "==> systemd"
 install -m 644 "$APP_DIR/deploy/bratstvo-bot.service" /etc/systemd/system/bratstvo-bot.service
