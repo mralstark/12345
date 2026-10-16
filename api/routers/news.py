@@ -54,6 +54,7 @@ from services.news import (
     can_delete_post,
     can_post_news,
     can_post_officially,
+    can_see_post,
     create_news,
     delete_comment,
     delete_news,
@@ -314,6 +315,21 @@ async def publish(
             _warn_leadership, post.id, post.byline, short_name(user.full_name), list(flagged)
         )
     return {"id": post.id, "byline": post.byline, "photos": photos}
+
+
+@router.get("/photos/{photo_id}/url")
+async def refresh_photo_url(
+    photo_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    item = await session.get(NewsPhoto, photo_id)
+    post = await session.get(NewsPost, item.post_id) if item else None
+    if post is None:
+        raise HTTPException(404, "Фотография не найдена")
+    if not await can_see_post(session, user, post):
+        raise AccessDenied("Нет доступа к фотографии")
+    return {"url": photo_url(photo_id)}
 
 
 @router.get("/photos/{photo_id}")

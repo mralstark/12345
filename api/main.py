@@ -17,10 +17,12 @@ from api.routers import (
     analytics,
     applications,
     bureau,
+    browser_login,
     cells,
     character,
     context,
     documents,
+    downloads,
     event_tasks,
     events,
     finance,
@@ -128,6 +130,7 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
 
 
 for router in (
+    browser_login.router,
     academy.router,
     context.router,
     applications.router,
@@ -137,6 +140,7 @@ for router in (
     events.router,
     event_tasks.router,
     documents.router,
+    downloads.router,
     cells.router,
     universities.router,
     profile.router,

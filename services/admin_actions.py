@@ -23,6 +23,7 @@ from database.models import (
     ROLE_SUPERUSER,
     BirthdayNotice,
     BureauMember,
+    BrowserSession,
     Category,
     CoordinatorRegion,
     Document,
@@ -453,6 +454,7 @@ async def reactivate_user(session: AsyncSession, user_id: int) -> User:
 # перечень писался руками и отстал от схемы на пять таблиц. Считать ссылки
 # глазами оказалось нельзя — теперь их считает тест.
 EXCLUDE_HANDLES_USER_REFS = frozenset({
+    "browser_sessions.user_id",
     "regions.leader_user_id",
     "university_cells.leader_user_id",
     "users.view_as_user_id",
@@ -542,6 +544,7 @@ async def exclude_member(
 
         # NOT NULL поля — оставить не с кем, удаляем сами записи, а не обнуляем.
         await _delete_all(session, BureauMember, BureauMember.user_id == user.id)
+        await _delete_all(session, BrowserSession, BrowserSession.user_id == user.id)
         await _delete_all(session, NewsComment, NewsComment.author_user_id == user.id)
         await _delete_all(session, NewsReaction, NewsReaction.user_id == user.id)
         await _delete_all(session, NewsView, NewsView.user_id == user.id)

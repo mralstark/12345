@@ -116,6 +116,9 @@ def ensure_impersonation_read_only(user: User, method: str, path: str) -> None:
         return
     if path == "/api/me/stop-impersonation":
         return
+    if method.upper() == "POST" and path in {"/api/reports/region/file", "/api/downloads/prepare"}:
+        # Preparing a short-lived export only reads the target's regional data.
+        return
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Режим «Войти как» доступен только для просмотра")
 
 
@@ -127,6 +130,15 @@ async def get_current_user(request: Request, authorization: str = Header(default
     if DEV_TELEGRAM_ID:
         # Режим локальной отладки — включается только явной переменной окружения.
         telegram_id = int(DEV_TELEGRAM_ID)
+    elif not authorization:
+        from services.browser_login import same_origin, session_user
+        browser_user = await session_user(request)
+        if browser_user is None:
+            raise HTTPException(401, "Войдите через Telegram")
+        if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+            same_origin(request)
+        telegram_id = browser_user.telegram_id
+        full_name = browser_user.full_name
     else:
         scheme, _, raw = authorization.partition(" ")
         if scheme.lower() != "tma" or not raw:

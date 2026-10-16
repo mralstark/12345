@@ -89,7 +89,7 @@ def build_region_xlsx(report: RegionReport) -> bytes:
     events_sheet = workbook.create_sheet("Мероприятия")
     _write_table(
         events_sheet,
-        ["Дата", "Название", "Статус", "План, ₽", "Факт, ₽", "Участников"],
+        ["Дата", "Название", "Статус", "План, ₽", "Факт, ₽", "Отмечено членов", "Всего посетителей"],
         [
             (
                 event_date.strftime("%d.%m.%Y"),
@@ -98,10 +98,11 @@ def build_region_xlsx(report: RegionReport) -> bytes:
                 format_kopecks(planned) if planned is not None else "",
                 format_kopecks(fact),
                 attended,
+                total if total is not None else "Не указано",
             )
-            for event_date, title, status, planned, fact, attended in report.events
+            for event_date, title, status, planned, fact, attended, total in report.events
         ],
-        widths=[12, 40, 16, 14, 14, 12],
+        widths=[12, 40, 16, 14, 14, 22, 22],
     )
 
     buffer = io.BytesIO()
@@ -282,7 +283,7 @@ def build_region_pdf(report: RegionReport) -> bytes:
         ),
         Paragraph("Мероприятия", heading_style),
         table(
-            ["Дата", "Название", "Статус", "План, ₽", "Факт, ₽", "Участников"],
+            ["Дата", "Название", "Статус", "План, ₽", "Факт, ₽", "Отмечено членов", "Всего посетителей"],
             [
                 [
                     event_date.strftime("%d.%m.%Y"),
@@ -291,17 +292,19 @@ def build_region_pdf(report: RegionReport) -> bytes:
                     format_kopecks(planned) if planned is not None else "—",
                     format_kopecks(fact),
                     str(attended),
+                    str(total) if total is not None else "Не указано",
                 ]
-                for event_date, title, status, planned, fact, attended in report.events
+                for event_date, title, status, planned, fact, attended, total in report.events
             ]
-            or [["—", "", "", "", "", ""]],
+            or [["—", "", "", "", "", "", ""]],
             [
+                total_width * 0.10,
+                total_width * 0.30,
+                total_width * 0.12,
                 total_width * 0.11,
-                total_width * 0.37,
-                total_width * 0.16,
-                total_width * 0.12,
-                total_width * 0.12,
-                total_width * 0.12,
+                total_width * 0.11,
+                total_width * 0.13,
+                total_width * 0.13,
             ],
         ),
     ]

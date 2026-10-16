@@ -15,10 +15,10 @@ class SlidingWindowLimiter:
     def __init__(self, max_keys: int = 20_000) -> None:
         if max_keys < 1:
             raise ValueError("max_keys должен быть положительным")
-        self._events: OrderedDict[tuple[str, int], deque[float]] = OrderedDict()
+        self._events: OrderedDict[tuple[str, int | str], deque[float]] = OrderedDict()
         self._max_keys = max_keys
 
-    def check(self, scope: str, subject: int, limit: int, window_seconds: int) -> int | None:
+    def check(self, scope: str, subject: int | str, limit: int, window_seconds: int) -> int | None:
         now = monotonic()
         key = (scope, subject)
         events = self._events.get(key)
@@ -47,7 +47,7 @@ _limiter = SlidingWindowLimiter()
 
 def enforce_user_rate_limit(telegram_id: int, method: str, path: str) -> None:
     method = method.upper()
-    if "export" in path or path.startswith("/api/reports"):
+    if "export" in path or path.startswith("/api/reports") or path == "/api/downloads/prepare":
         scope, limit, window = "export", 6, 60
     elif method in {"GET", "HEAD", "OPTIONS"}:
         scope, limit, window = "read", 240, 60

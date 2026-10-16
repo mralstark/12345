@@ -2267,3 +2267,9 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+/* Browser sign-in uses the same typography and controls as the cabinet. */
+.browser-login { max-width: 480px; margin: 32px auto; }
+.browser-login p { line-height: 1.55; }
+.browser-login__code { display: block; margin: 12px 0; font-size: 28px; letter-spacing: .16em; font-variant-numeric: tabular-nums; }
+#rpResult:not(:empty) { margin: 20px 0; }
+#rpResult .btn { max-width: 100%; }

@@ -132,7 +132,7 @@
     setTimeout(() => { intro.classList.add('intro--hidden'); }, INTRO_HOLD_MS);
   }
 
-  if (tg) {
+  if (tg && tg.initData) {
     tg.ready();
     tg.expand();
     // expand() тянется только до высоты контента и на Telegram Desktop почти
@@ -300,7 +300,9 @@
             detail = validationMessage(data.detail);
           }
         } catch (e) { /* тело не JSON — оставляем код ответа */ }
-        throw new Error(detail);
+        const error = new Error(detail);
+        error.status = response.status;
+        throw error;
       }
       if (mutating && state.me && path !== '/me/seen') scheduleCountersRefresh();
       if (response.status === 204) return null;
@@ -316,20 +318,63 @@
     return promise;
   }
 
-  async function download(path, fallbackName) {
-    const headers = {};
-    if (tg && tg.initData) headers['Authorization'] = 'tma ' + tg.initData;
-    const response = await fetch('/api' + path, { headers });
-    if (!response.ok) throw new Error('Не удалось сформировать файл');
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fallbackName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  function wireDownloadLink(link, file) {
+    let lastClick = 0;
+    let dialogOpen = false;
+    const expiresAt = Date.now() + (file.expires_in || 600) * 1000 - 5000;
+    link.onclick = (event) => {
+      if (Date.now() >= expiresAt) {
+        event.preventDefault();
+        toast('Ссылка устарела. Подготовьте файл заново.');
+        return;
+      }
+      if (Date.now() - lastClick < 1000 || dialogOpen) { event.preventDefault(); return; }
+      lastClick = Date.now();
+      if (!tg || !tg.initData) return;
+      event.preventDefault();
+      const href = new URL(file.url, location.origin).href;
+      const fallback = () => {
+        dialogOpen = false;
+        if (typeof tg.openLink === 'function') tg.openLink(href);
+        else window.open(href, '_blank', 'noopener');
+      };
+      try {
+        if (typeof tg.downloadFile === 'function' && tg.isVersionAtLeast && tg.isVersionAtLeast('8.0')) {
+          dialogOpen = true;
+          tg.downloadFile({ url: href, file_name: file.filename }, () => { dialogOpen = false; });
+        } else fallback();
+      } catch (error) { fallback(); }
+    };
+  }
+
+  const pendingDownloads = new Map();
+  function download(path, fallbackName) {
+    if (pendingDownloads.has(path)) return pendingDownloads.get(path);
+    const generation = viewGen;
+    const promise = (async () => {
+      const source = new URL(path, location.origin);
+      const documentMatch = source.pathname.match(/^\/documents\/(\d+)\/download$/);
+      let payload;
+      if (documentMatch) payload = { kind: 'document', document_id: Number(documentMatch[1]) };
+      else if (source.pathname === '/finance/export.csv') payload = {
+        kind: 'finance', region_id: Number(source.searchParams.get('region_id')),
+        period: source.searchParams.get('period') || 'year', offset: Number(source.searchParams.get('offset') || 0),
+      };
+      else throw new Error('Неизвестный тип файла');
+      toast('Подготавливаю файл…');
+      const file = await api('/downloads/prepare', { method: 'POST', body: payload });
+      if (generation !== viewGen) return;
+      const href = new URL(file.url, location.origin).href;
+      modal('Файл готов', '<p>Ссылка действует 10 минут.</p>' +
+        '<div class="btn-row"><a class="btn" id="fileDownload" download="' + esc(file.filename || fallbackName) +
+        '" href="' + esc(href) + '">Скачать файл</a>' +
+        '<button class="btn btn--ghost" id="fileClose">Вернуться</button></div>', () => {
+          wireDownloadLink(document.getElementById('fileDownload'), file);
+          document.getElementById('fileClose').onclick = closeModal;
+        });
+    })().finally(() => pendingDownloads.delete(path));
+    pendingDownloads.set(path, promise);
+    return promise;
   }
 
   function esc(value) {
@@ -2205,7 +2250,8 @@
       (contact ? '<div class="row"><div class="row__main">Контакты</div><div class="row__side">' + esc(contact) + '</div></div>' : '') +
       (event.is_recurring ? '<div class="row"><div class="row__main">Повтор</div><div class="row__side">' + esc(event.recurrence_rule) + '</div></div>' : '') +
       budgetBlock +
-      '<div class="row"><div class="row__main">Отмечено участников</div><div class="row__side">' + event.attended_member_ids.length + ' из ' + event.members.length + '</div></div>' +
+      '<div class="row"><div class="row__main">Всего посетителей</div><div class="row__side">' + (event.total_attendees == null ? 'Не указано' : event.total_attendees) + '</div></div>' +
+      '<div class="row"><div class="row__main">Отмечено членов отделения</div><div class="row__side">' + event.attended_member_ids.length + ' из ' + event.members.length + '</div></div>' +
       (event.tasks.length ? '<div class="row"><div class="row__main">Задачи</div><div class="row__side">' + tasksDone + ' из ' + event.tasks.length + ' закрыто</div></div>' : '') +
       '</div>' +
       (event.description ? '<div class="card">' + esc(event.description) + '</div>' : '') +
@@ -2340,9 +2386,23 @@
       });
   }
 
+  function parseHeadcount(value) {
+    const raw = value.trim();
+    if (!raw) return null;
+    if (!/^\d{1,7}$/.test(raw) || Number(raw) > 1000000) {
+      toast('Введите целое число посетителей от 0 до 1 000 000');
+      return undefined;
+    }
+    return Number(raw);
+  }
+
   function attendanceModal(event) {
     const checked = new Set(event.attended_member_ids);
     modal('Участники · ' + event.title,
+      '<div class="field"><label for="attTotal">Всего посетителей, включая гостей</label>' +
+      '<input id="attTotal" type="text" inputmode="numeric" maxlength="7" placeholder="Например, 60" value="' +
+      esc(event.total_attendees == null ? '' : event.total_attendees) + '" />' +
+      '<p class="row__sub">Общее число людей на мероприятии. Членов отделения отметьте отдельно ниже.</p></div>' +
       '<div class="field"><input id="attSearch" placeholder="Поиск по ФИО" /></div>' +
       '<div class="checklist" id="attList">' +
       event.members.map((member) =>
@@ -2363,8 +2423,10 @@
         document.getElementById('attClose').onclick = closeModal;
         document.getElementById('attSave').onclick = async () => {
           const ids = Array.from(document.querySelectorAll('#attList input:checked')).map((input) => Number(input.value));
+          const total = parseHeadcount(document.getElementById('attTotal').value);
+          if (total === undefined) return;
           try {
-            await api('/events/' + event.id + '/attendance', { method: 'PUT', body: { member_ids: ids } });
+            await api('/events/' + event.id + '/attendance', { method: 'PUT', body: { member_ids: ids, total_attendees: total } });
             closeModal();
             toast('Отмечено: ' + ids.length);
             startRender(renderEvents);
@@ -2383,6 +2445,9 @@
       '<div class="field"><label>Название</label><input id="evTitle" value="' + esc(event ? event.title : '') + '" /></div>' +
       '<div class="field"><label>Дата</label><input id="evDate" type="date" value="' + esc(event ? event.date : (prefillDate || todayIsoLocal())) + '" /></div>' +
       '<div class="field"><label>Время</label><input id="evTime" type="time" value="' + esc(event && event.time ? event.time : '') + '" /></div>' +
+      '<div class="field"><label for="evTotal">Всего посетителей, включая гостей</label>' +
+      '<input id="evTotal" inputmode="numeric" maxlength="7" placeholder="Заполните после мероприятия" value="' +
+      esc(event && event.total_attendees != null ? event.total_attendees : '') + '" /></div>' +
       (cellsData.items.length ? '<div class="field"><label>Вузовская ячейка</label><select id="evCell"><option value="">— Регионально-городское —</option>' +
         cellsData.items.map((c) => '<option value="' + c.id + '"' + (event && event.cell_id === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('') +
         '</select></div>' : '') +
@@ -2412,6 +2477,8 @@
           const description = document.getElementById('evDescription').value.trim();
           if (!description) { toast('Введите описание'); return; }
           const budgetRaw = document.getElementById('evBudget').value.replace(',', '.').trim();
+          const total = parseHeadcount(document.getElementById('evTotal').value);
+          if (total === undefined) return;
           const rule = document.getElementById('evRule').value;
           const responsible = document.getElementById('evResponsible').value;
           const evCellEl = document.getElementById('evCell');
@@ -2424,6 +2491,7 @@
             cell_id: evCellEl ? (evCellEl.value ? Number(evCellEl.value) : null) : undefined,
             status: document.getElementById('evStatus').value,
             planned_budget: budgetRaw ? Math.round(parseFloat(budgetRaw) * 100) : null,
+            total_attendees: total,
             is_recurring: Boolean(rule),
             recurrence_rule: rule || null,
             recurrence_until: document.getElementById('evUntil').value || null,
@@ -2981,7 +3049,8 @@
     const regionName = (state.me.regions.find((r) => r.id === state.regionId) || {}).name || '';
 
     setView(
-      '<div class="card"><div class="card__title">Отчёт по региону: ' + esc(regionName) + '</div>' +
+      '<div class="card"><div class="btn-row"><button class="btn btn--small btn--ghost" id="rpBack">В кабинет</button></div>' +
+      '<div class="card__title">Отчёт по региону: ' + esc(regionName) + '</div>' +
       '<p class="row__sub">Полный отчёт — финансы, состав и мероприятия — одним файлом.</p>' +
       '<div class="field"><label>Период</label><select id="rpPeriod">' +
       '<option value="month">Текущий месяц</option>' +
@@ -2989,17 +3058,41 @@
       '<option value="year" selected>Текущий год</option>' +
       '<option value="all">За всё время</option></select></div>' +
       '<div class="btn-row"><button class="btn" id="rpXlsx"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> Excel (.xlsx)</button>' +
-      '<button class="btn btn--ghost" id="rpPdf"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> PDF</button></div></div>'
+      '<button class="btn btn--ghost" id="rpPdf"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> PDF</button></div>' +
+      '<div id="rpResult" aria-live="polite"></div></div>'
     , gen);
 
-    const build = (format) => {
-      const period = document.getElementById('rpPeriod').value;
-      const url = '/reports/region?region_id=' + state.regionId + '&format=' + format + '&period=' + period;
-      toast('Формирую отчёт…');
-      download(url, 'report_' + state.regionId + '.' + format).catch(fail);
+    const xlsx = document.getElementById('rpXlsx');
+    const pdf = document.getElementById('rpPdf');
+    const periodInput = document.getElementById('rpPeriod');
+    const result = document.getElementById('rpResult');
+    document.getElementById('rpBack').onclick = () => {
+      state.tab = state.cabinetMode === 'personal' ? 'home' : state.cabinetMode === 'own' ? 'analytics' : 'dashboard';
+      renderTabs(); renderTab();
     };
-    document.getElementById('rpXlsx').onclick = () => build('xlsx');
-    document.getElementById('rpPdf').onclick = () => build('pdf');
+    let busy = false;
+    const build = async (format) => {
+      if (busy) return;
+      busy = true;
+      xlsx.disabled = pdf.disabled = periodInput.disabled = true;
+      result.innerHTML = '<p class="row__sub">Формирую отчёт…</p>';
+      try {
+        const file = await api('/reports/region/file?region_id=' + state.regionId + '&format=' + format + '&period=' + periodInput.value, { method: 'POST' });
+        if (!result.isConnected) return;
+        const href = new URL(file.url, location.origin).href;
+        result.innerHTML = '<p>Отчёт готов. Ссылка действует 10 минут.</p>' +
+          '<a class="btn" id="rpDownload" href="' + esc(href) + '" download="' + esc(file.filename) + '">Скачать ' + format.toUpperCase() + '</a>';
+        wireDownloadLink(document.getElementById('rpDownload'), file);
+      } catch (error) {
+        if (result.isConnected) result.textContent = error.message;
+        fail(error);
+      } finally {
+        busy = false;
+        xlsx.disabled = pdf.disabled = periodInput.disabled = false;
+      }
+    };
+    xlsx.onclick = () => build('xlsx');
+    pdf.onclick = () => build('pdf');
   }
 
   // --- Регионы (создание, назначение руководителя/координатора) -------------
@@ -4338,21 +4431,61 @@
         const rest = index === 3 && photos.length > 4 ? photos.length - 4 : 0;
         return '<button type="button" class="album__cell" data-photo="' + item.id + ':' + index + '">' +
           '<img src="' + photo.url + '" alt=""' + (eager ? '' : ' loading="lazy"') +
-          ' data-retry="0" onerror="window.retryPhoto &amp;&amp; window.retryPhoto(this)">' +
+          ' data-retry="0">' +
           (rest ? '<span class="album__more">+' + rest + '</span>' : '') +
           '</button>';
       }).join('') + '</div>';
   }
 
-  // Оборванный запрос (перезагрузка страницы, разрыв сети) оставлял пустое
-  // место навсегда: тег <img> сам не повторяет. Пробуем ещё дважды.
-  window.retryPhoto = function (img) {
+  // Signed URLs expire while the WebView is suspended or a lazy image waits.
+  // Refresh with authentication, rather than retrying the same expired token.
+  const mediaRefreshes = new Map();
+  let mediaRefreshQueue = Promise.resolve();
+  async function refreshMedia(img) {
+    const path = new URL(img.src, location.href).pathname;
+    if (!/^\/api\/(news\/photos|profile\/avatar)\/\d+$/.test(path)) return;
     const tries = Number(img.dataset.retry || 0);
-    if (tries >= 2) return;
+    if (tries >= 2) { img.alt = 'Не удалось загрузить фотографию'; return; }
+    if (img.dataset.refreshing) return;
+    img.dataset.refreshing = '1';
     img.dataset.retry = String(tries + 1);
-    const src = img.src;
-    setTimeout(() => { img.src = ''; img.src = src; }, 400 * (tries + 1));
-  };
+    try {
+      let pending = mediaRefreshes.get(path);
+      if (!pending) {
+        // A resumed album must not produce a burst of dozens of API calls.
+        pending = mediaRefreshQueue.catch(() => {}).then(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          return api(path.slice(4) + '/url');
+        });
+        mediaRefreshQueue = pending;
+        mediaRefreshes.set(path, pending);
+        pending.finally(() => mediaRefreshes.delete(path)).catch(() => {});
+      }
+      const data = await pending;
+      if (img.isConnected) img.src = data.url + '&retry=' + Date.now();
+    } catch (error) {
+      img.alt = 'Фотография временно недоступна';
+    } finally { delete img.dataset.refreshing; }
+  }
+  document.addEventListener('error', (event) => {
+    if (event.target && event.target.tagName === 'IMG') refreshMedia(event.target);
+  }, true);
+  function renewVisibleMedia() {
+    document.querySelectorAll('img[src*="?t="]').forEach((img) => {
+      const rect = img.getBoundingClientRect();
+      if (rect.bottom < -200 || rect.top > window.innerHeight + 200) return;
+      const token = new URL(img.src, location.href).searchParams.get('t') || '';
+      if ((img.complete && !img.naturalWidth) || Number(token.split('.')[0]) * 1000 < Date.now() + 30000) {
+        img.dataset.retry = '0';
+        refreshMedia(img);
+      }
+    });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) renewVisibleMedia();
+  });
+  window.addEventListener('online', renewVisibleMedia);
+  if (tg && typeof tg.onEvent === 'function') tg.onEvent('activated', renewVisibleMedia);
 
   // «сегодня в 18:20» вместо голого «18:20»: в ленте, где посты идут за
   // несколько дней, одно время без дня ничего не говорит.
@@ -5123,6 +5256,46 @@
     return state.me;
   }
 
+  let browserLoginGeneration = 0;
+  function renderBrowserLogin() {
+    const generation = ++browserLoginGeneration;
+    document.querySelector('.topbar').hidden = true;
+    document.getElementById('tabs').hidden = true;
+    setView('<div class="card browser-login"><div class="card__title">Личный кабинет</div>' +
+      '<p>Войдите в браузере, подтвердив вход в Telegram. Пароль и номер телефона вводить не нужно.</p>' +
+      '<button class="btn" id="browserLoginStart">Войти через Telegram</button>' +
+      '<div id="browserLoginStatus" aria-live="polite"></div></div>');
+    document.getElementById('browserLoginStart').onclick = async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      const status = document.getElementById('browserLoginStatus');
+      try {
+        const result = await api('/auth/browser/start', { method: 'POST' });
+        status.innerHTML = '<p>Код подтверждения: <strong class="browser-login__code">' + esc(result.code) + '</strong></p>' +
+          '<p>Откройте бота, сверьте код и нажмите «Подтвердить вход». Затем вернитесь сюда.</p>' +
+          '<a class="btn" href="' + esc(result.url) + '" target="_blank" rel="noopener noreferrer">Открыть бота</a>' +
+          '<p class="row__sub">Ожидаю подтверждения. Ссылка действует 5 минут.</p>';
+        const deadline = Date.now() + result.expires_in * 1000;
+        const poll = async () => {
+          if (generation !== browserLoginGeneration || !status.isConnected) return;
+          if (Date.now() > deadline) {
+            status.textContent = 'Время ожидания истекло. Начните вход заново.';
+            button.disabled = false; return;
+          }
+          try {
+            const state = await api('/auth/browser/status');
+            if (state.authenticated) {
+              document.querySelector('.topbar').hidden = false;
+              boot().catch(fail); return;
+            }
+          } catch (error) { /* A temporary disconnect does not cancel approval. */ }
+          setTimeout(poll, 2000);
+        };
+        setTimeout(poll, 2000);
+      } catch (error) { status.textContent = error.message; button.disabled = false; }
+    };
+  }
+
   async function boot() {
     const introEl = document.getElementById('intro');
     const params = new URLSearchParams(location.search);
@@ -5141,6 +5314,11 @@
     try {
       state.me = await api('/me');
     } catch (error) {
+      if ((!tg || !tg.initData) && error.status === 401) {
+        if (introEl) introEl.classList.add('intro--hidden');
+        renderBrowserLogin();
+        return;
+      }
       // Кабинет иногда не открывается по кнопке — по разовому сбою сети или
       // проверки подписи. Раньше здесь оставалась одна строка текста, и
       // единственным выходом было закрыть окно и открыть заново. Теперь
@@ -5156,6 +5334,19 @@
       return;
     }
 
+    ++browserLoginGeneration;
+    document.querySelector('.topbar').hidden = false;
+    document.getElementById('tabs').hidden = false;
+    if ((!tg || !tg.initData) && !document.getElementById('browserLogout')) {
+      const button = document.createElement('button');
+      button.id = 'browserLogout'; button.className = 'btn btn--small btn--ghost';
+      button.textContent = 'Выйти';
+      button.onclick = async () => {
+        try { await api('/auth/browser/logout', { method: 'POST' }); location.reload(); }
+        catch (error) { fail(error); }
+      };
+      document.querySelector('.topbar').appendChild(button);
+    }
     showIntroGreeting(state.me.full_name);
 
     document.getElementById('userName').textContent = state.me.full_name;

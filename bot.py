@@ -63,7 +63,9 @@ async def main() -> None:
     dp.include_router(apply.router)
     dp.include_router(fallback.router)  # всегда последним: ловит всё остальное
 
-    await bot.delete_webhook(drop_pending_updates=True)
+    # Deployments must not discard /start, login confirmations or other messages
+    # received while the service was restarting.
+    await bot.delete_webhook(drop_pending_updates=False)
     asyncio.create_task(notifier_loop(bot))
     await dp.start_polling(bot)
 

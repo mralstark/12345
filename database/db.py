@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from config import DATABASE_URL
 from database.models import Base
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+# A connection can be closed by PostgreSQL during a restart/idle timeout.
+# Check it before checkout rather than returning a random 500 on the next visit.
+engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True, pool_recycle=1800)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 

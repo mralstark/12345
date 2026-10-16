@@ -11,6 +11,8 @@ uvicorn[standard]>=0.30
 python-multipart>=0.0.9
 python-dotenv>=1.0
 aiohttp_socks>=0.9
+# Fixed items-view reference leak (GHSA-54p9-h82j-f925).
+multidict>=6.9.1
 tzdata>=2024.1
 openpyxl>=3.1
 reportlab>=4.2

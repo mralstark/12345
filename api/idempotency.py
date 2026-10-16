@@ -40,7 +40,9 @@ class IdempotencyStore:
         if not _KEY_RE.fullmatch(raw_key):
             return JSONResponse(status_code=400, content={"detail": "Некорректный ключ идемпотентности"})
 
-        actor = hashlib.sha256(request.headers.get("Authorization", "").encode()).hexdigest()
+        # Browser sessions must never share another user's cached mutation.
+        actor = hashlib.sha256((request.headers.get("Authorization", "") + "\0" +
+                                request.headers.get("Cookie", "")).encode()).hexdigest()
         cache_key = (actor, request.method.upper(), request.url.path, raw_key)
         async with self._lock:
             cutoff = monotonic() - self.ttl_seconds

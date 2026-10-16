@@ -12,6 +12,8 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
 )
 from sqlalchemy import select
 
@@ -91,6 +93,27 @@ async def start_with_application(message: Message, command: CommandObject) -> No
     """APPLY_-ссылка региона (публичная саморегистрация, handlers/apply.py) —
     многоразовый код, не привязан ни к одному конкретному User. Откатывается
     на обычный /start, если payload не распознан."""
+    if command.args and command.args.startswith("web_"):
+        from services.browser_login import pending_code
+        from config import WEBAPP_URL
+        from html import escape
+        if message.chat.type != "private":
+            return
+        grant = command.args[4:]
+        login_code = await pending_code(grant)
+        if login_code is None:
+            await message.answer("Ссылка для входа устарела. Начните вход заново на сайте.")
+            return
+        await message.answer(
+            f"Вход в кабинет в браузере: {escape(WEBAPP_URL)}\n\n"
+            f"Код на сайте должен совпадать: <b>{login_code}</b>\n\n"
+            "Подтверждайте только если вы сами начали вход на этом сайте. "
+            "Если ссылку прислал другой человек — не подтверждайте.",
+            parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="Подтвердить вход", callback_data="weblogin:" + grant),
+            ]]),
+        )
+        return
     code = parse_application_payload(command.args)
     if code is None:
         await start_plain(message)
@@ -140,6 +163,24 @@ async def start_plain(message: Message) -> None:
             await message.answer(WELCOME_TEXT, reply_markup=register_welcome_keyboard(), parse_mode="HTML")
             return
         await show_main_menu(message, session, user)
+
+
+@router.callback_query(F.data.startswith("weblogin:"))
+async def confirm_browser_login(callback: CallbackQuery) -> None:
+    from services.browser_login import approve
+    if callback.message is None or callback.message.chat.type != "private":
+        await callback.answer("Подтвердите вход в личном чате с ботом", show_alert=True)
+        return
+    async with async_session() as session:
+        user = await resolve_user(session, callback.from_user.id, callback.from_user.full_name)
+        if user is None or not user.is_active:
+            await callback.answer("Сначала создайте и подтвердите личный кабинет", show_alert=True)
+            return
+        ok = await approve(callback.data.removeprefix("weblogin:"), user)
+    await callback.answer("Вход подтверждён. Вернитесь в браузер." if ok else
+                          "Ссылка устарела или уже использована", show_alert=True)
+    if ok:
+        await callback.message.edit_reply_markup(reply_markup=None)
 
 
 @router.callback_query(F.data == "menu:main")

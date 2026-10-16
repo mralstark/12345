@@ -122,6 +122,7 @@ def event_dict(
         "status": event.status,
         "status_label": EVENT_STATUS_LABELS.get(event.status, event.status),
         "planned_budget": event.planned_budget,
+        "total_attendees": event.total_attendees,
         "fact_expense": fact,
         "responsible_member_id": event.responsible_member_id,
         "responsible_name": responsible_name,

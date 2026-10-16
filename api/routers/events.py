@@ -34,6 +34,7 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 
 class EventIn(BaseModel):
+    total_attendees: int | None = Field(default=None, ge=0, le=1_000_000, strict=True)
     region_id: int
     cell_id: int | None = None
     title: str = Field(min_length=2, max_length=128)
@@ -49,6 +50,7 @@ class EventIn(BaseModel):
 
 
 class EventPatch(BaseModel):
+    total_attendees: int | None = Field(default=None, ge=0, le=1_000_000, strict=True)
     cell_id: int | None = None
     title: str | None = Field(default=None, min_length=2, max_length=128)
     date: date_ | None = None
@@ -64,6 +66,7 @@ class EventPatch(BaseModel):
 
 class AttendanceIn(BaseModel):
     member_ids: list[int] = Field(max_length=500)
+    total_attendees: int | None = Field(default=None, ge=0, le=1_000_000, strict=True)
 
 
 class RsvpIn(BaseModel):
@@ -425,6 +428,9 @@ async def set_attendance(
         session.add(EventAttendance(event_id=event.id, member_id=member_id, attended=True))
     for member_id, row in existing.items():
         row.attended = member_id in chosen
+
+    if "total_attendees" in payload.model_fields_set:
+        event.total_attendees = payload.total_attendees
 
     await session.commit()
     return {"ok": True, "attended": sorted(chosen)}

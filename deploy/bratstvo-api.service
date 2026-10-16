@@ -13,7 +13,9 @@ Group=bratstvo
 WorkingDirectory=/opt/bratstvo
 # Порт не открываем сами, а принимаем от systemd готовым (дескриптор 3):
 # так перезапуск не рвёт соединения. Адрес и порт заданы в bratstvo-api.socket.
-ExecStart=/opt/bratstvo/.venv/bin/python -m uvicorn api.main:app --fd 3
+# Nginx logs requests without query strings. Uvicorn's duplicate access log
+# includes signed media/download tokens, so keep only error logs here.
+ExecStart=/opt/bratstvo/.venv/bin/python -m uvicorn api.main:app --fd 3 --no-access-log
 Restart=always
 RestartSec=5
 # Сервер может быть общим: предел памяти не даёт нам утащить за собой соседей.

@@ -35,7 +35,7 @@ class RegionReport:
     transactions: list[tuple] = field(default_factory=list)  # дата, тип, категория, мероприятие, сумма, комментарий
     expense_by_category: list[tuple[str, int]] = field(default_factory=list)
     income_by_category: list[tuple[str, int]] = field(default_factory=list)
-    events: list[tuple] = field(default_factory=list)  # дата, название, статус, план, факт, участников
+    events: list[tuple] = field(default_factory=list)  # дата, название, статус, план, факт, отмечено членов, всего посетителей
 
 
 async def gather_region_report(
@@ -144,6 +144,7 @@ async def gather_region_report(
             event.planned_budget,
             fact_by_event.get(event.id, 0),
             attended or 0,
+            event.total_attendees,
         )
         for event, attended in events
     ]

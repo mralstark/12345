@@ -98,7 +98,7 @@ chown root:bratstvo /opt/bratstvo/.env
 chmod 640 /opt/bratstvo/.env
 bash /opt/bratstvo/deploy/sync_units.sh
 cd /opt/bratstvo
-for migration in migrate_security_constraints migrate_university_active migrate_operational_roles_and_reviews migrate_cabinet_revisions migrate_gamification; do
+for migration in migrate_security_constraints migrate_university_active migrate_operational_roles_and_reviews migrate_cabinet_revisions migrate_gamification migrate_service_reliability; do
   sudo -u bratstvo /opt/bratstvo/.venv/bin/python -m scripts.$migration
 done
 systemctl start bratstvo-api.socket bratstvo-api bratstvo-bot

@@ -32,6 +32,7 @@ from services.education import academic_year
 from services.moderation import check as check_text
 from services.news import (
     avatar_token_valid,
+    avatar_token,
     avatar_url_for_user,
     photo_url,
     save_avatar,
@@ -315,6 +316,19 @@ async def drop_avatar(
         member.avatar_path = None
         await session.commit()
     return {"avatar": await avatar_url_for_user(session, user)}
+
+
+@router.get("/avatar/{member_id}/url")
+async def refresh_avatar_url(
+    member_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    # Avatars are visible to authenticated members, just like the feed bylines.
+    member = await session.get(Member, member_id)
+    if member is None or not member.is_active or not member.avatar_path:
+        raise HTTPException(404, "Аватар не найден")
+    return {"url": f"/api/profile/avatar/{member_id}?t={avatar_token(member_id)}"}
 
 
 @router.get("/avatar/{member_id}")

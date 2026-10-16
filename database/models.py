@@ -33,6 +33,16 @@ class Base(DeclarativeBase):
     pass
 
 
+class BrowserSession(Base):
+    __tablename__ = "browser_sessions"
+
+    secret_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    grant_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    code: Mapped[str] = mapped_column(String(6))
+    expires_at: Mapped[int] = mapped_column(BigInteger, index=True)
+
+
 # --- Роли (ТЗ §3) -----------------------------------------------------------
 ROLE_SUPERUSER = "superuser"
 ROLE_FEDERAL = "federal"
@@ -444,6 +454,7 @@ class Transaction(Base):
 
 class Event(Base):
     __tablename__ = "events"
+    __table_args__ = (CheckConstraint("total_attendees >= 0 AND total_attendees <= 1000000", name="ck_event_total_attendees"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)
@@ -461,6 +472,8 @@ class Event(Base):
     responsible_member_id: Mapped[int | None] = mapped_column(ForeignKey("members.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default=EVENT_STATUS_PLANNED)
     planned_budget: Mapped[int | None] = mapped_column(Integer, nullable=True)  # копейки
+    # Unknown is NULL, never inferred from the list of Brotherhood members.
+    total_attendees: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Повторяющееся событие: шаблон помечен is_recurring, порождённые записи
     # ссылаются на него через recurrence_parent_id (см. services/recurring_events.py).
     is_recurring: Mapped[bool] = mapped_column(Boolean, default=False)
