@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements-dev.lock
+        run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
       - name: Run tests
         run: python -m pytest -q
       - name: Scan Python code
