@@ -53,7 +53,7 @@ def enforce_user_rate_limit(telegram_id: int, method: str, path: str) -> None:
         scope, limit, window = "read", 240, 60
     elif path.startswith("/api/register/"):
         scope, limit, window = "registration", 5, 60
-    elif path == "/api/documents" or path.endswith("/avatar") or path == "/api/news":
+    elif path == "/api/documents" or path.endswith("/avatar") or path == "/api/news" or (path.startswith("/api/news/articles/") and path.endswith("/photos")):
         scope, limit, window = "upload", 12, 60
     else:
         scope, limit, window = "write", 60, 60

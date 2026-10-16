@@ -29,6 +29,7 @@ from database.models import (
     User,
 )
 from services.education import academic_year
+from services.articles import cover_photo_id
 from services.moderation import check as check_text
 from services.news import (
     avatar_token_valid,
@@ -130,7 +131,7 @@ async def author_stats(session: AsyncSession, user_id: int) -> dict:
     публикации и только про них: они и есть повод выложить следующий пост."""
     post_ids = list(
         (
-            await session.execute(select(NewsPost.id).where(NewsPost.author_user_id == user_id))
+            await session.execute(select(NewsPost.id).where(NewsPost.author_user_id == user_id, NewsPost.publication_state == "published"))
         ).scalars().all()
     )
     if not post_ids:
@@ -152,7 +153,7 @@ async def author_posts(session: AsyncSession, user_id: int, limit: int = 20) -> 
         (
             await session.execute(
                 select(NewsPost)
-                .where(NewsPost.author_user_id == user_id)
+                .where(NewsPost.author_user_id == user_id, NewsPost.publication_state == "published")
                 .order_by(NewsPost.created_at.desc(), NewsPost.id.desc())
                 .limit(limit)
             )
@@ -172,6 +173,10 @@ async def author_posts(session: AsyncSession, user_id: int, limit: int = 20) -> 
             {
                 "id": post.id,
                 "text": post.text,
+                "content_kind": post.content_kind,
+                "article_title": post.article_title,
+                "article_summary": post.article_summary,
+                "cover_photo_id": cover_photo_id(post),
                 "byline": post.byline,
                 "created_at": iso_utc(post.created_at),
                 "photos": [{"id": photo.id, "url": photo_url(photo.id)} for photo in photos],

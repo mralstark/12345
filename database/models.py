@@ -634,6 +634,17 @@ class NewsPost(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     text: Mapped[str] = mapped_column(Text)
+    # Articles share the feed, signatures, moderation and media with posts.
+    # Publishing a draft creates a new feed ID so read cursors cannot hide it.
+    publication_state: Mapped[str] = mapped_column(String(16), default="published", server_default="published", index=True)
+    content_kind: Mapped[str] = mapped_column(String(16), default="post", server_default="post")
+    article_title: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    article_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    article_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    article_revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    article_source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    article_source_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    article_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # «Братство Академистов», «Академисты | Москва» либо имя участника.
     byline: Mapped[str] = mapped_column(String(128), default="")
     # Чем подписан пост: personal — человеком, bratstvo — от всего Братства,
@@ -967,6 +978,7 @@ class MemberQuestProgress(Base):
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assignment_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    personal_seen_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     member: Mapped["Member"] = relationship(back_populates="quest_progress")
     quest: Mapped["Quest"] = relationship()

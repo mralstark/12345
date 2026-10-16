@@ -1,3 +1,35 @@
+@font-face {
+  font-family: 'Google Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/google-sans-italic-400-cyrillic-v1.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Google Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/google-sans-italic-400-latin-v1.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Google Sans';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/google-sans-italic-500-cyrillic-v1.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Google Sans';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/google-sans-italic-500-latin-v1.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 /* Кабинет Братства: графит, тёплое золото, локальные Forum и Google Sans.
    Общие компоненты сохраняют сценарии всех личных и управленческих кабинетов. */
 
@@ -2273,3 +2305,75 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .browser-login__code { display: block; margin: 12px 0; font-size: 28px; letter-spacing: .16em; font-variant-numeric: tabular-nums; }
 #rpResult:not(:empty) { margin: 20px 0; }
 #rpResult .btn { max-width: 100%; }
+
+/* Articles: a quiet editorial surface, shared with the cabinet's type and palette. */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.article-compose-actions { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 20px; }
+.feed-filters { margin-bottom:16px; }
+.article-teaser { display:block; width:100%; padding:0; border:0; background:transparent; color:var(--text); font:inherit; text-align:left; cursor:pointer; overflow:hidden; }
+.article-teaser__cover { display:block; width:100%; max-height:320px; object-fit:cover; aspect-ratio:16/9; }
+.article-teaser__body { display:block; padding:20px; }
+.article-kicker { display:block; color:var(--accent); font-size:11px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; margin-bottom:14px; }
+.article-teaser__title { display:block; font:400 30px/1.16 'Forum',Georgia,serif; overflow-wrap:anywhere; }
+.article-teaser__summary { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; margin-top:12px; color:var(--hint); font-size:15px; line-height:1.55; }
+.article-teaser__read { display:flex; align-items:center; gap:12px; margin-top:22px; font-size:13px; color:var(--accent); }
+.article-open { overflow:hidden; }
+.article-overlay { position:fixed; inset:0; z-index:40; background:var(--bg); display:flex; flex-direction:column; overflow:hidden; padding-top:var(--top-inset); color:var(--text); }
+.article-overlay[hidden], .article-preview-pane[hidden] { display:none; }
+.article-topbar { flex-shrink:0; min-height:64px; padding:10px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left)); display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid var(--border); background:var(--bg); }
+.article-topbar .back-link { margin:0; min-height:44px; flex-shrink:0; }
+.article-topbar .btn { min-height:40px; }
+.article-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-bottom:calc(40px + max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px))); scroll-padding:24px; }
+.article-paper { width:min(100%,720px); margin:0 auto; padding:48px 28px 16px; box-sizing:border-box; overflow-wrap:anywhere; }
+.article-title { margin:0 0 20px; font:400 48px/1.08 'Forum',Georgia,serif; letter-spacing:-.015em; text-wrap:balance; }
+.article-meta { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; color:var(--hint); font-size:12px; line-height:1.6; }
+.article-lead { font-size:21px; line-height:1.6; color:var(--hint); margin:30px 0; }
+.article-content { font:400 18px/1.8 'Google Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:var(--text); margin-top:36px; overflow-wrap:anywhere; }
+.article-content p { margin:0 0 1.25em; }
+.article-content h3 { font:400 32px/1.2 'Forum',Georgia,serif; margin:1.6em 0 .65em; }
+.article-content h4 { font:500 21px/1.4 'Google Sans',sans-serif; margin:1.5em 0 .65em; }
+.article-content blockquote { border-left:2px solid var(--accent); margin:28px 0; padding:2px 0 2px 22px; color:var(--hint); font-size:21px; }
+.article-content blockquote p:last-child { margin-bottom:0; }
+.article-content ul, .article-content ol { margin:0 0 1.4em; padding-left:1.4em; }
+.article-content li { margin:.4em 0; padding-left:.2em; }
+.article-content a { color:var(--link); text-decoration:underline; text-underline-offset:3px; }
+.article-content figure { margin:32px 0; }
+.article-content img { display:block; max-width:100%; max-height:80vh; height:auto; margin:24px auto; border-radius:3px; cursor:zoom-in; }
+.article-content figure img { margin:0 auto; }
+.article-content figcaption { font-size:13px; line-height:1.55; color:var(--hint); text-align:center; margin-top:12px; min-height:1.55em; }
+.article-content hr { width:64px; border:0; border-top:1px solid var(--rule-strong); margin:40px auto; }
+.article-end { text-align:center; color:var(--accent); font-size:9px; margin:48px 0 0; }
+.article-bottom { width:min(100%,720px); margin:0 auto; padding:24px 28px; box-sizing:border-box; }
+.article-save-state { font-size:12px; line-height:1.5; color:var(--hint); text-align:right; max-width:52%; }
+.article-save-state--error { color:var(--danger); }
+.article-title-input, .article-summary-input { display:block; width:100%; padding:0; background:transparent; border:0; border-radius:0; resize:vertical; outline-offset:6px; color:var(--text); }
+.article-title-input { font:400 42px/1.12 'Forum',Georgia,serif; min-height:96px; margin:8px 0 16px; }
+.article-summary-input { font:400 18px/1.6 'Google Sans',sans-serif; min-height:62px; margin:24px 0; }
+.article-title-input:focus, .article-summary-input:focus { background:transparent; box-shadow:none; }
+.article-editor-meta { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; color:var(--hint); font-size:12px; }
+.article-editor-meta select { width:auto; min-width:0; max-width:100%; font-size:14px; min-height:40px; }
+.article-toolbar { display:flex; flex-wrap:wrap; gap:2px; padding:8px 0; margin-bottom:16px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.article-tool { min-height:44px; min-width:42px; border:0; border-radius:8px; background:transparent; color:var(--text); font:400 13px/1.3 'Google Sans',sans-serif; padding:8px 10px; cursor:pointer; }
+.article-tool:hover, .article-tool:focus-visible { background:var(--accent-soft); color:var(--accent); }
+.article-editable { min-height:280px; margin:24px 0; padding:6px 0 24px; outline:none; }
+.article-editable:focus { outline:none; }
+.article-editable:empty::before, .article-editable figcaption:empty::before { content:attr(data-placeholder); color:var(--hint); pointer-events:none; }
+.article-editor-footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:12px; align-items:center; border-top:1px solid var(--border); padding-top:24px; }
+.article-editor-footer > .row__sub { flex:1 1 100%; }
+.article-preview-pane { position:absolute; inset:var(--top-inset) 0 0; display:flex; flex-direction:column; background:var(--bg); }
+.article-publish-footer { width:min(100%,720px); box-sizing:border-box; margin:0 auto; padding:24px 28px; border-top:1px solid var(--border); }
+.article-publish-footer .btn { margin-top:16px; }
+.article-draft-open { border:0; background:none; color:var(--text); text-align:left; cursor:pointer; font:inherit; overflow-wrap:anywhere; padding:12px 0; }
+@media (max-width:480px) {
+  .article-paper { padding:32px 20px 12px; }
+  .article-title { font-size:38px; }
+  .article-title-input { font-size:36px; min-height:86px; }
+  .article-lead { font-size:19px; margin:24px 0; }
+  .article-content { font-size:17px; line-height:1.8; margin-top:28px; }
+  .article-content h3 { font-size:29px; }
+  .article-content blockquote { font-size:19px; padding-left:16px; }
+  .article-content figure { margin:26px 0; }
+  .article-topbar { gap:8px; }
+  .article-editor-footer .btn { flex:1 1 45%; padding-inline:12px; }
+  .article-teaser__title { font-size:28px; }
+}

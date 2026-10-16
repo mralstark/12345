@@ -8,7 +8,7 @@ from utils.tz import today
 
 async def scope_query(session, user: User, section: str, region_id: int | None = None):
     if section == "news":
-        return select(NewsPost.id), 0
+        return select(NewsPost.id).where(NewsPost.publication_state == "published"), 0
     if section != "events":
         raise AccessDenied("Неизвестный раздел")
     cell_id = None

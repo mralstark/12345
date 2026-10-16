@@ -30,7 +30,9 @@
       .then((data) => {
         if (String(data.version) !== myVersion) {
           sessionStorage.setItem('bratstvo_version_reloaded', String(data.version));
-          location.href = '/?_r=' + Date.now();
+          const updated = new URL(location.href);
+          updated.searchParams.set('_r', Date.now());
+          location.href = updated.href;
         }
       })
       .catch(() => { /* версия недоступна — работаем с тем, что загрузилось */ });
@@ -283,7 +285,7 @@
     if (existing && existing.expiresAt > Date.now()) return existing.promise;
 
     if (tg && tg.initData) opts.headers['Authorization'] = 'tma ' + tg.initData;
-    if (mutating) opts.headers['Idempotency-Key'] = idempotencyKey();
+    if (mutating && !opts.headers['Idempotency-Key']) opts.headers['Idempotency-Key'] = idempotencyKey();
     if (opts.body && !(opts.body instanceof FormData)) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(opts.body);
@@ -304,7 +306,7 @@
         error.status = response.status;
         throw error;
       }
-      if (mutating && state.me && path !== '/me/seen') scheduleCountersRefresh();
+      if (mutating && state.me && !['/me/seen', '/character/me/seen'].includes(path)) scheduleCountersRefresh();
       if (response.status === 204) return null;
       return response.json();
     })();
@@ -2050,19 +2052,11 @@
 
   function renderEventRows(items) {
     return items.length ? items.map((event) => {
-      let budget = '';
-      if (event.planned_budget) {
-        const fact = event.fact_expense || 0;
-        const share = Math.min(Math.round((fact / event.planned_budget) * 100), 200);
-        budget = '<div class="progress"><div class="progress__bar' + (fact > event.planned_budget ? ' progress__bar--over' : '') +
-          '" style="width:' + Math.min(share, 100) + '%"></div></div>' +
-          '<div class="row__sub">План ' + money(event.planned_budget) + ' · факт ' + money(fact) + '</div>';
-      }
       return '<div class="row row--clickable" data-event="' + event.id + '">' +
         '<div class="row__main"><div class="row__title">' + esc(event.title) +
         (event.is_recurring ? ' 🔁' : '') + '</div>' +
         '<div class="row__sub">' + dateRu(event.date) + (event.time ? ', ' + event.time : '') + ' · ' + esc(event.status_label) +
-        '</div>' + budget + '</div></div>';
+        '</div></div></div>';
     }).join('') : '<div class="empty">Мероприятий нет</div>';
   }
 
@@ -3962,18 +3956,18 @@
     const branchTabs = data.branches.map((b) =>
       '<button type="button" class="chip' + (b.id === state.lobbyBranch ? ' chip--active' : '') +
       '" data-lobby-branch="' + b.id + '">' + esc(b.label) +
-      (b.claimable_stars > 0 ? ' <span class="dot dot--alert"></span>' : '') + '</button>'
+      (data.quests.some((q) => q.branch_id === b.id && q.is_unread) ? ' <span class="dot dot--alert"></span>' : '') + '</button>'
     ).join('');
 
     const branchQuests = data.academy_enabled ? data.quests.filter((q) => q.branch_id === state.lobbyBranch) : data.quests.filter((q) => q.claimable_stars > 0);
     const questsHtml = branchQuests.map((q) => {
       const pct = q.next_target ? Math.max(0, Math.min(100, Math.round((q.count / q.next_target) * 100))) : 100;
-      return '<div class="row quest quest--personal"><div class="row__main"><div class="row__title">' + esc(q.title) + '</div>' +
+      return '<div class="row quest quest--personal" data-personal-quest="' + q.id + '" data-notice-token="' + (q.notice_token || '') + '"><div class="row__main"><div class="row__title">' + (q.is_unread ? '<span class="dot dot--alert" aria-label="Новое"></span> ' : '') + esc(q.title) + '</div>' +
         (q.description ? '<div class="row__sub quest-description">' + esc(q.description) + '</div>' : '') +
         '<div class="quest-bar"><div class="quest-bar__fill" style="width:' + pct + '%"></div></div>' +
         '<div class="row__sub">' + esc(q.progress_label) + '</div>' +
         (q.pending_count ? '<div class="quest-review">⏳ Выполнение отправлено на проверку</div>' : '') +
-        (q.assigned ? '<div class="quest-assigned">Задание выдано руководителем' +
+        (q.assigned && data.academy_enabled ? '<div class="quest-assigned">Задание выдано руководителем' +
           (q.assignment_note ? '<br>' + esc(q.assignment_note) : '') + '</div>' : '') +
         '</div>' +
         '<div class="row__side">' +
@@ -3988,12 +3982,30 @@
         '</div></div>';
     }).join('');
 
-    const legacy = (data.legacy_quests || []).map((q) => '<div class="row quest"><div class="row__main">' + esc(q.title) + '<div class="row__sub">Награда за прежнее задание</div></div><button class="btn btn--small" data-claim-quest="' + q.id + '">Получить ' + q.claimable_stars + ' ⭐</button></div>').join('');
+    const legacy = (data.legacy_quests || []).map((q) => '<div class="row quest" data-personal-quest="' + q.id + '" data-notice-token="' + (q.notice_token || '') + '"><div class="row__main">' + (q.is_unread ? '<span class="dot dot--alert" aria-label="Новое"></span> ' : '') + esc(q.title) + '<div class="row__sub">Награда за прежнее задание</div></div><button class="btn btn--small" data-claim-quest="' + q.id + '">Получить ' + q.claimable_stars + ' ⭐</button></div>').join('');
     return (data.academy_enabled ? '<div class="chips" style="margin-bottom:var(--space-12)">' + branchTabs + '</div>' : '<p>Сохранились ваши образы, баланс и заработанные награды.</p>') +
       (questsHtml || '<div class="empty">' + (data.academy_enabled ? 'Заданий пока нет' : 'Все награды получены') + '</div>') + (legacy ? '<h3>Прежние награды</h3>' + legacy : '');
   }
 
   function wireQuestsCard(data) {
+    // Only acknowledge entries actually rendered in this branch, never later arrivals.
+    const shown = new Set(Array.from(document.querySelectorAll('[data-personal-quest]')).map((el) => Number(el.dataset.personalQuest)));
+    const unread = data.quests.concat(data.legacy_quests || []).filter((q) => shown.has(q.id) && q.is_unread && q.notice_token);
+    if (unread.length) api('/character/me/seen', {method:'POST', body:{items:unread.map((q) => ({quest_id:q.id, token:q.notice_token}))}}).then(async () => {
+      unread.forEach((q) => { q.is_unread = false; });
+      document.querySelectorAll('[data-personal-quest]').forEach((el) => {
+        if (unread.some((q) => q.id === Number(el.dataset.personalQuest) && q.notice_token === el.dataset.noticeToken)) {
+          const dot = el.querySelector('.dot--alert'); if (dot) dot.remove();
+        }
+      });
+      document.querySelectorAll('[data-lobby-branch]').forEach((el) => {
+        if (!data.quests.some((q) => q.branch_id === el.dataset.lobbyBranch && q.is_unread)) {
+          const dot = el.querySelector('.dot--alert'); if (dot) dot.remove();
+        }
+      });
+      const freshMe = await api('/me');
+      state.me = freshMe; renderTabs(); renderCabinetSwitch();
+    }).catch(() => {});
     on('[data-lobby-branch]', 'click', async (event) => {
       const branchId = event.currentTarget.dataset.lobbyBranch;
       state.lobbyBranch = branchId;
@@ -4304,6 +4316,22 @@
   async function renderHome(gen) { return renderFeed(gen); }
   async function renderNews(gen) { return renderFeed(gen); }
 
+  async function articleIdentities() {
+    const choices = [{official:false}];
+    if (meHasRole('superuser') || meHasRole('federal') || state.me.cell) choices.unshift({official:true});
+    if (!state.me.cell) (state.me.regions || []).forEach((r) => choices.push({official:true, regionId:r.id}));
+    return Promise.all(choices.map(async (c) => {
+      const info = await api('/news/byline?official=' + c.official + (c.regionId ? '&region_id=' + c.regionId : ''));
+      return Object.assign({}, c, {label:info.byline + (c.official ? '' : ' · от себя'), kind:info.byline_kind, audience:info.audience});
+    }));
+  }
+
+  const articleUI = window.CabinetArticles({api, esc, toast, modal, closeModal, on, photoViewer,
+    identities:articleIdentities,
+    canEdit:() => state.cabinetMode !== 'personal',
+    refreshFeed:() => startRender(renderFeed),
+  });
+
   // Личный кабинет — не место для управления чужим. Сервер решает то же самое
   // сам (services/news.py::can_delete_post), это лишь говорит ему, откуда
   // смотрят: одна и та же лента открывается из обоих кабинетов.
@@ -4326,16 +4354,25 @@
     // Разделителей по дням больше нет: время у каждого поста теперь со днём
     // («сегодня в 18:20», «22 авг в 14:05»), и плашка между постами только
     // рвала ленту пополам.
-    const posts = data.items.map((item) => newsPostHtml(item, data.reaction_set || [])).join('');
+    const articlesOnly = state.feedFilter === 'articles';
+    const items = articlesOnly ? data.items.filter((item) => item.content_kind === 'article') : data.items;
+    const posts = items.map((item) => newsPostHtml(item, data.reaction_set || [])).join('');
 
     setView(
       (data.can_post ? composeRowHtml(data.me_avatar, data.me_name) : '') +
-      (data.items.length ? '<div class="feed">' + posts + '</div>' : '<div class="empty">Новостей пока нет</div>')
+      (data.can_post ? '<div class="article-compose-actions"><button class="btn btn--small btn--ghost" id="newArticle">Создать статью</button><button class="btn btn--small btn--ghost" id="articleDrafts">Мои черновики</button></div>' : '') +
+      ((articlesOnly || data.items.some((item) => item.content_kind === 'article')) ? '<div class="chips feed-filters"><button class="chip' + (!articlesOnly ? ' chip--active' : '') + '" data-feed-filter="all">Все публикации</button><button class="chip' + (articlesOnly ? ' chip--active' : '') + '" data-feed-filter="articles">Статьи</button></div>' : '') +
+      (items.length ? '<div class="feed">' + posts + '</div>' : '<div class="empty">' + (articlesOnly ? 'Статей пока нет' : 'Новостей пока нет') + '</div>')
     , gen);
 
     if (data.can_post) document.getElementById('addNews').onclick = () => newsForm().catch(fail);
+    if (data.can_post) {
+      on('#newArticle', 'click', () => articleUI.create());
+      on('#articleDrafts', 'click', () => articleUI.drafts());
+    }
+    on('[data-feed-filter]', 'click', (event) => { state.feedFilter = event.currentTarget.dataset.feedFilter; startRender(renderFeed); });
     wireFeed(data);
-    acknowledgeSection('news', data.seen_cursor);
+    if (!articlesOnly) acknowledgeSection('news', data.seen_cursor);
   }
 
   function newsPostHtml(item, reactionSet) {
@@ -4370,10 +4407,16 @@
       '<span class="act act--views">' + iconEye() + '<span>' + (item.views || 0) + '</span></span>' +
       '</div>';
 
-    return '<div class="post" data-post="' + item.id + '">' +
+    const isArticle = item.content_kind === 'article';
+    const articleCover = (item.photos || []).find((p) => p.id === item.cover_photo_id);
+    const articleCard = '<button type="button" class="article-teaser" data-read-article="' + item.id + '">' +
+      (articleCover ? '<img class="article-teaser__cover" src="' + esc(articleCover.url) + '" alt="" loading="lazy">' : '') +
+      '<span class="article-teaser__body"><span class="article-kicker">Статья</span><span class="article-teaser__title">' + esc(item.article_title || item.text) + '</span>' +
+      (item.article_summary ? '<span class="article-teaser__summary">' + esc(item.article_summary) + '</span>' : '') +
+      '<span class="article-teaser__read">Читать статью <span aria-hidden="true">→</span></span></span></button>';
+    return '<div class="post' + (isArticle ? ' post--article' : '') + '" data-post="' + item.id + '">' +
       head +
-      newsPhotosHtml(item) +
-      (item.text ? postTextHtml(item) : '') +
+      (isArticle ? articleCard : newsPhotosHtml(item) + (item.text ? postTextHtml(item) : '')) +
       actions +
       '</div>';
   }
@@ -4565,6 +4608,7 @@
     const post = data.items.find((i) => String(i.id) === String(postId));
 
     on('[data-like]', 'click', () => sendReaction(postId, '❤️'), node);
+    on('[data-read-article]', 'click', () => articleUI.open(Number(postId)), node);
 
     // Разворачиваем насовсем: свернуть обратно незачем — человек нажал,
     // потому что хочет дочитать, а не полистать туда-сюда.
@@ -4580,7 +4624,7 @@
     }, node);
 
     on('[data-del-news]', 'click', () => {
-      confirmAction('Удалить новость?', async () => {
+      confirmAction(post && post.content_kind === 'article' ? 'Удалить статью?' : 'Удалить новость?', async () => {
         try {
           await api('/news/' + postId + feedScope(), { method: 'DELETE' });
           toast('Новость удалена');
@@ -5347,7 +5391,9 @@
       };
       document.querySelector('.topbar').appendChild(button);
     }
-    showIntroGreeting(state.me.full_name);
+    const requestedArticle = Number(params.get('article'));
+    if (requestedArticle > 0) { if (introEl) introEl.classList.add('intro--hidden'); }
+    else showIntroGreeting(state.me.full_name);
 
     document.getElementById('userName').textContent = state.me.full_name;
     // Подпись под именем — только про управление. Статус члена Братства оттуда
@@ -5386,10 +5432,12 @@
       roleLine.textContent = state.me.role_label || '';
     }
 
+    if (requestedArticle > 0 && Number.isSafeInteger(requestedArticle)) state.tab = state.me.has_personal_cabinet ? 'home' : 'news';
     renderImpersonationBanner();
     renderCabinetSwitch();
     renderTabs();
     renderTab();
+    if (requestedArticle > 0 && Number.isSafeInteger(requestedArticle)) articleUI.open(requestedArticle);
   }
 
   boot();

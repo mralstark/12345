@@ -205,6 +205,10 @@ async def _character_payload(session: AsyncSession, member: Member) -> dict:
                                 earned_stars_floor=progress_by_quest[q.id].earned_stars_floor)
                      for q in retired if q.id in progress_by_quest]
     legacy_quests = [q for q in legacy_quests if q["claimable_stars"] > 0]
+    from services.academy_notifications import add_notice
+    quest_by_id = {q.id: q for q in quests + retired}
+    for item in quest_items + legacy_quests:
+        add_notice(member, quest_by_id[item["id"]], progress_by_quest.get(item["id"]), item)
     touched = sum(1 for item in quest_items if item["count"] > 0)
     total = len(quest_items)
     if total and touched >= total:
@@ -283,6 +287,34 @@ async def get_character(
 
 class AvatarPatch(BaseModel):
     outfit: str = Field(...)
+
+
+class NoticeIn(BaseModel):
+    quest_id: int
+    token: str = Field(min_length=64, max_length=64, pattern="^[0-9a-f]+$")
+
+
+class NoticesIn(BaseModel):
+    items: list[NoticeIn] = Field(default_factory=list, max_length=200)
+
+
+@router.post("/me/seen")
+async def mark_personal_notices(payload: NoticesIn, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
+    member = await _own_member(user, session, lock=True)
+    from services.academy_notifications import notice_token
+    for seen in payload.items:
+        row = (await session.execute(select(MemberQuestProgress).where(
+            MemberQuestProgress.member_id == member.id, MemberQuestProgress.quest_id == seen.quest_id,
+        ).with_for_update())).scalar_one_or_none()
+        quest = await session.get(Quest, seen.quest_id)
+        if row is None or quest is None:
+            continue
+        item = _quest_dict(quest, row.count, row.stars_claimed, earned_stars_floor=row.earned_stars_floor or 0)
+        # A response from an older screen cannot swallow a later reward/assignment.
+        if notice_token(member, quest, row, item) == seen.token:
+            row.personal_seen_token = seen.token
+    await session.commit()
+    return {"ok": True}
 
 
 class QuestSubmissionIn(BaseModel):

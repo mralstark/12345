@@ -79,9 +79,10 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
     progress = [] if member is None else (await session.execute(select(MemberQuestProgress, Quest).join(
         Quest, Quest.id == MemberQuestProgress.quest_id,
     ).where(MemberQuestProgress.member_id == member.id))).all()
-    academy_alerts = sum(int(bool(q.is_active and row.assigned_by_user_id and not row.pending_count)) + int(
-        _quest_dict(q, row.count, row.stars_claimed, earned_stars_floor=row.earned_stars_floor or 0)["claimable_stars"] > 0
-    ) for row, q in progress)
+    from services.academy_notifications import add_notice
+    academy_alerts = sum(add_notice(member, q, row, _quest_dict(
+        q, row.count, row.stars_claimed, earned_stars_floor=row.earned_stars_floor or 0,
+    ))["is_unread"] for row, q in progress)
     ids = [r.id for r in regions]
     pending_by_region = {}
     if ids and can_manage_academy(user):

@@ -82,6 +82,11 @@ rollback() {
   code=$?
   trap - ERR
   echo 'Update failed; restoring previous application code'
+  if ! (cd /opt/bratstvo && /opt/bratstvo/.venv/bin/python -m scripts.check_rollback_compatibility "$ROLLBACK"); then
+    systemctl stop bratstvo-api bratstvo-api.socket bratstvo-bot
+    echo 'Unsafe rollback blocked; application data and release backups preserved'
+    exit "$code"
+  fi
   tar xzf "$ROLLBACK" -C /opt/bratstvo
   chown -R bratstvo:bratstvo /opt/bratstvo
   chown root:bratstvo /opt/bratstvo/.env
@@ -98,7 +103,7 @@ chown root:bratstvo /opt/bratstvo/.env
 chmod 640 /opt/bratstvo/.env
 bash /opt/bratstvo/deploy/sync_units.sh
 cd /opt/bratstvo
-for migration in migrate_security_constraints migrate_university_active migrate_operational_roles_and_reviews migrate_cabinet_revisions migrate_gamification migrate_service_reliability; do
+for migration in migrate_security_constraints migrate_university_active migrate_operational_roles_and_reviews migrate_cabinet_revisions migrate_gamification migrate_service_reliability migrate_articles; do
   sudo -u bratstvo /opt/bratstvo/.venv/bin/python -m scripts.$migration
 done
 systemctl start bratstvo-api.socket bratstvo-api bratstvo-bot

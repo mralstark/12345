@@ -1,8 +1,8 @@
 """Новости: общая лента Братства.
 
-Публиковать может любой; разделения по уровням доступа нет — новость видят
-все, кто открыл кабинет. От чьего имени сказано, показывает подпись, которую
-считает byline_for и которая сохраняется в посте в момент публикации.
+Публикует руководящий состав; опубликованную ленту видят авторизованные
+пользователи, черновики — только их автор. Подпись рассчитывает byline_for;
+она сохраняется в посте в момент публикации.
 """
 
 import asyncio
@@ -168,6 +168,8 @@ async def create_news(
         await session.execute(
             select(NewsPost).where(
                 NewsPost.author_user_id == author.id,
+                NewsPost.publication_state == "published",
+                NewsPost.content_kind == "post",
                 NewsPost.text == text,
                 NewsPost.region_id == region_id,
                 NewsPost.byline_kind == (BYLINE_OTDELENIE if region_id is not None else byline_kind_for(author, official)),
@@ -211,7 +213,7 @@ async def create_news(
 async def news_audience_telegram_ids(session: AsyncSession, post: NewsPost) -> list[int]:
     """Telegram-id тех, кому уходит уведомление об этом посте. Автора среди
     них нет — он и так знает, что опубликовал."""
-    if post.byline_kind == BYLINE_PERSONAL:
+    if post.publication_state != "published" or post.byline_kind == BYLINE_PERSONAL:
         return []
 
     author = await session.get(User, post.author_user_id)
@@ -248,6 +250,7 @@ async def news_feed(session: AsyncSession, user: User, limit: int = 50) -> list[
     """Общая лента: видят все и всё. Разделения по отделениям нет."""
     query = (
         select(NewsPost)
+        .where(NewsPost.publication_state == "published")
         .order_by(NewsPost.created_at.desc(), NewsPost.id.desc())
         .limit(limit)
     )
@@ -255,10 +258,9 @@ async def news_feed(session: AsyncSession, user: User, limit: int = 50) -> list[
 
 
 async def can_see_post(session: AsyncSession, user: User, post: NewsPost) -> bool:
-    """Оставлено одной точкой, через которую проходят фотографии, комментарии,
-    реакции и просмотры: сейчас лента общая и ответ всегда положительный, но
-    если ограничения вернутся, править нужно будет только здесь."""
-    return True
+    """Общая опубликованная лента; частные черновики — только своему автору.
+    Эта проверка также защищает выдачу новых ссылок изображений."""
+    return post.publication_state == "published" or (post.author_user_id == user.id and can_post_news(user))
 
 
 # Уровни для модерации. Удалять чужие посты можно только строго ниже себя и
@@ -336,7 +338,7 @@ async def delete_news(session: AsyncSession, user: User, post_id: int, *, person
     Квитанции забираем ДО удаления: каскад унесёт их вместе с постом, а
     переписать сообщения в боте надо уже после — и знать, какие именно.
     """
-    post = await session.get(NewsPost, post_id)
+    post = (await session.execute(select(NewsPost).where(NewsPost.id == post_id).with_for_update())).scalar_one_or_none()
     if post is None:
         raise ValueError("Новость не найдена")
     if not await can_delete_post(session, user, post, personal=personal):
@@ -354,6 +356,17 @@ async def delete_news(session: AsyncSession, user: User, post_id: int, *, person
         "byline": post.byline,
         "messages": [(row.chat_id, row.message_id) for row in sent],
     }
+    # Working copies only own newly uploaded files; source illustrations stay
+    # attached to the published post. Removing a source also removes its copies.
+    copies = list((await session.execute(select(NewsPost).where(
+        NewsPost.article_source_id == post.id, NewsPost.publication_state == "draft",
+    ))).scalars())
+    for copy in copies:
+        for image in (await session.execute(select(NewsPhoto).where(NewsPhoto.post_id == copy.id))).scalars():
+            target = (STORAGE_DIR / image.stored_path).resolve()
+            if target.is_file() and STORAGE_DIR.resolve() in target.parents:
+                target.unlink()
+        await session.delete(copy)
 
     # Каскад заберёт строки фотографий, комментариев, реакций и просмотров, но
     # файлы на диске надо убрать руками — иначе STORAGE_DIR растёт мусором.

@@ -1,7 +1,7 @@
 """Новости кабинета: общая лента и публикация.
 
-Писать может любой, видят все. Роль автора решает не аудиторию, а подпись
-под постом (services/news.py::byline_for).
+Публикует руководящий состав; опубликованную ленту читают авторизованные
+пользователи. Статьи используют те же подписи, медиа и рассылку.
 """
 
 import logging
@@ -68,6 +68,7 @@ from services.news import (
     toggle_reaction,
     views_count,
 )
+from services.articles import cover_photo_id, article_link
 from utils.access import AccessDenied
 from utils.notify import get_notifier_bot, notify_telegram
 from utils.tz import iso_utc
@@ -130,6 +131,10 @@ async def list_news(
             {
                 "id": post.id,
                 "text": post.text,
+                "content_kind": post.content_kind,
+                "article_title": post.article_title,
+                "article_summary": post.article_summary,
+                "cover_photo_id": cover_photo_id(post),
                 "author_user_id": post.author_user_id,
                 "author_name": short_name(author.full_name) if author is not None else None,
                 "byline": post.byline or (short_name(author.full_name) if author is not None else ""),
@@ -226,7 +231,7 @@ async def _send_news_notifications(post_id: int) -> None:
     """
     async with async_session() as session:
         post = await session.get(NewsPost, post_id)
-        if post is None:
+        if post is None or post.publication_state != "published":
             return
         telegram_ids = await news_audience_telegram_ids(session, post)
         byline, text, kind = post.byline, post.text, post.byline_kind
@@ -254,7 +259,8 @@ async def _send_news_notifications(post_id: int) -> None:
     keyboard = None
     if WEBAPP_URL:
         keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="🏛 Открыть в кабинете", web_app=WebAppInfo(url=WEBAPP_URL))]]
+            inline_keyboard=[[InlineKeyboardButton(text="Читать статью" if post.content_kind == "article" else "🏛 Открыть в кабинете",
+                web_app=WebAppInfo(url=article_link(post.id) if post.content_kind == "article" else WEBAPP_URL))]]
         )
 
     # Запоминаем, какое сообщение у кого получилось: без этого удалённая

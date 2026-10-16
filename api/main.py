@@ -16,6 +16,7 @@ from api.routers import (
     academy,
     analytics,
     applications,
+    articles,
     bureau,
     browser_login,
     cells,
@@ -147,6 +148,7 @@ for router in (
     register.router,
     regions.router,
     tasks.router,
+    articles.router,
     news.router,
     analytics.router,
     reports.router,
@@ -193,6 +195,6 @@ if WEBAPP_DIR.exists():
         """Подставляем в ссылки на app.js/styles.css версию по mtime файла —
         адрес меняется сам при каждом деплое. index.html отдаём с no-store."""
         html = (WEBAPP_DIR / "index.html").read_text(encoding="utf-8")
-        for asset in ("app.js", "styles.css"):
+        for asset in ("app.js", "styles.css", "articles.js"):
             html = html.replace(f"/static/{asset}", f"/static/{asset}?v={_asset_version(asset)}")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
