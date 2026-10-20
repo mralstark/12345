@@ -45,7 +45,7 @@ class SlidingWindowLimiter:
 _limiter = SlidingWindowLimiter()
 
 
-def enforce_user_rate_limit(telegram_id: int, method: str, path: str) -> None:
+def enforce_user_rate_limit(telegram_id: int | str, method: str, path: str) -> None:
     method = method.upper()
     if "export" in path or path.startswith("/api/reports") or path == "/api/downloads/prepare":
         scope, limit, window = "export", 6, 60

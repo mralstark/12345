@@ -37,6 +37,7 @@ from api.routers import (
     shop,
     tasks,
     universities,
+    vk_login,
 )
 from api.idempotency import idempotency_store
 from config import (
@@ -137,6 +138,7 @@ async def image_busy_handler(request: Request, exc: ImageProcessorBusy) -> JSONR
 
 
 for router in (
+    vk_login.router,
     browser_login.router,
     academy.router,
     context.router,
@@ -201,6 +203,6 @@ if WEBAPP_DIR.exists():
         """Подставляем в ссылки на app.js/styles.css версию по mtime файла —
         адрес меняется сам при каждом деплое. index.html отдаём с no-store."""
         html = (WEBAPP_DIR / "index.html").read_text(encoding="utf-8")
-        for asset in ("app.js", "styles.css", "articles.js"):
+        for asset in ("app.js", "styles.css", "articles.js", "bootstrap.js"):
             html = html.replace(f"/static/{asset}", f"/static/{asset}?v={_asset_version(asset)}")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})

@@ -19,6 +19,8 @@ BOT_PROXY_URL = os.getenv("BOT_PROXY_URL") or None
 # Публичный HTTPS-адрес Mini App. Telegram открывает WebApp только по HTTPS,
 # поэтому для локальной отладки нужен туннель (ngrok/cloudflared).
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/") or None
+# Public VK ID application identifier; tokens are exchanged only by the API.
+VK_ID_CLIENT_ID = os.getenv("VK_ID_CLIENT_ID", "").strip()
 
 # Внешние адреса, с которых браузеру разрешено обращаться к API. В обычной
 # установке Mini App и API находятся на одном origin, поэтому CORS вообще не
@@ -92,6 +94,8 @@ def validate_security_config() -> None:
     устаревшей настройкой, выдающей админские права по пользовательскому ФИО."""
     if APP_ENV not in {"development", "test", "production"}:
         raise RuntimeError("APP_ENV должен быть development, test или production")
+    if VK_ID_CLIENT_ID and (len(VK_ID_CLIENT_ID) > 20 or not all(c in "0123456789" for c in VK_ID_CLIENT_ID) or int(VK_ID_CLIENT_ID) <= 0):
+        raise RuntimeError("VK_ID_CLIENT_ID должен быть публичным числовым ID приложения VK ID")
     if not IS_PRODUCTION:
         return
     if os.getenv("DEV_TELEGRAM_ID", "").strip():

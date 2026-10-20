@@ -81,6 +81,18 @@ async def resolve_user(session: AsyncSession, telegram_id: int, full_name: str =
     if user is None:
         return None
 
+    return await effective_user(session, user)
+
+
+async def resolve_user_by_id(session: AsyncSession, user_id: int) -> User | None:
+    """Browser/VK identities must never resolve through telegram_id=NULL."""
+    user = await session.get(User, user_id)
+    return await effective_user(session, user) if user is not None else None
+
+
+async def effective_user(session: AsyncSession, user: User) -> User:
+    if not user.is_active:
+        return user
     if has_role(user, ROLE_SUPERUSER) and user.view_as_user_id is not None:
         target = await session.get(User, user.view_as_user_id)
         if target is not None and target.is_active:

@@ -11,7 +11,7 @@
 from datetime import datetime
 import unicodedata
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +29,7 @@ from database.models import (
     BureauRegion,
     CoordinatorRegion,
     MembershipApplication,
+    ExternalIdentity,
     Region,
     TelegramPhoneVerification,
     University,
@@ -40,9 +41,38 @@ from services.applications import approve_application
 from utils.notify import escape_telegram_html, notify_telegram, send_cabinet_welcome
 from utils.parser import normalize_phone, normalize_telegram_username
 from utils.roles import region_display_name
-from utils.users import resolve_user
+from utils.users import resolve_user, resolve_user_by_id
 
 router = APIRouter(prefix="/register", tags=["register"])
+
+
+async def registered_user(session, identity):
+    if identity.external_identity_id is not None:
+        return await resolve_user_by_id(session, identity.user_id) if identity.user_id is not None else None
+    return await resolve_user(session, identity.telegram_id, identity.full_name)
+
+
+async def verified_phone(session, identity):
+    if identity.external_identity_id is not None:
+        return identity.verified_phone
+    verification = await session.get(TelegramPhoneVerification, identity.telegram_id)
+    return verification.phone if verification is not None else None
+
+
+def identity_condition(identity):
+    return (MembershipApplication.external_identity_id == identity.external_identity_id) if identity.external_identity_id is not None else (MembershipApplication.telegram_id == identity.telegram_id)
+
+
+async def contact_has_account(session, phone):
+    if not phone:
+        return False
+    # Editable roster contacts are not identity proof: another participant
+    # must not be able to reserve a victim's phone by changing their profile.
+    return (await session.execute(select(User.id)
+        .outerjoin(TelegramPhoneVerification, TelegramPhoneVerification.telegram_id == User.telegram_id)
+        .outerjoin(ExternalIdentity, ExternalIdentity.user_id == User.id)
+        .where(or_(TelegramPhoneVerification.phone == phone, ExternalIdentity.verified_phone == phone))
+        .limit(1))).scalar_one_or_none() is not None
 
 
 @router.get("/context")
@@ -52,7 +82,7 @@ async def register_context(
 ) -> dict:
     """Веб решает, что показывать: уже есть кабинет — сразу на него; иначе —
     список отделений для формы."""
-    existing = await resolve_user(session, identity.telegram_id, identity.full_name)
+    existing = await registered_user(session, identity)
     if existing is not None:
         return {"already_registered": True}
 
@@ -61,11 +91,17 @@ async def register_context(
         .scalars()
         .all()
     )
-    phone = await session.get(TelegramPhoneVerification, identity.telegram_id)
+    phone = await verified_phone(session, identity)
+    latest = (await session.execute(select(MembershipApplication).where(identity_condition(identity))
+        .order_by(MembershipApplication.id.desc()).limit(1))).scalar_one_or_none()
     return {
         "already_registered": False,
         "regions": [{"id": r.id, "label": region_display_name(r)} for r in regions],
-        "verified_phone": phone.phone if phone is not None else None,
+        "verified_phone": phone,
+        "provider": "vk" if identity.external_identity_id is not None else "telegram",
+        "full_name": identity.full_name,
+        "application": {"state": latest.state, "reason": latest.reject_reason} if latest else None,
+        "existing_account": bool(identity.external_identity_id and await contact_has_account(session, phone)),
     }
 
 
@@ -74,10 +110,10 @@ async def register_phone(
     identity: TelegramIdentity = Depends(get_telegram_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    verification = await session.get(TelegramPhoneVerification, identity.telegram_id)
+    phone = await verified_phone(session, identity)
     return {
-        "verified": verification is not None,
-        "phone": verification.phone if verification is not None else None,
+        "verified": phone is not None,
+        "phone": phone,
     }
 
 
@@ -183,10 +219,11 @@ class RegisterSubmit(BaseModel):
 @router.post("/submit")
 async def register_submit(
     payload: RegisterSubmit,
+    background_tasks: BackgroundTasks,
     identity: TelegramIdentity = Depends(get_telegram_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    existing = await resolve_user(session, identity.telegram_id, identity.full_name)
+    existing = await registered_user(session, identity)
     if existing is not None:
         raise HTTPException(409, "У вас уже есть личный кабинет")
 
@@ -212,12 +249,30 @@ async def register_submit(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    verification = await session.get(TelegramPhoneVerification, identity.telegram_id)
-    if IS_PRODUCTION and verification is None:
-        raise HTTPException(400, "Подтвердите номер через Telegram")
-    phone = verification.phone if verification is not None else submitted_phone
-    if verification is not None and submitted_phone != verification.phone:
-        raise HTTPException(400, "Номер изменился — подтвердите его через Telegram ещё раз")
+    confirmed_phone = await verified_phone(session, identity)
+    if (IS_PRODUCTION or identity.external_identity_id is not None) and not confirmed_phone:
+        raise HTTPException(400, "Разрешите VK ID передать телефон и повторите вход" if identity.external_identity_id else "Подтвердите номер через Telegram")
+    phone = confirmed_phone or submitted_phone
+    if confirmed_phone is not None and submitted_phone != confirmed_phone:
+        raise HTTPException(400, "Номер изменился — подтвердите его ещё раз")
+    if identity.external_identity_id is not None:
+        if await contact_has_account(session, phone):
+            raise HTTPException(409, "С этим телефоном уже есть кабинет. Войдите в него через Telegram и подключите VK в разделе «Способы входа»")
+    elif confirmed_phone:
+        web_account = (await session.execute(select(User.id).join(ExternalIdentity, ExternalIdentity.user_id == User.id)
+            .where(ExternalIdentity.verified_phone == phone, User.telegram_id.is_(None)).limit(1))).scalar_one_or_none()
+        if web_account is not None:
+            raise HTTPException(409, "С этим телефоном уже есть веб-кабинет. Войдите в него через VK ID, не создавая вторую анкету")
+    cross_provider = (MembershipApplication.phone == phone) & (MembershipApplication.state == APPLICATION_STATE_PENDING)
+    cross_provider = cross_provider & or_(
+        MembershipApplication.telegram_id.in_(select(TelegramPhoneVerification.telegram_id).where(TelegramPhoneVerification.phone == phone)),
+        MembershipApplication.external_identity_id.in_(select(ExternalIdentity.id).where(ExternalIdentity.verified_phone == phone)),
+    )
+    if identity.external_identity_id is None:
+        cross_provider = cross_provider & MembershipApplication.external_identity_id.is_not(None)
+    existing_request = (await session.execute(select(MembershipApplication.id).where(cross_provider).limit(1))).scalar_one_or_none()
+    if existing_request is not None:
+        raise HTTPException(409, "Заявка с этим телефоном уже отправлена. Дождитесь решения руководителя")
 
     if payload.status not in MEMBER_STATUS_LABELS:
         raise HTTPException(400, "Неизвестный статус")
@@ -233,7 +288,7 @@ async def register_submit(
     pending = (
         await session.execute(
             select(MembershipApplication).where(
-                MembershipApplication.telegram_id == identity.telegram_id,
+                identity_condition(identity),
                 MembershipApplication.state == APPLICATION_STATE_PENDING,
             )
         )
@@ -271,6 +326,7 @@ async def register_submit(
         region_id=region.id,
         cell_id=cell.id if cell else None,
         telegram_id=identity.telegram_id,
+        external_identity_id=identity.external_identity_id,
         full_name=payload.full_name.strip(),
         phone=phone,
         telegram_username=telegram_username,
@@ -330,11 +386,12 @@ async def register_submit(
     )
     for reviewer in await _reviewers(session, region):
         if reviewer.telegram_id and reviewer.telegram_id != identity.telegram_id:
-            await notify_telegram(reviewer.telegram_id, notify_text)
+            background_tasks.add_task(notify_telegram, reviewer.telegram_id, notify_text)
 
     # Подтверждение в чат бота — отдельно от текста внутри самой Mini App
     # (webapp/app.js::renderRegisterView), явно попросили именно сообщение в чат.
-    await notify_telegram(identity.telegram_id, "Заявка отправлена, ожидайте.")
+    if identity.telegram_id is not None:
+        background_tasks.add_task(notify_telegram, identity.telegram_id, "Заявка отправлена, ожидайте.")
 
     return {"ok": True}
 

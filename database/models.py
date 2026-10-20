@@ -33,12 +33,37 @@ class Base(DeclarativeBase):
     pass
 
 
+class ExternalIdentity(Base):
+    """An explicitly linked provider identity; never matched by name/phone."""
+    __tablename__ = "external_identities"
+    __table_args__ = (UniqueConstraint("provider", "subject"), UniqueConstraint("provider", "user_id"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16), default="vk", server_default="vk")
+    subject: Mapped[str] = mapped_column(String(64))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(128), default="")
+    verified_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class OAuthLoginAttempt(Base):
+    __tablename__ = "oauth_login_attempts"
+    state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    binding_hash: Mapped[str] = mapped_column(String(64))
+    code_verifier: Mapped[str] = mapped_column(String(128))
+    purpose: Mapped[str] = mapped_column(String(16))
+    return_article_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    expires_at: Mapped[int] = mapped_column(BigInteger, index=True)
+
+
 class BrowserSession(Base):
     __tablename__ = "browser_sessions"
 
     secret_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     grant_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    external_identity_id: Mapped[int | None] = mapped_column(ForeignKey("external_identities.id", ondelete="CASCADE"), nullable=True, index=True)
     code: Mapped[str] = mapped_column(String(6))
     expires_at: Mapped[int] = mapped_column(BigInteger, index=True)
 
@@ -875,6 +900,9 @@ class MembershipApplication(Base):
             sqlite_where=text("state = 'pending'"),
             postgresql_where=text("state = 'pending'"),
         ),
+        Index("uq_membership_applications_pending_external", "external_identity_id", unique=True,
+              sqlite_where=text("state = 'pending'"), postgresql_where=text("state = 'pending'")),
+        CheckConstraint("telegram_id IS NOT NULL OR external_identity_id IS NOT NULL", name="ck_application_identity"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -882,7 +910,8 @@ class MembershipApplication(Base):
     # Ячейка Братства выбирается отдельно от места учёбы: вуз может быть в
     # другом городе или обучение может быть заочным.
     cell_id: Mapped[int | None] = mapped_column(ForeignKey("university_cells.id"), nullable=True, index=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, index=True, nullable=True)
+    external_identity_id: Mapped[int | None] = mapped_column(ForeignKey("external_identities.id"), nullable=True)
     full_name: Mapped[str] = mapped_column(String(128))
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     telegram_username: Mapped[str | None] = mapped_column(String(33), nullable=True)

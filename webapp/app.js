@@ -55,7 +55,7 @@
   applyLayoutWidth();
   window.addEventListener('resize', applyLayoutWidth);
 
-  const tg = window.Telegram && window.Telegram.WebApp;
+  const tg = new URLSearchParams(location.search).get('web') !== '1' && window.Telegram && window.Telegram.WebApp;
 
   // Фирменная тема (тона academists.ru) — светлая временно отключена по
   // просьбе (переключатель спрятан в index.html, не удалён), всегда тёмная.
@@ -989,13 +989,13 @@
     const button = document.getElementById('cabinetSwitch');
     const items = cabinetItems();
     // Один кабинет — переключать не на что, кнопке в шапке делать нечего.
-    if (items.length <= 1) {
+    if (items.length <= 1 && !(state.authOptions && state.authOptions.vk)) {
       button.hidden = true;
       return;
     }
     button.hidden = false;
 
-    const current = items.find((item) => item.active) || items[0];
+    const current = items.find((item) => item.active) || items[0] || {kind:'personal',short:'Кабинет'};
     // На кнопке — то, что ждёт в ДРУГИХ кабинетах: про текущий человек и так
     // всё видит по значкам на вкладках.
     const elsewhere = items.reduce((sum, item) => sum + (item.active ? 0 : item.badge), 0);
@@ -1024,11 +1024,41 @@
           ? '<svg class="cabinet-row__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
             'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>'
           : '') +
-        '</button>').join('') + '</div>',
+        '</button>').join('') + '</div>' + (state.authOptions && state.authOptions.vk ? '<button type="button" class="btn btn--ghost btn--block" id="accountLoginSettings">Способы входа</button>' : ''),
       () => {
+        const settings = document.getElementById('accountLoginSettings');
+        if (settings) settings.onclick = () => loginSettings().catch(fail);
         on('[data-cabinet]', 'click', (event) => {
           closeModal();
           switchCabinet(event.currentTarget.dataset.cabinet);
+        });
+      });
+  }
+
+  async function beginVkLogin(link) {
+    const article = Number(new URLSearchParams(location.search).get('article'));
+    const result = await api(link ? '/auth/vk/link' : '/auth/vk/start', {method:'POST', body:{article_id:Number.isSafeInteger(article) && article > 0 ? article : null}});
+    const url = new URL(result.url);
+    if (url.origin !== 'https://id.vk.ru') throw new Error('Не удалось открыть VK ID. Повторите попытку.');
+    location.assign(url.href);
+  }
+
+  async function loginSettings() {
+    const account = await api('/auth/vk/account');
+    modal('Способы входа', '<p>' + (account.connected ? 'VK ID подключён. Вы можете входить в этот же кабинет из браузера.' : 'Подключите VK ID к этому кабинету, чтобы входить в браузере. Ваши роли, задания и история сохранятся.') + '</p>' +
+      (account.connected ? '<div class="notice">VK ID подключён</div>' : '<button type="button" class="btn btn--vk" id="connectVk">Подключить VK ID</button>') +
+      (account.can_unlink ? '<button type="button" class="btn btn--ghost" id="disconnectVk">Отключить VK ID</button>' : '') +
+      '<p class="row__sub">' + (account.can_link ? 'Подключение и отключение доступны после повторного открытия кабинета в Telegram.' : 'VK ID — ваш способ входа в кабинет.') + '</p>', () => {
+        const connect = document.getElementById('connectVk');
+        if (connect) connect.onclick = async () => { connect.disabled = true; try { await beginVkLogin(true); } catch(e) { toast(e.message); connect.disabled = false; } };
+        const disconnect = document.getElementById('disconnectVk');
+        if (disconnect) disconnect.onclick = () => modal('Отключить VK ID?', '<p>Вход через Telegram сохранится. VK больше не будет открывать этот кабинет.</p><div class="btn-row"><button type="button" class="btn" id="confirmVkDisconnect">Отключить</button><button type="button" class="btn btn--ghost" id="cancelVkDisconnect">Отмена</button></div>', () => {
+          document.getElementById('cancelVkDisconnect').onclick = closeModal;
+          document.getElementById('confirmVkDisconnect').onclick = async (event) => {
+            event.currentTarget.disabled = true;
+            try { await api('/auth/vk/link', {method:'DELETE'}); closeModal(); toast('VK ID отключён'); }
+            catch(e) { toast(e.message); event.currentTarget.disabled = false; }
+          };
         });
       });
   }
@@ -5029,14 +5059,32 @@
     const data = await api('/register/context');
     if (data.already_registered) {
       setView('<div class="empty">Личный кабинет уже создан — открываю…</div>', gen);
-      location.href = '/';
+      const next = new URL('/',location.origin);
+      if (!tg || !tg.initData) next.searchParams.set('web','1');
+      const article = Number(new URLSearchParams(location.search).get('article'));
+      if (Number.isSafeInteger(article) && article > 0) next.searchParams.set('article',article);
+      location.href = next.href;
       return;
     }
 
+    const vkRegistration = data.provider === 'vk';
+    if (data.application && data.application.state === 'pending') {
+      setView('<div class="card register-card"><div class="card__title">Заявка на рассмотрении</div><p>Руководитель отделения проверит анкету. После одобрения здесь откроется ваш кабинет.</p><div class="btn-row"><button type="button" class="btn" id="registerRefresh">Проверить статус</button>' + (vkRegistration ? '<button type="button" class="btn btn--ghost" id="registerLogout">Выйти</button>' : '') + '</div></div>', gen);
+      document.getElementById('registerRefresh').onclick = () => startRender((next) => renderRegisterView(next, prefillRegionId));
+      const logout = document.getElementById('registerLogout');
+      if (logout) logout.onclick = async () => { logout.disabled = true; try { await api('/auth/browser/logout',{method:'POST'}); location.href='/'; } catch (error) { fail(error); logout.disabled = false; } };
+      return;
+    }
+    if (vkRegistration && data.existing_account) {
+      setView('<div class="card register-card"><div class="card__title">У вас уже есть кабинет</div><p>Войдите через Telegram, откройте меню кабинетов → «Способы входа» и подключите VK ID. Так сохранятся ваши роли и история.</p><p class="row__sub">Если Telegram недоступен, обратитесь к руководителю отделения. По одному совпадению телефона доступ не выдаётся.</p><button type="button" class="btn" id="registerChooseOther">Выбрать другой способ входа</button></div>', gen);
+      document.getElementById('registerChooseOther').onclick = async (event) => { const button = event.currentTarget; button.disabled = true; try { await api('/auth/browser/logout',{method:'POST'}); location.href='/'; } catch (error) { fail(error); button.disabled = false; } };
+      return;
+    }
     const regions = data.regions || [];
     setView(
       '<div class="card register-card"><div class="card__title">Создание личного кабинета</div>' +
-      '<div class="register-lead">Телефон — основной контакт. Telegram попросит разрешение передать боту ваш номер.</div>' +
+      '<div class="register-lead">' + (vkRegistration ? 'Кабинет создаётся после проверки анкеты руководителем. Телефон передаётся с вашего разрешения через VK ID.' : 'Телефон — основной контакт. Telegram попросит разрешение передать боту ваш номер.') + '</div>' +
+      (data.application && data.application.state === 'rejected' ? '<div class="notice notice--warn">Предыдущая заявка отклонена. ' + esc(data.application.reason || 'Уточните данные у руководителя перед повторной подачей.') + '</div>' : '') +
       '<div class="field"><label>ФИО</label><input id="rName" placeholder="Иванов Иван Иванович" /></div>' +
       '<div class="field"><label>Дата рождения</label><input id="rBirth" placeholder="20.02.2000" inputmode="numeric" /></div>' +
       '<div class="field"><label>Телефон</label><div class="phone-verify"><input id="rPhone" />' +
@@ -5085,19 +5133,20 @@
     let phoneVerified = Boolean(data.verified_phone);
 
     applyPhoneMask(phoneInput);
+    if (vkRegistration) document.getElementById('rName').value = data.full_name || '';
     function showPhoneState(phone) {
       phoneVerified = Boolean(phone);
       if (phone) phoneInput.value = phone;
-      phoneInput.readOnly = inTelegram;
+      phoneInput.readOnly = inTelegram || vkRegistration;
       phoneStatus.textContent = phoneVerified
-        ? '✓ Номер подтверждён Telegram'
-        : (canRequestContact
+        ? '✓ Номер подтверждён ' + (vkRegistration ? 'VK ID' : 'Telegram')
+        : (vkRegistration ? 'VK ID не передал телефон. Разрешите доступ к номеру и повторите вход.' : canRequestContact
           ? 'Нажмите кнопку — Telegram покажет системное подтверждение'
           : (inTelegram ? 'Отправьте команду /phone в чат с ботом и снова откройте форму' : 'Введите номер телефона'));
       phoneStatus.classList.toggle('field-hint--success', phoneVerified);
-      phoneButton.textContent = phoneVerified ? 'Обновить номер' : 'Подтвердить через Telegram';
-      phoneButton.hidden = !canRequestContact;
-      submitButton.disabled = inTelegram && !phoneVerified;
+      phoneButton.textContent = phoneVerified ? 'Обновить номер' : (vkRegistration ? 'Разрешить телефон в VK ID' : 'Подтвердить через Telegram');
+      phoneButton.hidden = vkRegistration ? phoneVerified : !canRequestContact;
+      submitButton.disabled = (inTelegram || vkRegistration) && !phoneVerified;
     }
     showPhoneState(data.verified_phone);
 
@@ -5115,7 +5164,8 @@
       phoneButton.disabled = false;
     }
 
-    phoneButton.onclick = () => {
+    phoneButton.onclick = async () => {
+      if (vkRegistration) { phoneButton.disabled = true; try { await beginVkLogin(false); } catch(e) { toast(e.message); phoneButton.disabled = false; } return; }
       phoneButton.disabled = true;
       phoneStatus.textContent = 'Ожидаю подтверждение в Telegram…';
       try {
@@ -5264,6 +5314,7 @@
             status: status,
           },
         });
+        if (vkRegistration) { startRender((next) => renderRegisterView(next, prefillRegionId)); return; }
         setView('<div class="empty">✅ Анкета отправлена — ждите подтверждения. Можно закрыть это окно.</div>', gen);
       } catch (error) { fail(error); }
     };
@@ -5308,9 +5359,12 @@
     document.querySelector('.topbar').hidden = true;
     document.getElementById('tabs').hidden = true;
     setView('<div class="card browser-login"><div class="card__title">Личный кабинет</div>' +
-      '<p>Войдите в браузере, подтвердив вход в Telegram. Пароль и номер телефона вводить не нужно.</p>' +
+      '<p>' + (state.authOptions && state.authOptions.vk ? 'Выберите способ входа в свой кабинет.' : 'Войдите в браузере, подтвердив вход в Telegram. Пароль и номер телефона вводить не нужно.') + '</p>' +
       '<button class="btn" id="browserLoginStart">Войти через Telegram</button>' +
+      (state.authOptions && state.authOptions.vk ? '<button class="btn btn--vk" id="browserLoginVk">Войти с VK ID</button><p class="row__sub">Если у вас уже есть кабинет в Telegram, сначала подключите VK в разделе «Способы входа».</p>' : '') +
       '<div id="browserLoginStatus" aria-live="polite"></div></div>');
+    const vkButton = document.getElementById('browserLoginVk');
+    if (vkButton) vkButton.onclick = async () => { vkButton.disabled = true; try { await beginVkLogin(false); } catch(e) { document.getElementById('browserLoginStatus').textContent = e.message; vkButton.disabled = false; } };
     document.getElementById('browserLoginStart').onclick = async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
@@ -5345,6 +5399,12 @@
   async function boot() {
     const introEl = document.getElementById('intro');
     const params = new URLSearchParams(location.search);
+    state.authOptions = await api('/auth/options').catch(() => ({vk:false}));
+    if (params.get('login_error')) {
+      const messages = {vk_unavailable:'VK ID временно недоступен. Повторите вход позже.',vk_conflict:'VK ID уже подключён к другому кабинету либо у кабинета уже есть другая привязка.',vk_access_closed:'Доступ к кабинету закрыт. Обратитесь к руководителю отделения.',vk_expired:'Ссылка входа устарела или уже использована. Начните вход заново.',vk_cancelled:'Вход через VK ID отменён.'};
+      toast(messages[params.get('login_error')] || 'Не удалось подтвердить вход через VK ID. Начните вход заново.');
+      const clean = new URL(location.href); clean.searchParams.delete('login_error'); history.replaceState(null,'',clean.pathname + clean.search);
+    }
     if (params.get('view') === 'register') {
       // Незнакомый telegram_id — своя, самодостаточная форма без топбара/
       // вкладок (см. handlers/start.py, api/routers/register.py). Имени тут
@@ -5362,6 +5422,8 @@
     } catch (error) {
       if ((!tg || !tg.initData) && error.status === 401) {
         if (introEl) introEl.classList.add('intro--hidden');
+        const loginStatus = await api('/auth/browser/status').catch(() => ({}));
+        if (loginStatus.registration) { startRender((gen) => renderRegisterView(gen, null)); return; }
         renderBrowserLogin();
         return;
       }

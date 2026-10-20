@@ -18,10 +18,27 @@ def archive_filters_drafts(path):
     return True
 
 
+def archive_supports_web_identities(path):
+    with tarfile.open(path, 'r:gz') as archive:
+        names = {name.removeprefix('./'):name for name in archive.getnames()}
+        name = names.get('api/auth.py')
+        if name is None or 'services/vk_login.py' not in names:
+            return False
+        source = archive.extractfile(name)
+        return source is not None and b'resolve_user_by_id' in source.read()
+
+
 async def safe_to_restore(path):
-    if archive_filters_drafts(path):
-        return True
+    filters_drafts = archive_filters_drafts(path)
+    supports_web = archive_supports_web_identities(path)
     async with engine.connect() as conn:
+        tables = await conn.run_sync(lambda c:set(inspect(c).get_table_names()))
+        if not supports_web and {'external_identities','users'} <= tables:
+            web_users = await conn.scalar(text("SELECT count(*) FROM external_identities e JOIN users u ON u.id=e.user_id WHERE u.telegram_id IS NULL"))
+            if web_users:
+                return False
+        if filters_drafts:
+            return True
         columns = await conn.run_sync(lambda c: {x["name"] for x in inspect(c).get_columns("news_posts")})
         if "publication_state" not in columns:
             return True
@@ -37,7 +54,7 @@ async def main():
     finally:
         await engine.dispose()
     if not safe:
-        print("Rollback refused: the previous reader may expose private article drafts")
+        print("Rollback refused: previous code cannot safely handle private drafts or web identities")
         raise SystemExit(1)
 
 

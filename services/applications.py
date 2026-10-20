@@ -4,6 +4,7 @@
 services/admin_actions.py (там тоже permission-check в хендлере, не в сервисе)."""
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 
 from database.models import (
     APPLICATION_STATE_APPROVED,
@@ -13,6 +14,8 @@ from database.models import (
     Member,
     MembershipApplication,
     User,
+    ExternalIdentity,
+    BrowserSession,
 )
 from services.education import academic_year
 from utils.tz import now as tz_now
@@ -27,7 +30,8 @@ async def approve_application(session: AsyncSession, application_id: int, review
     reviewer_id — None для автоматического одобрения без участия человека
     (api/routers/register.py — доверенные заранее известные люди, см.
     config.AUTO_FEDERAL_FULL_NAMES)."""
-    application = await session.get(MembershipApplication, application_id)
+    application = (await session.execute(select(MembershipApplication).where(MembershipApplication.id == application_id)
+        .with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
     if application is None:
         raise ValueError("Заявка не найдена")
     if application.state != APPLICATION_STATE_PENDING:
@@ -77,6 +81,14 @@ async def approve_application(session: AsyncSession, application_id: int, review
         telegram_id=application.telegram_id,
     )
     session.add(user)
+    await session.flush()
+    if application.external_identity_id is not None:
+        identity = await session.get(ExternalIdentity, application.external_identity_id)
+        if identity is None or identity.user_id is not None:
+            raise ValueError("Идентификатор VK уже связан с кабинетом или недоступен")
+        identity.user_id = user.id
+        await session.execute(update(BrowserSession).where(BrowserSession.external_identity_id == identity.id)
+            .values(user_id=user.id))
 
     application.state = APPLICATION_STATE_APPROVED
     application.reviewed_by_user_id = reviewer_id

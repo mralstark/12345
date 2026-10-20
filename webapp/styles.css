@@ -2344,6 +2344,10 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .article-remove-photo { display:block; margin:10px auto 0; padding:8px 12px; min-height:36px; border:1px solid var(--rule-strong); border-radius:8px; background:transparent; color:var(--hint); font:inherit; font-size:12px; line-height:1.4; cursor:pointer; }
 .article-remove-photo:hover, .article-remove-photo:focus-visible { color:var(--danger); border-color:var(--danger); }
 .article-media-hint { color:var(--hint); font-size:12px; line-height:1.7; margin:24px 0; overflow-wrap:anywhere; }
+.btn--vk { background:#0077ff; color:#fff; border-color:#0077ff; }
+.btn--vk:hover { background:#0069e6; border-color:#0069e6; }
+.browser-login { width:min(100%,480px); margin:clamp(24px,10vh,100px) auto; box-sizing:border-box; }
+.browser-login > .btn { display:flex; width:100%; justify-content:center; margin-top:12px; }
 .article-content hr { width:64px; border:0; border-top:1px solid var(--rule-strong); margin:40px auto; }
 .article-end { text-align:center; color:var(--accent); font-size:9px; margin:48px 0 0; }
 .article-bottom { width:min(100%,720px); margin:0 auto; padding:24px 28px; box-sizing:border-box; }

@@ -19,7 +19,7 @@ from api.rate_limit import enforce_user_rate_limit
 from config import BOT_TOKEN
 from database.db import async_session
 from database.models import User
-from utils.users import resolve_user
+from utils.users import resolve_user, resolve_user_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,8 @@ def ensure_impersonation_read_only(user: User, method: str, path: str) -> None:
 
 async def get_current_user(request: Request, authorization: str = Header(default="")) -> User:
     """Пользователь Mini App. Регионы и права дальше считает utils/access.py."""
-    telegram_id: int
+    telegram_id: int | None
+    browser_user = None
     full_name = ""
 
     if DEV_TELEGRAM_ID:
@@ -134,7 +135,7 @@ async def get_current_user(request: Request, authorization: str = Header(default
         from services.browser_login import same_origin, session_user
         browser_user = await session_user(request)
         if browser_user is None:
-            raise HTTPException(401, "Войдите через Telegram")
+            raise HTTPException(401, "Войдите в личный кабинет")
         if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
             same_origin(request)
         telegram_id = browser_user.telegram_id
@@ -157,9 +158,9 @@ async def get_current_user(request: Request, authorization: str = Header(default
             part for part in (user_field.get("first_name"), user_field.get("last_name")) if part
         )
 
-    enforce_user_rate_limit(telegram_id, request.method, request.url.path)
+    enforce_user_rate_limit(telegram_id if telegram_id is not None else f'user:{browser_user.id}', request.method, request.url.path)
     async with async_session() as session:
-        user = await resolve_user(session, telegram_id, full_name)
+        user = await resolve_user(session, telegram_id, full_name) if telegram_id is not None else await resolve_user_by_id(session, browser_user.id)
         if user is None or not user.is_active:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -176,14 +177,29 @@ class TelegramIdentity:
     регистрации (api/routers/register.py), где человека ещё нет в системе.
     В остальном — тот же разбор, что и get_current_user."""
 
-    def __init__(self, telegram_id: int, full_name: str) -> None:
+    def __init__(self, telegram_id: int | None, full_name: str, *, external_identity_id: int | None = None,
+                 verified_phone: str | None = None, user_id: int | None = None) -> None:
         self.telegram_id = telegram_id
         self.full_name = full_name
+        self.external_identity_id = external_identity_id
+        self.verified_phone = verified_phone
+        self.user_id = user_id
 
 
 async def get_telegram_identity(request: Request, authorization: str = Header(default="")) -> TelegramIdentity:
     if DEV_TELEGRAM_ID:
         return TelegramIdentity(int(DEV_TELEGRAM_ID), "")
+
+    if not authorization:
+        from services.browser_login import same_origin
+        from services.vk_login import registration_identity
+        external = await registration_identity(request)
+        if external is not None:
+            if request.method.upper() not in {'GET','HEAD','OPTIONS'}:
+                same_origin(request)
+            enforce_user_rate_limit(f'vk:{external.id}', request.method, request.url.path)
+            return TelegramIdentity(None, external.full_name, external_identity_id=external.id,
+                                    verified_phone=external.verified_phone, user_id=external.user_id)
 
     scheme, _, raw = authorization.partition(" ")
     if scheme.lower() != "tma" or not raw:

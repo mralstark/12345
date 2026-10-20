@@ -221,6 +221,7 @@ chmod 640 "$APP_DIR/.env"
 
 echo "==> Миграции безопасности"
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_security_constraints)
+(cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_web_identity)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_articles)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_university_active)
 (cd "$APP_DIR" && sudo -u "$APP_USER" "$VENV/bin/python" -m scripts.migrate_operational_roles_and_reviews)
