@@ -12,6 +12,7 @@ from database.models import (
     ROLE_PARTICIPANT,
     Base,
     BirthdayNotice,
+    BrowserSession,
     BureauMember,
     CoordinatorRegion,
     Document,
@@ -19,6 +20,7 @@ from database.models import (
     EventAttendance,
     EventTask,
     EventTaskAssignee,
+    ExternalIdentity,
     Member,
     MemberQuestProgress,
     MembershipApplication,
@@ -27,6 +29,7 @@ from database.models import (
     NewsPost,
     NewsReaction,
     NewsView,
+    OAuthLoginAttempt,
     Quest,
     Region,
     ShopPurchase,
@@ -282,3 +285,27 @@ async def test_leader_cannot_exclude_member_of_other_region(client, session, wor
 
     session.expire_all()
     assert await session.get(Member, member_id) is not None
+
+
+async def test_exclude_vk_only_member_revokes_all_login_proofs_and_preserves_application_history(session, world):
+    member = Member(region_id=world['moscow'].id,full_name='VK участник')
+    session.add(member); await session.flush()
+    user = User(full_name=member.full_name,role=ROLE_PARTICIPANT,member_id=member.id,telegram_id=None)
+    session.add(user); await session.flush()
+    identity = ExternalIdentity(provider='vk',subject='993322',full_name=member.full_name,user_id=user.id)
+    session.add(identity); await session.flush()
+    application = MembershipApplication(region_id=member.region_id,full_name=member.full_name,
+        external_identity_id=identity.id,state='approved')
+    session.add_all([application,
+        OAuthLoginAttempt(state_hash='s'*64,binding_hash='b'*64,code_verifier='v'*64,purpose='link',user_id=user.id,expires_at=9999999999),
+        BrowserSession(secret_hash='a'*64,code='',user_id=user.id,external_identity_id=identity.id,expires_at=9999999999),
+        BrowserSession(secret_hash='b'*64,code='',user_id=None,external_identity_id=identity.id,expires_at=9999999999)])
+    await session.commit()
+    identity_id, application_id, user_id = identity.id, application.id, user.id
+    await exclude_member(session,member.id)
+    session.expire_all()
+    assert await session.get(User,user_id) is None
+    assert (await session.get(ExternalIdentity,identity_id)).user_id is None
+    assert (await session.get(MembershipApplication,application_id)).external_identity_id == identity_id
+    assert not (await session.execute(select(BrowserSession).where(BrowserSession.external_identity_id==identity_id))).scalars().all()
+    assert not (await session.execute(select(OAuthLoginAttempt).where(OAuthLoginAttempt.user_id==user_id))).scalars().all()

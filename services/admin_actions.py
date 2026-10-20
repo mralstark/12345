@@ -24,6 +24,8 @@ from database.models import (
     BirthdayNotice,
     BureauMember,
     BrowserSession,
+    ExternalIdentity,
+    OAuthLoginAttempt,
     Category,
     CoordinatorRegion,
     Document,
@@ -455,6 +457,8 @@ async def reactivate_user(session: AsyncSession, user_id: int) -> User:
 # глазами оказалось нельзя — теперь их считает тест.
 EXCLUDE_HANDLES_USER_REFS = frozenset({
     "browser_sessions.user_id",
+    "external_identities.user_id",
+    "oauth_login_attempts.user_id",
     "regions.leader_user_id",
     "university_cells.leader_user_id",
     "users.view_as_user_id",
@@ -545,6 +549,12 @@ async def exclude_member(
         # NOT NULL поля — оставить не с кем, удаляем сами записи, а не обнуляем.
         await _delete_all(session, BureauMember, BureauMember.user_id == user.id)
         await _delete_all(session, BrowserSession, BrowserSession.user_id == user.id)
+        await _delete_all(session, OAuthLoginAttempt, OAuthLoginAttempt.user_id == user.id)
+        for identity in (await session.execute(select(ExternalIdentity).where(ExternalIdentity.user_id == user.id))).scalars().all():
+            # Keep the identity referenced by historical VK applications, but
+            # revoke every browser session and remove its cabinet connection.
+            await _delete_all(session, BrowserSession, BrowserSession.external_identity_id == identity.id)
+            identity.user_id = None
         await _delete_all(session, NewsComment, NewsComment.author_user_id == user.id)
         await _delete_all(session, NewsReaction, NewsReaction.user_id == user.id)
         await _delete_all(session, NewsView, NewsView.user_id == user.id)
