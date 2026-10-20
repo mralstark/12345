@@ -1,6 +1,8 @@
 aiogram>=3.20,<4.0
 # Security fixes for CVE-2026-111063, CVE-2026-111064 and GHSA-2g87-pp6c-29x5.
 aiohttp>=3.14.4,<3.15
+# Keep the TLS trust bundle past the PYSEC-2026-4320 removal.
+certifi>=2026.10.19
 SQLAlchemy>=2.0
 # Явно, не полагаясь на автоподтяжку SQLAlchemy: на Apple Silicon (macOS
 # arm64) её platform-маркер не срабатывает (там платформа "arm64", а не
@@ -21,4 +23,4 @@ reportlab>=4.2
 # Уменьшение загружаемых фотографий и аватаров (services/images.py). Без неё
 # файл ложился на диск ровно таким, каким пришёл с телефона: снимок на 3,8 МБ
 # ехал к читателю целиком ради картинки шириной в 350 точек.
-Pillow>=10.3
+Pillow>=13.0.0,<14
