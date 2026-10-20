@@ -219,7 +219,9 @@ async def test_logout_cancels_pending_vk_attempt(client, session, monkeypatch):
     calls = provider(monkeypatch)
     state = await begin(client)
     binding = client.cookies.get(vk_login.BINDING_COOKIE)
-    assert (await client.post('/api/auth/browser/logout',headers={'Origin':'http://test'})).status_code == 200
+    response = await client.post('/api/auth/browser/logout',headers={'Origin':'http://test','Idempotency-Key':'vk-browser-logout-proof-test'})
+    assert response.status_code == 200
+    assert len(response.headers.get_list('set-cookie')) == 2
     client.cookies.set(vk_login.BINDING_COOKIE,binding)
     assert 'login_error' in (await finish(client,state)).headers['location']
     assert not calls and not (await session.execute(select(OAuthLoginAttempt))).scalars().all()

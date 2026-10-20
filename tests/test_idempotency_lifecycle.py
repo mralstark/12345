@@ -50,3 +50,22 @@ async def test_live_request_cannot_expire_or_be_evicted_by_new_keys():
     responses = await asyncio.gather(first, duplicate)
     assert [r.status_code for r in responses] == [200, 200]
     assert calls == 1
+
+
+async def test_first_and_replayed_response_keep_all_cookie_headers():
+    store = IdempotencyStore()
+    calls = 0
+    async def handle(_):
+        nonlocal calls
+        calls += 1
+        response = StreamingResponse(iter([b'logged-out']))
+        response.delete_cookie('browser-session',httponly=True,samesite='strict')
+        response.delete_cookie('oauth-attempt',httponly=True,samesite='lax')
+        return response
+    for _ in range(2):
+        response = await store.execute(request(),handle)
+        cookies = response.headers.getlist('set-cookie')
+        assert len(cookies)==2
+        assert any(cookie.startswith('browser-session=') and 'Max-Age=0' in cookie for cookie in cookies)
+        assert any(cookie.startswith('oauth-attempt=') and 'Max-Age=0' in cookie for cookie in cookies)
+    assert calls==1

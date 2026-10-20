@@ -20,7 +20,7 @@ class _Entry:
     ready: asyncio.Event = field(default_factory=asyncio.Event)
     status_code: int | None = None
     body: bytes = b""
-    headers: dict[str, str] = field(default_factory=dict)
+    headers: list[tuple[bytes, bytes]] = field(default_factory=list)
     error: BaseException | None = None
     finished_at: float | None = None
 
@@ -70,26 +70,31 @@ class IdempotencyStore:
             await entry.ready.wait()
             if entry.error is not None:
                 raise entry.error
-            return Response(content=entry.body, status_code=entry.status_code or 500, headers=entry.headers)
+            replay = Response(content=entry.body, status_code=entry.status_code or 500)
+            replay.raw_headers = list(entry.headers)
+            return replay
 
         try:
             response = await call_next(request)
             body = b"".join([chunk async for chunk in response.body_iterator])
             entry.status_code = response.status_code
             entry.body = body
-            entry.headers = dict(response.headers)
+            # Set-Cookie can occur more than once (session and OAuth binding).
+            # A dict silently loses cookies both on first delivery and replay.
+            entry.headers = list(response.raw_headers)
             if response.status_code == 429 or response.status_code >= 500:
                 # A retry after Retry-After must be allowed to run, rather
                 # than replaying a temporary decoder/rate-limit failure.
                 async with self._lock:
                     if self._entries.get(cache_key) is entry:
                         self._entries.pop(cache_key)
-            return Response(
+            result = Response(
                 content=body,
                 status_code=response.status_code,
-                headers=entry.headers,
                 background=response.background,
             )
+            result.raw_headers = list(entry.headers)
+            return result
         except BaseException as exc:
             entry.error = exc
             async with self._lock:
