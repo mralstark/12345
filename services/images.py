@@ -15,6 +15,7 @@
 """
 
 import io
+import asyncio
 import logging
 import warnings
 
@@ -32,7 +33,10 @@ AVATAR_MAX_SIDE = 512
 # Ограничение относится к распакованному изображению. Маленький сжатый файл
 # может занимать сотни мегабайт после декодирования (decompression bomb).
 MAX_IMAGE_PIXELS = 25_000_000
-MAX_ANIMATION_FRAMES = 60
+# Pillow checks GIF frame extents before allocating disposal buffers. Match
+# its threshold to ours, including frames decoded after Image.open().
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+MAX_ANIMATION_FRAMES = 300
 MAX_ANIMATION_TOTAL_PIXELS = 50_000_000
 
 JPEG_QUALITY = 82
@@ -53,30 +57,75 @@ class InvalidImageError(ValueError):
     pass
 
 
+class ImageProcessorBusy(ValueError):
+    pass
+
+
+# Shared by news, articles and avatars. Waiting bodies must not create an
+# unbounded decoder/thread queue; clients can retry a busy upload explicitly.
+_decoder = asyncio.Semaphore(1)
+
+
+async def prepare_image(payload: bytes, max_side: int) -> tuple[bytes, str]:
+    try:
+        await asyncio.wait_for(_decoder.acquire(), timeout=0.25)
+    except TimeoutError as exc:
+        raise ImageProcessorBusy("Обрабатывается другое изображение. Повторите загрузку через несколько секунд") from exc
+    task = asyncio.create_task(asyncio.to_thread(shrink, payload, max_side))
+    def finished(completed):
+        # Even repeated request cancellation cannot release a live decoder.
+        _decoder.release()
+        if not completed.cancelled():
+            completed.exception()  # consume exceptions after a disconnect
+    task.add_done_callback(finished)
+    return await asyncio.shield(task)
+
+
 def shrink(payload: bytes, max_side: int) -> tuple[bytes, str]:
     """Возвращает уменьшенную картинку и её content-type.
 
     Если картинка и так меньше предела, а формат обычный, отдаём исходные
     байты — незачем пересохранять и терять качество на ровном месте.
     """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        return _shrink(payload, max_side)
+
+
+def _shrink(payload: bytes, max_side: int) -> tuple[bytes, str]:
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            image = Image.open(io.BytesIO(payload))
+        image = Image.open(io.BytesIO(payload))
         with image:
             if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_IMAGE_PIXELS:
                 raise InvalidImageError("Слишком большое разрешение изображения")
-            image.load()
             source_format = (image.format or "").upper()
             content_type = _content_type(source_format)
             if not content_type:
-                raise InvalidImageError("Неподдерживаемый формат изображения")
+                raise InvalidImageError("Неподдерживаемый формат. Используйте JPEG, PNG, GIF или WebP")
+            image.load()
             # Анимацию не трогаем вовсе: кадры при пересохранении потеряются.
-            if source_format in ANIMATED_FORMATS and getattr(image, "n_frames", 1) > 1:
-                frames = image.n_frames
-                if frames > MAX_ANIMATION_FRAMES or frames * image.width * image.height > MAX_ANIMATION_TOTAL_PIXELS:
-                    raise InvalidImageError("Слишком большая анимация")
-                return payload, content_type
+            if source_format in ANIMATED_FORMATS:
+                # Decoding frame zero alone accepts GIF/WebP/APNG with broken
+                # later frames. Do not ask GIF for n_frames: Pillow scans the
+                # entire file to count them, before we could apply our bound.
+                total_pixels = 0
+                frames = 0
+                for frame in range(MAX_ANIMATION_FRAMES + 1):
+                    try:
+                        image.seek(frame)
+                    except EOFError:
+                        break
+                    if frame == MAX_ANIMATION_FRAMES:
+                        raise InvalidImageError(f"Слишком большая анимация: максимум {MAX_ANIMATION_FRAMES} кадров")
+                    pixels = image.width * image.height
+                    total_pixels += pixels
+                    if pixels > MAX_IMAGE_PIXELS or total_pixels > MAX_ANIMATION_TOTAL_PIXELS:
+                        raise InvalidImageError("Слишком большое разрешение анимации")
+                    image.load()
+                    frames += 1
+                if frames > 1:
+                    return payload, content_type
+                image.seek(0)
 
             # Телефон пишет поворот в EXIF, а не в самих точках. Если его не
             # применить до уменьшения, снимок ляжет на диск повёрнутым — при
@@ -116,7 +165,7 @@ def shrink(payload: bytes, max_side: int) -> tuple[bytes, str]:
 
     except InvalidImageError:
         raise
-    except (Image.DecompressionBombError, Image.DecompressionBombWarning, UnidentifiedImageError, OSError, ValueError) as exc:
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning, UnidentifiedImageError, OSError, ValueError, EOFError, SyntaxError) as exc:
         logger.warning("Отклонено некорректное изображение: %s", exc)
         raise InvalidImageError("Файл не удалось распознать как безопасное изображение") from exc
 

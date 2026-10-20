@@ -5,7 +5,6 @@
 она сохраняется в посте в момент публикации.
 """
 
-import asyncio
 import hashlib
 import hmac
 import re
@@ -35,7 +34,8 @@ from database.models import (
     Region,
     User,
 )
-from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, shrink, suffix_for
+from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, prepare_image, suffix_for
+from utils.upload_transaction import track_upload
 from services.moderation import check as check_text
 from utils.access import AccessDenied, accessible_region_ids, actor_cell
 from utils.storage import ensure_storage_capacity
@@ -137,7 +137,8 @@ async def byline_for(session: AsyncSession, author: User, official: bool = False
 
 
 async def create_news(
-    session: AsyncSession, author: User, text: str, official: bool = False, region_id: int | None = None
+    session: AsyncSession, author: User, text: str, official: bool = False, region_id: int | None = None,
+    *, commit: bool = True,
 ) -> NewsPost:
     text = text.strip()
     if not text:
@@ -184,6 +185,7 @@ async def create_news(
     ).scalars().first()
     if recent is not None:
         recent.flagged_words = []
+        recent.duplicate = True
         return recent
 
     post = NewsPost(
@@ -194,7 +196,10 @@ async def create_news(
         region_id=region_id,
     )
     session.add(post)
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     await session.refresh(post)
     # Что насторожило — кладём на сам объект: заводить ради этого поле в базе
     # незачем, значение нужно ровно один раз, сразу после публикации.
@@ -415,7 +420,7 @@ async def _read_upload_limited(upload, *, too_large_message: str, empty_ok: bool
     return payload
 
 
-async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> int:
+async def attach_photos(session: AsyncSession, post: NewsPost, files: list, *, commit: bool = True) -> int:
     """Сохраняет файлы на диск и привязывает их к новости. Возвращает число
     добавленных. Порядок в галерее — порядок, в котором их прислали."""
     added = 0
@@ -443,7 +448,7 @@ async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> i
         # не отдавал управление — кабинет замирал для всех, кто в этот момент
         # им пользовался. Ядро на сервере одно, подхватить некому. Теперь
         # цикл событий свободен и обслуживает остальных, пока идёт сжатие.
-        payload, content_type = await asyncio.to_thread(shrink, payload, PHOTO_MAX_SIDE)
+        payload, content_type = await prepare_image(payload, PHOTO_MAX_SIDE)
         ensure_storage_capacity(len(payload))
         suffix = suffix_for(content_type)
 
@@ -451,6 +456,7 @@ async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> i
         relative = Path(PHOTO_DIR) / str(post.id) / stored_name
         target = STORAGE_DIR / relative
         target.parent.mkdir(parents=True, exist_ok=True)
+        track_upload(session, target)
         target.write_bytes(payload)
 
         session.add(
@@ -464,8 +470,10 @@ async def attach_photos(session: AsyncSession, post: NewsPost, files: list) -> i
             )
         )
         added += 1
-    if added:
+    if added and commit:
         await session.commit()
+    elif added:
+        await session.flush()
     return added
 
 
@@ -698,7 +706,7 @@ async def save_avatar(session: AsyncSession, member: Member, upload) -> str:
         raise ValueError("Аватар должен быть изображением")
 
     # В отдельном потоке — по той же причине, что и фотографии в attach_photos.
-    payload, content_type = await asyncio.to_thread(shrink, payload, AVATAR_MAX_SIDE)
+    payload, content_type = await prepare_image(payload, AVATAR_MAX_SIDE)
     ensure_storage_capacity(len(payload))
     suffix = suffix_for(content_type)
 

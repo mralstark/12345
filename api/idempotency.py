@@ -22,6 +22,7 @@ class _Entry:
     body: bytes = b""
     headers: dict[str, str] = field(default_factory=dict)
     error: BaseException | None = None
+    finished_at: float | None = None
 
 
 class IdempotencyStore:
@@ -47,16 +48,21 @@ class IdempotencyStore:
         async with self._lock:
             cutoff = monotonic() - self.ttl_seconds
             for key in list(self._entries):
-                if self._entries[key].created_at >= cutoff:
-                    break
-                self._entries.pop(key, None)
+                cached = self._entries[key]
+                if cached.ready.is_set() and cached.finished_at is not None and cached.finished_at < cutoff:
+                    self._entries.pop(key, None)
             entry = self._entries.get(cache_key)
             owner = entry is None
             if owner:
+                # An upload may outlive the cache TTL. Never evict its running
+                # operation, either by time or to admit a flood of new keys.
+                while len(self._entries) >= self.max_entries:
+                    completed = next((k for k, v in self._entries.items() if v.ready.is_set()), None)
+                    if completed is None:
+                        return JSONResponse(status_code=503, content={"detail": "Сервер занят. Повторите запрос через несколько секунд"}, headers={"Retry-After": "2"})
+                    self._entries.pop(completed)
                 entry = _Entry()
                 self._entries[cache_key] = entry
-                while len(self._entries) > self.max_entries:
-                    self._entries.popitem(last=False)
             else:
                 self._entries.move_to_end(cache_key)
 
@@ -72,6 +78,12 @@ class IdempotencyStore:
             entry.status_code = response.status_code
             entry.body = body
             entry.headers = dict(response.headers)
+            if response.status_code == 429 or response.status_code >= 500:
+                # A retry after Retry-After must be allowed to run, rather
+                # than replaying a temporary decoder/rate-limit failure.
+                async with self._lock:
+                    if self._entries.get(cache_key) is entry:
+                        self._entries.pop(cache_key)
             return Response(
                 content=body,
                 status_code=response.status_code,
@@ -84,6 +96,7 @@ class IdempotencyStore:
                 self._entries.pop(cache_key, None)
             raise
         finally:
+            entry.finished_at = monotonic()
             entry.ready.set()
 
 

@@ -49,6 +49,7 @@ from config import (
 )
 from database.db import init_db
 from utils.access import AccessDenied
+from services.images import ImageProcessorBusy
 from utils.notify import close_notifier_bot
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,11 @@ async def access_denied_handler(request: Request, exc: AccessDenied) -> JSONResp
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(ImageProcessorBusy)
+async def image_busy_handler(request: Request, exc: ImageProcessorBusy) -> JSONResponse:
+    return JSONResponse(status_code=429, content={"detail": str(exc)}, headers={"Retry-After": "2"})
 
 
 for router in (

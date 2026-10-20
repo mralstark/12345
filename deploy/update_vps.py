@@ -74,6 +74,8 @@ mkdir -p /opt/bratstvo-releases
 chmod 700 /opt/bratstvo-releases
 ROLLBACK=/opt/bratstvo-releases/code-$STAMP.tar.gz
 tar --exclude=.venv --exclude=.env --exclude=storage --exclude=backups --exclude=.git --exclude='*.db' -czf "$ROLLBACK" -C /opt/bratstvo .
+cp -p /etc/nginx/sites-available/bratstvo "$ROLLBACK.nginx"
+cp -p /etc/nginx/.bratstvo-template.sha256 "$ROLLBACK.nginx-stamp"
 # Зависимости устанавливаются заранее; пока сервисы работают на прежнем коде.
 STAGING=$(mktemp -d /tmp/bratstvo-stage.XXXXXXXX)
 tar xzf "$ARCHIVE" -C "$STAGING"
@@ -91,6 +93,9 @@ rollback() {
   chown -R bratstvo:bratstvo /opt/bratstvo
   chown root:bratstvo /opt/bratstvo/.env
   chmod 640 /opt/bratstvo/.env
+  cp -p "$ROLLBACK.nginx" /etc/nginx/sites-available/bratstvo
+  cp -p "$ROLLBACK.nginx-stamp" /etc/nginx/.bratstvo-template.sha256
+  nginx -t && systemctl reload nginx
   bash /opt/bratstvo/deploy/sync_units.sh
   systemctl start bratstvo-api.socket bratstvo-api bratstvo-bot
   exit "$code"

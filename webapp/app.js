@@ -293,7 +293,9 @@
     const promise = (async () => {
       const response = await fetch('/api' + path, opts);
       if (!response.ok) {
-        let detail = 'Ошибка ' + response.status;
+        let detail = response.status === 413 ? 'Файл или запрос слишком большой. Выберите файл меньшего размера.' :
+          response.status === 429 ? 'Слишком много запросов. Подождите несколько секунд и повторите.' :
+          'Ошибка ' + response.status;
         try {
           const data = await response.json();
           if (data && typeof data.detail === 'string') {

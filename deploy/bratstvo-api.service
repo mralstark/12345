@@ -19,7 +19,9 @@ ExecStart=/opt/bratstvo/.venv/bin/python -m uvicorn api.main:app --fd 3 --no-acc
 Restart=always
 RestartSec=5
 # Сервер может быть общим: предел памяти не даёт нам утащить за собой соседей.
-MemoryMax=350M
+# A bounded decoder handles one photo (up to 25 MP) at a time. Its transient
+# EXIF/resize buffers must fit alongside the API; 350M killed valid phone uploads.
+MemoryMax=768M
 StandardOutput=journal
 StandardError=journal
 

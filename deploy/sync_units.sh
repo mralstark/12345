@@ -11,7 +11,8 @@
 # Настройку nginx здесь НЕ трогаем, и это важно. После первичной установки её
 # правит certbot — дописывает сертификаты и перенаправление на HTTPS. Шаблон в
 # проекте про них ничего не знает, и перезапись шаблоном снесла бы HTTPS.
-# Поэтому про nginx только предупреждаем, а применяет человек руками.
+# Единственная автоматическая миграция ниже меняет известный upload location,
+# сохраняя весь остальной vhost. Неизвестные изменения по-прежнему блокируются.
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/opt/bratstvo}
@@ -68,6 +69,10 @@ fi
 # отпечатком шаблона на момент последней установки.
 NGINX_TEMPLATE="$APP_DIR/deploy/nginx-bratstvo.conf"
 NGINX_STAMP=/etc/nginx/.bratstvo-template.sha256
+
+if [ -f "$APP_DIR/deploy/migrate_nginx_article_uploads.py" ]; then
+    python3 "$APP_DIR/deploy/migrate_nginx_article_uploads.py" "$NGINX_TEMPLATE" "$NGINX_STAMP" /etc/nginx/sites-available/bratstvo
+fi
 
 if [ -f "$NGINX_TEMPLATE" ]; then
     current=$(sha256sum "$NGINX_TEMPLATE" | cut -d' ' -f1)

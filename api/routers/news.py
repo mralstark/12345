@@ -306,8 +306,12 @@ async def publish(
     if len([f for f in (files or []) if f is not None]) > PHOTO_LIMIT:
         raise ValueError(f"К одной новости можно приложить не больше {PHOTO_LIMIT} фотографий")
 
-    post = await create_news(session, user, text, official=official, region_id=region_id)
-    photos = await attach_photos(session, post, files)
+    post = await create_news(session, user, text, official=official, region_id=region_id, commit=False)
+    if getattr(post, "duplicate", False):
+        photos = len((await session.execute(select(NewsPhoto).where(NewsPhoto.post_id == post.id))).scalars().all())
+        return {"id": post.id, "byline": post.byline, "photos": photos}
+    photos = await attach_photos(session, post, files, commit=False)
+    await session.commit()
     # Уведомление ставим в очередь после того, как фотографии легли на диск:
     # человек нажмёт кнопку в уведомлении и увидит пост целиком, а не текст
     # без картинок.

@@ -26,7 +26,7 @@ window.CabinetArticles = function (deps) {
       }
       if (tag === 'a') return safeLink(attrs.href) ? '<a href="' + esc(attrs.href) + '" target="_blank" rel="noopener noreferrer">' + children + '</a>' : children;
       if (tag === 'br' || tag === 'hr') return '<' + tag + '>';
-      return '<' + tag + (editing && tag === 'figure' ? ' contenteditable="false"' : '') + (editing && tag === 'figcaption' ? ' contenteditable="true" tabindex="0" role="textbox" aria-label="Подпись к фотографии" data-placeholder="Подпись к фотографии"' : '') + '>' + children + '</' + tag + '>';
+      return '<' + tag + (editing && tag === 'figure' ? ' contenteditable="false"' : '') + (editing && tag === 'figcaption' ? ' contenteditable="true" tabindex="0" role="textbox" aria-label="Подпись к фотографии" data-placeholder="Подпись к фотографии"' : '') + '>' + children + (editing && tag === 'figure' ? '<button type="button" class="article-remove-photo" aria-label="Удалить изображение">Удалить изображение</button>' : '') + '</' + tag + '>';
     }
     return (nodes || []).map((n) => render(n, 0)).join('');
   }
@@ -178,6 +178,7 @@ window.CabinetArticles = function (deps) {
   async function editor(initial, suppliedIdentities) {
     const identities = suppliedIdentities || await deps.identities();
     let article = initial;
+    const mediaLimits = article.media_limits || {max_bytes:20 * 1024 * 1024, max_photos:10};
     const pane = mount();
     let changed = 0, saved = 0, saving = null, timer = null, actionBusy = false, range = null, previewing = false, publicationAttempt = null;
     const tg = window.Telegram && window.Telegram.WebApp;
@@ -193,8 +194,9 @@ window.CabinetArticles = function (deps) {
       '<div class="article-toolbar" role="toolbar" aria-label="Форматирование статьи">' +
       [['bold','Ж','Жирный'],['italic','К','Курсив'],['h3','H1','Подзаголовок'],['h4','H2','Малый подзаголовок'],['p','Текст','Обычный текст'],['blockquote','Цитата','Цитата'],['insertUnorderedList','• Список','Маркированный список'],['insertOrderedList','1. Список','Нумерованный список'],['link','Ссылка','Добавить ссылку'],['photo','Фото','Вставить фотографию'],['removeFormat','Очистить','Убрать выделение']].map((b) => '<button type="button" class="article-tool" data-format="' + b[0] + '" title="' + b[2] + '" aria-label="' + b[2] + '">' + b[1] + '</button>').join('') + '</div>' +
       '<div id="articleBody" class="article-content article-editable" contenteditable="true" role="textbox" aria-label="Текст статьи" aria-multiline="true" data-placeholder="Начните историю…">' + documentHtml(article.content, article.photos, true) + '</div>' +
-      '<input id="articleFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic" hidden>' +
-      '<div class="article-editor-footer"><span class="row__sub">До 60 000 знаков · до 10 фотографий</span><button class="btn btn--ghost" type="button" id="articleSave">Сохранить черновик</button><button class="btn" type="button" id="articlePreview">Предпросмотр</button></div>' +
+      '<input id="articleFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>' +
+      '<p class="article-media-hint">JPEG, PNG, GIF и WebP · до ' + Math.floor(mediaLimits.max_bytes / (1024 * 1024)) + ' МБ на файл. Можно выбрать несколько, вставить из буфера или перетащить. GIF сохраняет анимацию.</p>' +
+      '<div class="article-editor-footer"><span class="row__sub">До 60 000 знаков · до ' + mediaLimits.max_photos + ' изображений</span><button class="btn btn--ghost" type="button" id="articleSave">Сохранить черновик</button><button class="btn" type="button" id="articlePreview">Предпросмотр</button></div>' +
       '</div></div><div id="articlePreviewPane" class="article-preview-pane" hidden></div>';
     const body = pane.root.querySelector('#articleBody');
     const title = pane.root.querySelector('#articleTitle');
@@ -268,6 +270,8 @@ window.CabinetArticles = function (deps) {
     body.addEventListener('keyup', remember); body.addEventListener('mouseup', remember); body.addEventListener('touchend', remember);
     body.addEventListener('paste', (e) => {
       e.preventDefault(); remember();
+      const files = Array.from(e.clipboardData.files || []);
+      if (files.length) { uploadFiles(files); return; }
       try {
         const html = e.clipboardData.getData('text/html');
         if (html) {
@@ -277,7 +281,14 @@ window.CabinetArticles = function (deps) {
         } else insert(e.clipboardData.getData('text/plain').split(/\r?\n/).map((p) => '<p>' + esc(p) + '</p>').join(''));
       } catch (error) { toast(error.message); }
     });
-    body.addEventListener('drop', (e) => e.preventDefault());
+    body.addEventListener('dragover', (e) => e.preventDefault());
+    body.addEventListener('drop', (e) => {
+      e.preventDefault(); if (!actionBusy) { remember(); uploadFiles(Array.from(e.dataTransfer.files || [])); }
+    });
+    body.addEventListener('click', (e) => {
+      const remove = e.target.closest('.article-remove-photo');
+      if (remove && !actionBusy) { remove.closest('figure').remove(); range = null; dirty(); }
+    });
     const buttons = pane.root.querySelectorAll('[data-format]');
     buttons.forEach((button) => {
       button.addEventListener('mousedown', (e) => { e.preventDefault(); remember(); });
@@ -303,21 +314,56 @@ window.CabinetArticles = function (deps) {
         remember(); dirty();
       };
     });
-    picker.onchange = async () => {
-      const file = picker.files[0]; picker.value = ''; if (!file || actionBusy) return;
-      if (file.size > 20 * 1024 * 1024) { toast('Фотография слишком большая'); return; }
+    function lockEditor(locked) {
+      body.contentEditable = String(!locked); title.disabled = summary.disabled = locked;
+      identitySelect.disabled = locked || Boolean(article.source_id);
+      pane.root.querySelectorAll('.article-toolbar button, #articleSave, #articlePreview, .article-remove-photo').forEach((b) => { b.disabled = locked; });
+      body.querySelectorAll('figcaption').forEach((c) => { c.contentEditable = String(!locked); });
+    }
+    async function uploadFiles(files) {
+      if (!files.length || actionBusy || previewing || !pane.root.isConnected) return;
+      const count = new Set(Array.from(body.querySelectorAll('[data-article-photo]'), (p) => p.dataset.articlePhoto)).size;
+      if (count + files.length > mediaLimits.max_photos) { toast('В статье может быть не больше ' + mediaLimits.max_photos + ' изображений'); return; }
+      if (files.some((f) => !f.size || f.size > mediaLimits.max_bytes)) { toast('Выберите непустые изображения не больше ' + Math.floor(mediaLimits.max_bytes / (1024 * 1024)) + ' МБ каждое'); return; }
       actionBusy = true;
+      let uploaded = 0;
       try {
-        await save(); setStatus('Загружаем фотографию…'); body.contentEditable = 'false'; title.disabled = summary.disabled = identitySelect.disabled = true;
-        const previous = new Set(article.photos.map((p) => p.id));
-        const form = new FormData(); form.append('revision', article.revision); form.append('file', file);
-        article = await api('/news/articles/' + article.id + '/photos', {method:'POST', body:form});
-        const photo = article.photos.find((p) => !previous.has(p.id));
-        body.contentEditable = 'true';
-        if (photo) insert('<figure contenteditable="false"><img src="' + esc(photo.url) + '" data-article-photo="' + photo.id + '" contenteditable="false" alt="Иллюстрация к статье"><figcaption contenteditable="true" tabindex="0" role="textbox" aria-label="Подпись к фотографии"><br></figcaption></figure><p><br></p>');
-        await save();
-      } catch (e) { setStatus('Фотография не загружена', true); toast(e.message); }
-      finally { body.contentEditable = 'true'; title.disabled = summary.disabled = false; identitySelect.disabled = Boolean(article.source_id); actionBusy = false; }
+        lockEditor(true); await save();
+        for (const file of files) {
+          setStatus('Загружаем изображение ' + (uploaded + 1) + ' из ' + files.length + '…');
+          const previous = new Set(article.photos.map((p) => p.id));
+          const form = new FormData(); form.append('revision', article.revision); form.append('file', file);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 120000);
+          const uploadKey = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : 'upload-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+          try {
+            // Same key on the immediate network retry: never duplicate a file
+            // whose successful response was lost on a mobile connection.
+            const send = () => api('/news/articles/' + article.id + '/photos', {method:'POST', headers:{'Idempotency-Key':uploadKey}, body:form, signal:controller.signal});
+            try { article = await send(); }
+            catch (error) {
+              if (error.name !== 'AbortError' && !error.status && !controller.signal.aborted) {
+                await new Promise((resolve) => setTimeout(resolve, 1600)); article = await send();
+              } else throw error;
+            }
+          } finally { clearTimeout(timeout); }
+          const photo = article.photos.find((p) => !previous.has(p.id));
+          if (!photo) throw new Error('Не удалось получить изображение. Откройте сохранённый черновик');
+          uploaded++;
+          // The server has already appended the image atomically. Move it to
+          // the author's cursor in the next save; its fallback is still safe.
+          body.contentEditable = 'true';
+          insert(documentHtml([{tag:'figure',children:[{tag:'img',attrs:{photo_id:photo.id}},{tag:'figcaption',children:[]}]}], [photo], true) + '<p><br></p>');
+          body.contentEditable = 'false'; await save();
+        }
+        setStatus('Черновик сохранён');
+      } catch (e) {
+        setStatus(uploaded ? 'Изображения добавлены: ' + uploaded + '. Проверьте сохранение черновика' : 'Загрузка не завершена — текст сохранён', true);
+        toast(e.name === 'AbortError' ? 'Загрузка заняла слишком много времени. Проверьте связь и откройте сохранённый черновик перед повторной загрузкой.' : e.message);
+      } finally { lockEditor(false); actionBusy = false; }
+    }
+    picker.onchange = () => {
+      const files = Array.from(picker.files); picker.value = ''; uploadFiles(files);
     };
     async function previewArticle() {
       if (actionBusy) return; actionBusy = true;
@@ -354,7 +400,7 @@ window.CabinetArticles = function (deps) {
       restore();
     }
     pane.root.querySelector('#articlePreview').onclick = previewArticle;
-    pane.root.querySelector('#articleSave').onclick = async () => { try { await save(); toast('Черновик сохранён'); } catch (e) { toast(e.message); } };
+    pane.root.querySelector('#articleSave').onclick = async () => { if (actionBusy) return; try { await save(); toast('Черновик сохранён'); } catch (e) { toast(e.message); } };
   }
   return {open, create, drafts, documentHtml, nodesFromDom, safeLink};
 };

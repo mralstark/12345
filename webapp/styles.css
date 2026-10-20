@@ -2341,6 +2341,9 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .article-content img { display:block; max-width:100%; max-height:80vh; height:auto; margin:24px auto; border-radius:3px; cursor:zoom-in; }
 .article-content figure img { margin:0 auto; }
 .article-content figcaption { font-size:13px; line-height:1.55; color:var(--hint); text-align:center; margin-top:12px; min-height:1.55em; }
+.article-remove-photo { display:block; margin:10px auto 0; padding:8px 12px; min-height:36px; border:1px solid var(--rule-strong); border-radius:8px; background:transparent; color:var(--hint); font:inherit; font-size:12px; line-height:1.4; cursor:pointer; }
+.article-remove-photo:hover, .article-remove-photo:focus-visible { color:var(--danger); border-color:var(--danger); }
+.article-media-hint { color:var(--hint); font-size:12px; line-height:1.7; margin:24px 0; overflow-wrap:anywhere; }
 .article-content hr { width:64px; border:0; border-top:1px solid var(--rule-strong); margin:40px auto; }
 .article-end { text-align:center; color:var(--accent); font-size:9px; margin:48px 0 0; }
 .article-bottom { width:min(100%,720px); margin:0 auto; padding:24px 28px; box-sizing:border-box; }

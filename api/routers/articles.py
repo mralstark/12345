@@ -158,8 +158,18 @@ async def upload_photo(article_id: int, revision: int = Form(..., ge=1), file: U
     if count >= PHOTO_LIMIT:
         raise ValueError(f"В статье может быть не больше {PHOTO_LIMIT} фотографий")
     await claim_revision(session, post, revision)
-    if not await attach_photos(session, post, [file]):
+    previous_ids = {p.id for p in await article_photos(session, post)}
+    if not await attach_photos(session, post, [file], commit=False):
         raise ValueError("Выберите непустой файл фотографии")
+    photo = next(p for p in await article_photos(session, post) if p.id not in previous_ids)
+    # The file and its document reference commit together. If the mobile
+    # connection loses the response, reopening the draft still shows the image.
+    content = json.loads(post.article_content or "[]")
+    content.extend([{"tag": "figure", "children": [
+        {"tag": "img", "attrs": {"photo_id": photo.id}},
+        {"tag": "figcaption", "children": []},
+    ]}, {"tag": "p", "children": []}])
+    post.article_content, _ = validate_content(content, previous_ids | {photo.id})
     await session.commit()
     await session.refresh(post)
     return await article_payload(session, user, post)

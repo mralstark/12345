@@ -6,7 +6,8 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import STORAGE_DIR, WEBAPP_URL
+from config import MAX_UPLOAD_BYTES, STORAGE_DIR, WEBAPP_URL
+from services.images import MAX_ANIMATION_FRAMES, MAX_ANIMATION_TOTAL_PIXELS, MAX_IMAGE_PIXELS
 
 from database.models import NewsPhoto, NewsPost, User
 from services.news import can_post_news, can_see_post, photo_url
@@ -164,4 +165,7 @@ async def article_payload(session: AsyncSession, user: User, post: NewsPost) -> 
         "source_id": post.article_source_id,
         "reading_minutes": max(1, math.ceil(len(plain.split()) / 180)),
         "photos": [{"id": p.id, "url": photo_url(p.id)} for p in photos],
+        "media_limits": {"max_bytes": MAX_UPLOAD_BYTES, "max_photos": 10,
+                         "max_pixels": MAX_IMAGE_PIXELS, "max_animation_frames": MAX_ANIMATION_FRAMES,
+                         "max_animation_pixels": MAX_ANIMATION_TOTAL_PIXELS},
     }

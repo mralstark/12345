@@ -650,7 +650,7 @@ async def test_slow_photo_processing_does_not_block_other_requests(client, world
         _time.sleep(BLOCK)          # синхронно, как настоящее сжатие
         return payload, "image/jpeg"
 
-    monkeypatch.setattr("services.news.shrink", slow_shrink)
+    monkeypatch.setattr("services.images.shrink", slow_shrink)
     login(world["leader_moscow"])
 
     served = 0
