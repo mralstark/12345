@@ -196,7 +196,7 @@ async def test_vk_framing_is_explicit_and_bridge_is_served_locally(client):
     response = await client.get("/")
     ancestors = next(directive.split()[1:] for directive in response.headers["content-security-policy"].split(";")
                      if directive.strip().startswith("frame-ancestors "))
-    assert "https://vk.ru" in ancestors
-    assert "*" not in ancestors
+    assert set(ancestors) == {"'self'", "https://web.telegram.org", "https://*.telegram.org",
+                              "https://vk.com", "https://m.vk.com", "https://vk.ru", "https://m.vk.ru"}
     assert 'data-vk="/static/vk-platform.js?v=' in response.text
     assert (await client.get("/static/vendor/vk-bridge.min.js")).status_code == 200
