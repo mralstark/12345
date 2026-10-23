@@ -55,6 +55,8 @@ async def actor_cell(session: AsyncSession, user: User) -> UniversityCell | None
 
 async def accessible_region_ids(session: AsyncSession, user: User) -> list[int]:
     """Регионы, которые пользователь вправе видеть, по возрастанию id."""
+    if not user.is_active:
+        return []
     if has_any_role(user, (ROLE_SUPERUSER, ROLE_FEDERAL)):
         result = await session.execute(select(Region.id).where(Region.is_active.is_(True)).order_by(Region.id))
         return list(result.scalars().all())
@@ -117,14 +119,18 @@ async def can_edit_region(session: AsyncSession, user: User, region_id: int) -> 
     иначе require_edit(region_id) отказал бы ему целиком. Сужение до его
     собственной ячейки (не всего региона) — отдельный, более узкий слой
     actor_cell() поверх этой проверки в самих роутерах (members/events/finance)."""
+    if not user.is_active:
+        return False
     if has_role(user, ROLE_SUPERUSER):
         return True
+    region = await session.get(Region, region_id)
+    if region is None or not region.is_active:
+        return False
     if user.role == ROLE_LEADER:
-        region = await session.get(Region, region_id)
-        return region is not None and region.leader_user_id == user.id
+        return region.leader_user_id == user.id
     if user.role == ROLE_CELL_LEADER:
         cell = await actor_cell(session, user)
-        return cell is not None and cell.region_id == region_id
+        return cell is not None and cell.is_active and cell.region_id == region_id
     return False
 
 
@@ -136,6 +142,13 @@ async def require_view(session: AsyncSession, user: User, region_id: int) -> Non
 async def require_edit(session: AsyncSession, user: User, region_id: int) -> None:
     if not await can_edit_region(session, user, region_id):
         raise AccessDenied("Изменение данных региона доступно только его руководителю")
+
+
+async def require_regional_documents(session: AsyncSession, user: User, region_id: int) -> None:
+    """Documents have regional ownership; a cell role cannot use this workspace."""
+    await require_view(session, user, region_id)
+    if await actor_cell(session, user) is not None:
+        raise AccessDenied("Документы отделения доступны региональному руководству")
 
 
 async def default_region_id(session: AsyncSession, user: User) -> int | None:
@@ -190,6 +203,8 @@ async def correspondents(session: AsyncSession, user: User) -> list[User]:
     У рядового человека нет ни того, ни другого: задачу он получает, а не
     раздаёт. Так и задумано — постановка задачи управленческое действие.
     """
+    if not user.is_active:
+        return []
     people = {u.id: u for u in await _correspondents_by_role(session, user)}
     for person in await subordinates(session, user):
         people[person.id] = person

@@ -76,12 +76,21 @@ async def _check_category(session: AsyncSession, category_id: int | None, region
         raise HTTPException(400, "Категория не принадлежит этому региону")
 
 
-async def _check_event(session: AsyncSession, event_id: int | None, region_id: int) -> None:
+async def _check_event(session: AsyncSession, event_id: int | None, region_id: int,
+                       cell: UniversityCell | None = None) -> None:
     if event_id is None:
         return
     event = await session.get(Event, event_id)
     if event is None or event.region_id != region_id:
         raise HTTPException(400, "Мероприятие не принадлежит этому региону")
+    require_same_cell(cell, event.cell_id)
+
+
+async def _require_category_edit(session: AsyncSession, user: User, region_id: int) -> None:
+    await require_edit(session, user, region_id)
+    # Categories are shared by the whole region, including every cell's history.
+    if await actor_cell(session, user) is not None:
+        raise HTTPException(403, "Категориями региона управляет руководитель отделения")
 
 
 async def _check_cell(session: AsyncSession, cell_id: int | None, region_id: int) -> None:
@@ -222,9 +231,8 @@ async def add_transaction(
 ) -> dict:
     await require_edit(session, user, payload.region_id)
     await _check_category(session, payload.category_id, payload.region_id)
-    await _check_event(session, payload.event_id, payload.region_id)
-
     cell = await actor_cell(session, user)
+    await _check_event(session, payload.event_id, payload.region_id, cell)
     # Сервер не доверяет cell_id от клиента, если пишет руководитель ячейки.
     cell_id = cell.id if cell is not None else payload.cell_id
     await _check_cell(session, cell_id, payload.region_id)
@@ -266,7 +274,7 @@ async def edit_transaction(
     if "category_id" in data:
         await _check_category(session, data["category_id"], transaction.region_id)
     if "event_id" in data:
-        await _check_event(session, data["event_id"], transaction.region_id)
+        await _check_event(session, data["event_id"], transaction.region_id, cell)
     if "cell_id" in data:
         await _check_cell(session, data["cell_id"], transaction.region_id)
 
@@ -321,7 +329,7 @@ async def add_category(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    await require_edit(session, user, payload.region_id)
+    await _require_category_edit(session, user, payload.region_id)
     if payload.type not in ("income", "expense"):
         raise HTTPException(400, "Тип категории — income или expense")
 
@@ -352,7 +360,7 @@ async def edit_category(
     category = await session.get(Category, category_id)
     if category is None:
         raise HTTPException(404, "Категория не найдена")
-    await require_edit(session, user, category.region_id)
+    await _require_category_edit(session, user, category.region_id)
 
     data = payload.model_dump(exclude_unset=True)
     if data.get("name"):
@@ -387,7 +395,7 @@ async def delete_category(
     category = await session.get(Category, category_id)
     if category is None:
         raise HTTPException(404, "Категория не найдена")
-    await require_edit(session, user, category.region_id)
+    await _require_category_edit(session, user, category.region_id)
 
     # Операции не удаляем — они просто становятся «без категории»,
     # иначе удаление справочника молча меняло бы баланс.

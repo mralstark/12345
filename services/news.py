@@ -37,7 +37,7 @@ from database.models import (
 from services.images import AVATAR_MAX_SIDE, PHOTO_MAX_SIDE, prepare_image, suffix_for
 from utils.upload_transaction import track_upload
 from services.moderation import check as check_text
-from utils.access import AccessDenied, accessible_region_ids, actor_cell
+from utils.access import AccessDenied, accessible_region_ids, actor_cell, require_view
 from utils.storage import ensure_storage_capacity
 from utils.permissions import has_any_role, has_role
 
@@ -136,6 +136,21 @@ async def byline_for(session: AsyncSession, author: User, official: bool = False
     return short_name(author.full_name)
 
 
+async def publication_identity(session: AsyncSession, user: User, official: bool, region_id: int | None):
+    if not user.is_active or not can_post_news(user):
+        raise AccessDenied("Публикации доступны руководителю из кабинета управления")
+    if region_id is not None:
+        await require_view(session, user, region_id)
+        if not official or await actor_cell(session, user) is not None:
+            raise AccessDenied("Подпись региона недоступна для этой роли")
+        region = await session.get(Region, region_id)
+        return f"Академисты | {region.name}", BYLINE_OTDELENIE
+    kind = byline_kind_for(user, official)
+    if kind == BYLINE_OTDELENIE and not await accessible_region_ids(session, user):
+        raise AccessDenied("Отделение или ячейка недоступны для публикации")
+    return await byline_for(session, user, official), kind
+
+
 async def create_news(
     session: AsyncSession, author: User, text: str, official: bool = False, region_id: int | None = None,
     *, commit: bool = True,
@@ -150,11 +165,7 @@ async def create_news(
     if official and not can_post_officially(author):
         raise AccessDenied("От имени отделения публикует только руководитель")
 
-    if region_id is not None:
-        from utils.access import require_view
-        await require_view(session, author, region_id)
-        if not official:
-            raise AccessDenied("Регион выбирается только для официальной подписи")
+    byline, byline_kind = await publication_identity(session, author, official, region_id)
     # Мат до ленты не доходит вовсе, спорное выходит с уведомлением
     # руководству — решение о нём принимает вызывающий (api/routers/news.py).
     flagged = await check_text(session, text)
@@ -191,8 +202,8 @@ async def create_news(
     post = NewsPost(
         author_user_id=author.id,
         text=text,
-        byline=(f"Академисты | {(await session.get(Region, region_id)).name}" if region_id is not None else await byline_for(session, author, official)),
-        byline_kind=BYLINE_OTDELENIE if region_id is not None else byline_kind_for(author, official),
+        byline=byline,
+        byline_kind=byline_kind,
         region_id=region_id,
     )
     session.add(post)

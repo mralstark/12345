@@ -18,6 +18,7 @@ from database.db import init_db
 from handlers import apply, fallback, impersonate, start, tasks
 from services.notifier import notifier_loop
 from utils.bot_rate_limit import BotRateLimitMiddleware
+from utils.bot_security import ActiveBotUserMiddleware
 
 
 async def main() -> None:
@@ -39,6 +40,10 @@ async def main() -> None:
     rate_limit = BotRateLimitMiddleware()
     dp.message.outer_middleware(rate_limit)
     dp.callback_query.outer_middleware(rate_limit)
+    # Check the real Telegram actor before handlers, FSM or impersonation.
+    active_user = ActiveBotUserMiddleware()
+    dp.message.outer_middleware(active_user)
+    dp.callback_query.outer_middleware(active_user)
 
     # Список команд (/help, /menu и т.п.) — убран совсем, ими не пользовались:
     # то же самое доступно кнопками внутри кабинета. Пустой список явно

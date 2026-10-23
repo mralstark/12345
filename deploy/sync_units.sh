@@ -18,6 +18,11 @@ set -euo pipefail
 APP_DIR=${APP_DIR:-/opt/bratstvo}
 ENV_FILE="$APP_DIR/.env"
 
+# All deployment entry points retain private imported/uploaded data permissions.
+if [ -f "$APP_DIR/deploy/harden_storage.sh" ]; then
+    bash "$APP_DIR/deploy/harden_storage.sh"
+fi
+
 value_from_env() {
     [ -f "$ENV_FILE" ] || return 0
     sed -n "s|^$1=||p" "$ENV_FILE" | tail -1

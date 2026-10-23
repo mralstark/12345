@@ -750,7 +750,7 @@
     if (canManageUniversities()) {
       items.push({ id: 'universities', label: 'ВУЗы' });
     }
-    items.push({ id: 'documents', label: 'Документы' });
+    if (state.me && !state.me.cell) items.push({ id: 'documents', label: 'Документы' });
     // Отчёты — по региону/ячейке в целом, руководителю ячейки не нужны
     // (у него нет полномочий за пределами своей ячейки).
     if (state.me && state.me.role !== 'cell_leader') {
@@ -1802,7 +1802,7 @@
       '</div>' +
       (canEdit()
         ? '<div class="btn-row"><button class="btn" id="addTx"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Операция</button>' +
-          '<button class="btn btn--ghost" id="manageCats">📁 Категории</button>' +
+          (!state.me.cell ? '<button class="btn btn--ghost" id="manageCats">📁 Категории</button>' : '') +
           '<button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> CSV</button></div>'
         : '<div class="btn-row"><button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> CSV</button></div>') +
       '<div class="card"><div class="card__title">Расходы по категориям</div>' + breakdown + '</div>' +
@@ -1814,7 +1814,8 @@
       download('/finance/export.csv?' + query, 'finance.csv').catch(fail);
     if (canEdit()) {
       document.getElementById('addTx').onclick = () => transactionForm();
-      document.getElementById('manageCats').onclick = () => categoriesModal().catch(fail);
+      const manageCats = document.getElementById('manageCats');
+      if (manageCats) manageCats.onclick = () => categoriesModal().catch(fail);
       on('[data-tx]', 'click', (event) => {
         const id = Number(event.currentTarget.dataset.tx);
         confirmAction('Удалить операцию?', async () => {
