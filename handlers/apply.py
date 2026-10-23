@@ -73,17 +73,21 @@ async def _require_reviewer(callback: CallbackQuery, application: MembershipAppl
     вернуть это руководителям, подтверждают federal/superuser."""
     async with async_session() as session:
         user = await resolve_user(session, callback.from_user.id, callback.from_user.full_name)
-        if user is None:
-            await callback.answer("Доступ не открыт", show_alert=True)
-            return None
-        region_ids = await accessible_region_ids(session, user)
-        if not has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER)) and (
-            not has_any_role(user, (ROLE_LEADER, "coordinator"))
-            or application.region_id not in region_ids
-        ):
+        if not await _can_review(session, user, application):
             await callback.answer("Доступно только администраторам", show_alert=True)
             return None
         return user
+
+
+async def _can_review(session, user: User | None, application: MembershipApplication) -> bool:
+    if user is None or not user.is_active or getattr(user, "_impersonated_by", None):
+        return False
+    if has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER)):
+        return True
+    return (
+        has_any_role(user, (ROLE_LEADER, "coordinator"))
+        and application.region_id in await accessible_region_ids(session, user)
+    )
 
 
 def _review_keyboard(application_id: int) -> InlineKeyboardMarkup:
@@ -128,7 +132,7 @@ async def _send_pending_applications(send, telegram_id: int, full_name: str) -> 
     доступно кнопкой."""
     async with async_session() as session:
         user = await resolve_user(session, telegram_id, full_name)
-        if user is None:
+        if user is None or not user.is_active or getattr(user, "_impersonated_by", None):
             return
         region_ids = await accessible_region_ids(session, user)
         if not has_any_role(user, (ROLE_FEDERAL, ROLE_SUPERUSER, ROLE_LEADER, "coordinator")):
@@ -172,10 +176,10 @@ async def list_applications_button(callback: CallbackQuery) -> None:
 async def show_application_link(callback: CallbackQuery) -> None:
     async with async_session() as session:
         user = await resolve_user(session, callback.from_user.id, callback.from_user.full_name)
-        if user is None:
+        if user is None or not user.is_active or getattr(user, "_impersonated_by", None):
             await callback.answer("Доступ не открыт", show_alert=True)
             return
-        region = (await session.execute(select(Region).where(Region.leader_user_id == user.id))).scalar_one_or_none()
+        region = (await session.execute(select(Region).where(Region.leader_user_id == user.id, Region.is_active.is_(True)))).scalar_one_or_none()
         if region is None:
             await callback.answer("Доступно только руководителю региона", show_alert=True)
             return
@@ -205,10 +209,10 @@ async def show_application_link(callback: CallbackQuery) -> None:
 async def regenerate_application_link(callback: CallbackQuery) -> None:
     async with async_session() as session:
         user = await resolve_user(session, callback.from_user.id, callback.from_user.full_name)
-        if user is None:
+        if user is None or not user.is_active or getattr(user, "_impersonated_by", None):
             await callback.answer("Доступ не открыт", show_alert=True)
             return
-        region = (await session.execute(select(Region).where(Region.leader_user_id == user.id))).scalar_one_or_none()
+        region = (await session.execute(select(Region).where(Region.leader_user_id == user.id, Region.is_active.is_(True)))).scalar_one_or_none()
         if region is None:
             await callback.answer("Доступно только руководителю региона", show_alert=True)
             return
@@ -312,6 +316,8 @@ async def back_to_review(callback: CallbackQuery) -> None:
         if application is None:
             await callback.answer("Анкета не найдена", show_alert=True)
             return
+        if await _require_reviewer(callback, application) is None:
+            return
         text = await _render_application_text(application)
     await callback.message.edit_text(text, reply_markup=_review_keyboard(application_id), parse_mode="HTML")
     await callback.answer()
@@ -329,6 +335,9 @@ async def edit_field_start(callback: CallbackQuery, state: FSMContext) -> None:
         if await _require_reviewer(callback, application) is None:
             return
 
+    if field not in _EDIT_FIELDS or application.state != APPLICATION_STATE_PENDING:
+        await callback.answer("Анкета уже рассмотрена или поле недоступно", show_alert=True)
+        return
     label, _ = _EDIT_FIELDS[field]
     await state.set_state(ApplicationEditStates.waiting_value)
     await state.update_data(application_id=int(application_id), field=field)
@@ -339,14 +348,25 @@ async def edit_field_start(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(ApplicationEditStates.waiting_value)
 async def edit_field_apply(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    field = data["field"]
+    field = data.get("field")
     raw = (message.text or "").strip()
     await state.clear()
 
+    if field not in _EDIT_FIELDS or not isinstance(data.get("application_id"), int):
+        await message.answer("Редактирование устарело. Откройте анкету заново.")
+        return
     async with async_session() as session:
-        application = await session.get(MembershipApplication, data["application_id"])
+        application = await session.get(MembershipApplication, data["application_id"], with_for_update=True)
         if application is None:
             await message.answer("Анкета не найдена.")
+            return
+
+        user = await resolve_user(session, message.from_user.id, message.from_user.full_name)
+        if not await _can_review(session, user, application):
+            await message.answer("Доступ к редактированию закрыт.")
+            return
+        if application.state != APPLICATION_STATE_PENDING:
+            await message.answer("Анкета уже рассмотрена. Изменения не сохранены.")
             return
 
         if field == "birth":

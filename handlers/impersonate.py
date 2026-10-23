@@ -55,7 +55,7 @@ GROUP_LABELS = dict(GROUPS)
 
 async def _require_admin(callback: CallbackQuery, session) -> User | None:
     real = await get_user_by_telegram_id(session, callback.from_user.id)
-    if real is None or not has_role(real, "superuser"):
+    if real is None or not real.is_active or not has_role(real, "superuser"):
         await callback.answer("Доступно только администраторам", show_alert=True)
         return None
     return real

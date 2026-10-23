@@ -35,7 +35,6 @@ from database.models import (
     NewsPhoto,
     NewsPost,
     User,
-    Region,
 )
 from services.news import (
     BYLINE_BRATSTVO,
@@ -56,6 +55,7 @@ from services.news import (
     can_post_officially,
     can_see_post,
     create_news,
+    publication_identity,
     delete_comment,
     delete_news,
     mark_viewed,
@@ -184,14 +184,11 @@ async def my_byline(
     (services/news.py::byline_for). Про уведомление форма раньше молчала, и
     человек не знал, что официальный пост разойдётся всем в бот.
     """
-    label = await byline_for(session, user, official)
-    if region_id is not None:
-        from utils.access import require_view
-        await require_view(session, user, region_id)
-        if not official or not can_post_officially(user):
-            raise AccessDenied("Подпись отделения доступна руководителю")
-        label = f"Академисты | {(await session.get(Region, region_id)).name}"
-    kind = BYLINE_OTDELENIE if region_id is not None else byline_kind_for(user, official)
+    # Personal preview remains available to ordinary accounts; publishing does not.
+    if region_id is not None or can_post_news(user):
+        label, kind = await publication_identity(session, user, official, region_id)
+    else:
+        label, kind = await byline_for(session, user, official), byline_kind_for(user, official)
     audience = {
         BYLINE_BRATSTVO: "Уведомление придёт всем",
         BYLINE_OTDELENIE: "Уведомление придёт вашему отделению",

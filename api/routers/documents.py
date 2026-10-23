@@ -3,6 +3,7 @@
 import re
 import uuid
 import zipfile
+from xml.parsers import expat
 from io import BytesIO
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from api.auth import get_current_user, get_db
 from api.serializers import document_dict
 from config import MAX_UPLOAD_BYTES, STORAGE_DIR
 from database.models import Document, Event, User
-from utils.access import require_edit, require_view
+from utils.access import require_edit, require_regional_documents
 from utils.storage import ensure_storage_capacity
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -31,7 +32,28 @@ _OFFICE_TYPES = {
 }
 _TEXT_TYPES = {".txt": "text/plain", ".csv": "text/csv"}
 _OFFICE_ACTIVE_PARTS = ("vbaproject.bin", "/embeddings/", "/activex/", "/externallinks/")
-_EXTERNAL_RELATION_RE = re.compile(rb"\bTargetMode\s*=\s*['\"]External['\"]", re.IGNORECASE)
+_MAX_RELATIONSHIP_BYTES = 1024 * 1024
+
+
+def _validate_relationships(payload: bytes) -> None:
+    """Parse encodings and character references without allowing DTD/entities."""
+    if len(payload) > _MAX_RELATIONSHIP_BYTES:
+        raise HTTPException(400, "Слишком большой список связей Office-документа")
+    parser = expat.ParserCreate(namespace_separator="}")
+    def reject_dtd(*_args):
+        raise ValueError("DTD and entities are not supported")
+    def element(_name, attrs):
+        if any(key.rsplit("}", 1)[-1].lower() == "targetmode" and value.lower() == "external"
+               for key, value in attrs.items()):
+            raise ValueError("External relationship")
+    parser.StartDoctypeDeclHandler = reject_dtd
+    parser.EntityDeclHandler = reject_dtd
+    parser.ExternalEntityRefHandler = reject_dtd
+    parser.StartElementHandler = element
+    try:
+        parser.Parse(payload, True)
+    except (ValueError, expat.ExpatError) as exc:
+        raise HTTPException(400, "Некорректные или внешние связи в Office-документе") from exc
 
 
 def _safe_original_name(name: str) -> str:
@@ -101,8 +123,8 @@ def _validated_document(payload: bytes, original_name: str) -> tuple[str, str]:
                 if expected_mime.encode() not in archive.read("[Content_Types].xml"):
                     raise HTTPException(400, "Расширение не соответствует типу Office-документа")
                 for name in names:
-                    if name.lower().endswith(".rels") and _EXTERNAL_RELATION_RE.search(archive.read(name)):
-                        raise HTTPException(400, "Внешние связи в Office-документах не поддерживаются")
+                    if name.lower().endswith(".rels"):
+                        _validate_relationships(archive.read(name))
         except (zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
             raise HTTPException(400, "Файл не является корректным Office-документом") from exc
         return _OFFICE_TYPES[suffix][0], suffix
@@ -117,7 +139,7 @@ async def list_documents(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    await require_view(session, user, region_id)
+    await require_regional_documents(session, user, region_id)
 
     stmt = (
         select(Document, User.full_name, Event.title)
@@ -148,6 +170,7 @@ async def upload_document(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     await require_edit(session, user, region_id)
+    await require_regional_documents(session, user, region_id)
 
     if event_id is not None:
         event = await session.get(Event, event_id)
@@ -197,7 +220,7 @@ async def download_document(
     document = await session.get(Document, document_id)
     if document is None:
         raise HTTPException(404, "Документ не найден")
-    await require_view(session, user, document.region_id)
+    await require_regional_documents(session, user, document.region_id)
 
     path = (STORAGE_DIR / document.stored_path).resolve()
     if not path.is_file() or STORAGE_DIR.resolve() not in path.parents:
@@ -220,6 +243,7 @@ async def delete_document(
     if document is None:
         raise HTTPException(404, "Документ не найден")
     await require_edit(session, user, document.region_id)
+    await require_regional_documents(session, user, document.region_id)
 
     path = (STORAGE_DIR / document.stored_path).resolve()
     if path.is_file() and STORAGE_DIR.resolve() in path.parents:

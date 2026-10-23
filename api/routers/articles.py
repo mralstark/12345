@@ -8,16 +8,16 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
-from database.models import NewsPhoto, NewsPost, Region, User
+from database.models import NewsPost, User
 from services.articles import (
     article_payload, article_photos, content_photo_ids, get_article, validate_content,
     prune_unused_photos, remove_pruned_files,
 )
 from services.moderation import check as check_text
 from services.news import (
-    BYLINE_OTDELENIE, PHOTO_LIMIT, attach_photos, byline_for, byline_kind_for, can_post_news,
+    BYLINE_PERSONAL, PHOTO_LIMIT, attach_photos, can_post_news, publication_identity,
 )
-from utils.access import AccessDenied, require_view
+from utils.access import AccessDenied
 
 router = APIRouter(prefix="/news/articles", tags=["articles"])
 
@@ -40,15 +40,15 @@ class RevisionIn(BaseModel):
 
 
 async def identity(session, user, official, region_id):
-    if not can_post_news(user):
-        raise AccessDenied("Статьи публикуют из кабинета управления")
-    if region_id is not None:
-        await require_view(session, user, region_id)
-        if not official:
-            raise AccessDenied("Регион выбирается для официальной подписи")
-        region = await session.get(Region, region_id)
-        return f"Академисты | {region.name}", BYLINE_OTDELENIE
-    return await byline_for(session, user, official), byline_kind_for(user, official)
+    return await publication_identity(session, user, official, region_id)
+
+
+async def require_saved_identity(session, user, post):
+    current = await identity(session, user, post.byline_kind != BYLINE_PERSONAL, post.region_id)
+    # A signature is also publication authority. It must not survive a role or
+    # organisational scope change merely because the author still owns the draft.
+    if post.byline_kind != BYLINE_PERSONAL and current != (post.byline, post.byline_kind):
+        raise AccessDenied("Права официальной подписи изменились. Создайте новый черновик")
 
 
 async def claim_revision(session, post, revision):
@@ -101,6 +101,7 @@ async def read(article_id: int, user: User = Depends(get_current_user), session:
 @router.post("/{article_id}/edit")
 async def start_edit(article_id: int, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
     source = await get_article(session, user, article_id, edit=True)
+    await require_saved_identity(session, user, source)
     if source.publication_state == "draft":
         return await article_payload(session, user, source)
     await session.execute(select(User.id).where(User.id == user.id).with_for_update())
@@ -129,7 +130,8 @@ async def save(article_id: int, payload: ArticleIn, user: User = Depends(get_cur
     content, plain = validate_content(payload.content, photos)
     title, summary = payload.title.strip(), payload.summary.strip()
     if post.article_source_id:
-        # Published signatures/audiences stay fixed; editing never re-sends the announcement.
+        # Recheck the saved scope while preserving the original published signature.
+        await require_saved_identity(session, user, post)
         byline, kind = post.byline, post.byline_kind
         region_id = post.region_id
     else:
@@ -187,8 +189,7 @@ async def publish(article_id: int, payload: RevisionIn, background_tasks: Backgr
     _, plain = validate_content(json.loads(post.article_content or "[]"), {p.id for p in photos}, publishing=True)
     flagged = await check_text(session, post.article_title + "\n" + (post.article_summary or "") + "\n" + plain)
     # Recheck region permissions at publication, after potentially long draft editing.
-    if post.region_id is not None:
-        await require_view(session, user, post.region_id)
+    await require_saved_identity(session, user, post)
     if post.article_source_id:
         published = await get_article(session, user, post.article_source_id, edit=True)
         # Same lock order as source deletion: published post, then working copy.

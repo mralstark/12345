@@ -102,6 +102,7 @@ echo "==> Системный пользователь и каталоги"
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
 mkdir -p "$APP_DIR" "$DATA_DIR/storage"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR" "$DATA_DIR"
+bash "$APP_DIR/deploy/harden_storage.sh"
 
 echo "==> Виртуальное окружение и зависимости"
 [[ -d "$VENV" ]] || python3 -m venv "$VENV"

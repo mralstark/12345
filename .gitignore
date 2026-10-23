@@ -1,4 +1,14 @@
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.db
+*.sqlite
+*.sqlite3
+backups/
 .venv/
 venv/
 __pycache__/

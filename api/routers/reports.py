@@ -11,10 +11,10 @@ from api.auth import get_current_user, get_db
 from config import STORAGE_DIR
 from database.models import Document, Region, User
 from services.reports import gather_region_report
-from utils.access import actor_cell, require_view
+from utils.access import actor_cell, require_view, require_regional_documents
 from utils.period import resolve_period
 from utils.report_export import build_region_pdf, build_region_xlsx
-from services.report_downloads import cache_dir, decode_ticket, generation_slots, save_export
+from services.report_downloads import decode_ticket, export_path, generation_slots, save_export
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -119,12 +119,13 @@ async def download_region_report(
     if kind == "finance" and cell is not None and cell.id != data.get("cell_id"):
         raise HTTPException(403, "Область доступа к финансовому отчёту изменилась")
     if kind == "document":
+        await require_regional_documents(session, user, data["rid"])
         document = await session.get(Document, data.get("document_id"))
         if document is None or document.region_id != data["rid"]:
             raise HTTPException(404, "Документ удалён или перемещён")
     if kind not in {"report", "finance", "document"}:
         raise HTTPException(403, "Ссылка недействительна")
-    path = cache_dir() / data["file"]
+    path = export_path(data["file"])
     if not path.is_file():
         raise HTTPException(410, "Файл больше недоступен. Сформируйте отчёт заново")
     if kind == "document":
