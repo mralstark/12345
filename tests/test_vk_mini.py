@@ -194,7 +194,9 @@ async def test_feature_off_fails_closed_and_never_exposes_secret(client, monkeyp
 
 async def test_vk_framing_is_explicit_and_bridge_is_served_locally(client):
     response = await client.get("/")
-    assert "https://vk.ru" in response.headers["content-security-policy"]
-    assert "frame-ancestors *" not in response.headers["content-security-policy"]
+    ancestors = next(directive.split()[1:] for directive in response.headers["content-security-policy"].split(";")
+                     if directive.strip().startswith("frame-ancestors "))
+    assert "https://vk.ru" in ancestors
+    assert "*" not in ancestors
     assert 'data-vk="/static/vk-platform.js?v=' in response.text
     assert (await client.get("/static/vendor/vk-bridge.min.js")).status_code == 200
