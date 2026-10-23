@@ -21,6 +21,8 @@ BOT_PROXY_URL = os.getenv("BOT_PROXY_URL") or None
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/") or None
 # Public VK ID application identifier; tokens are exchanged only by the API.
 VK_ID_CLIENT_ID = os.getenv("VK_ID_CLIENT_ID", "").strip()
+VK_MINI_APP_ID = os.getenv("VK_MINI_APP_ID", "").strip()
+VK_MINI_APP_SECRET = os.getenv("VK_MINI_APP_SECRET", "").strip()
 
 # Внешние адреса, с которых браузеру разрешено обращаться к API. В обычной
 # установке Mini App и API находятся на одном origin, поэтому CORS вообще не
@@ -92,6 +94,12 @@ MIN_FREE_STORAGE_BYTES = int(os.getenv("MIN_FREE_STORAGE_MB", "512")) * 1024 * 1
 def validate_security_config() -> None:
     """Не позволяем production запуститься с отладочным обходом или с
     устаревшей настройкой, выдающей админские права по пользовательскому ФИО."""
+    if VK_MINI_APP_ID or VK_MINI_APP_SECRET:
+        if (not VK_MINI_APP_ID or len(VK_MINI_APP_ID) > 20 or
+                not all(c in "0123456789" for c in VK_MINI_APP_ID) or int(VK_MINI_APP_ID) <= 0):
+            raise RuntimeError("VK_MINI_APP_ID должен быть числовым ID мини-приложения")
+        if len(VK_MINI_APP_SECRET) < 16:
+            raise RuntimeError("Для VK Mini App нужен защищённый ключ приложения")
     if APP_ENV not in {"development", "test", "production"}:
         raise RuntimeError("APP_ENV должен быть development, test или production")
     if VK_ID_CLIENT_ID and (len(VK_ID_CLIENT_ID) > 20 or not all(c in "0123456789" for c in VK_ID_CLIENT_ID) or int(VK_ID_CLIENT_ID) <= 0):

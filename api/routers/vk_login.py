@@ -51,7 +51,11 @@ def require_fresh_telegram(request, user):
 
 @router.get('/options')
 async def options():
-    return {'telegram':bool(BOT_TOKEN), 'vk':vk_login.enabled()}
+    from services import vk_mini
+    result = {'telegram':bool(BOT_TOKEN), 'vk':vk_login.enabled()}
+    if vk_mini.enabled():
+        result['vk_mini'] = {'app_id': vk_mini.VK_MINI_APP_ID}
+    return result
 
 
 @router.post('/vk/start')

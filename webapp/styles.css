@@ -150,7 +150,7 @@ a:not(.btn):hover { color: var(--accent); }
    проверить, подставив значение руками. */
 :root {
   --top-inset: calc(
-    max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px))
+    max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), var(--vk-safe-top, 0px))
     + var(--tg-content-safe-area-inset-top, 0px)
   );
 }
@@ -164,7 +164,7 @@ body {
   color: var(--text);
   background: var(--bg);
   /* место под фиксированную нижнюю панель */
-  padding-bottom: calc(76px + var(--space-24) + max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)));
+  padding-bottom: calc(76px + var(--space-24) + max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--vk-safe-bottom, 0px)));
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -426,7 +426,7 @@ body {
   border-top: 1px solid var(--rule-strong);
   /* Домашний индикатор на iPhone перекрывает нижние пиксели — отступ по
      safe-area (в index.html для этого стоит viewport-fit=cover). */
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--vk-safe-bottom, 0px));
 }
 
 .tab {
@@ -1075,7 +1075,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(88px + max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)));
+  bottom: calc(88px + max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--vk-safe-bottom, 0px)));
   transform: translateX(-50%);
   background: var(--surface-raised);
   color: var(--text);
@@ -2323,7 +2323,7 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .article-topbar { flex-shrink:0; min-height:64px; padding:10px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left)); display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid var(--border); background:var(--bg); }
 .article-topbar .back-link { margin:0; min-height:44px; flex-shrink:0; }
 .article-topbar .btn { min-height:40px; }
-.article-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-bottom:calc(40px + max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px))); scroll-padding:24px; }
+.article-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-bottom:calc(40px + max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px),var(--vk-safe-bottom,0px))); scroll-padding:24px; }
 .article-paper { width:min(100%,720px); margin:0 auto; padding:48px 28px 16px; box-sizing:border-box; overflow-wrap:anywhere; }
 .article-title { margin:0 0 20px; font:400 48px/1.08 'Forum',Georgia,serif; letter-spacing:-.015em; text-wrap:balance; }
 .article-meta { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; color:var(--hint); font-size:12px; line-height:1.6; }

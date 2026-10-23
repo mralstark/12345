@@ -83,7 +83,9 @@ async def approve_application(session: AsyncSession, application_id: int, review
     session.add(user)
     await session.flush()
     if application.external_identity_id is not None:
-        identity = await session.get(ExternalIdentity, application.external_identity_id)
+        identity = (await session.execute(select(ExternalIdentity).where(
+            ExternalIdentity.id == application.external_identity_id,
+        ).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
         if identity is None or identity.user_id is not None:
             raise ValueError("Идентификатор VK уже связан с кабинетом или недоступен")
         identity.user_id = user.id

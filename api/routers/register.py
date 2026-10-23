@@ -98,7 +98,7 @@ async def register_context(
         "already_registered": False,
         "regions": [{"id": r.id, "label": region_display_name(r)} for r in regions],
         "verified_phone": phone,
-        "provider": "vk" if identity.external_identity_id is not None else "telegram",
+        "provider": identity.provider,
         "full_name": identity.full_name,
         "application": {"state": latest.state, "reason": latest.reject_reason} if latest else None,
         "existing_account": bool(identity.external_identity_id and await contact_has_account(session, phone)),
