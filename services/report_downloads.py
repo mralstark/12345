@@ -63,8 +63,12 @@ def export_path(file_id: str) -> Path:
     directory = cache_dir().resolve()
     if STORAGE_DIR.resolve() not in directory.parents:
         raise HTTPException(403, "Недопустимое хранилище отчётов")
-    # basename is an additional path barrier, never a replacement for validation.
-    path = directory / os.path.basename(file_id)
+    # Normalize and check a separator-terminated prefix before any file lookup.
+    # The strict ID check still defines the only accepted filename grammar.
+    normalized = os.path.normpath(os.path.join(directory, os.path.basename(file_id)))
+    if not normalized.startswith(str(directory) + os.sep):
+        raise HTTPException(403, "Недопустимый путь отчёта")
+    path = Path(normalized)
     if path.is_symlink() or path.resolve().parent != directory:
         raise HTTPException(403, "Недопустимый путь отчёта")
     return path
