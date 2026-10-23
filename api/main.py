@@ -38,6 +38,7 @@ from api.routers import (
     tasks,
     universities,
     vk_login,
+    vk_mini,
 )
 from api.idempotency import idempotency_store
 from config import (
@@ -96,7 +97,7 @@ _CONTENT_SECURITY_POLICY = "; ".join(
         "base-uri 'self'",
         "object-src 'none'",
         "form-action 'self'",
-        "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
+        "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://vk.com https://m.vk.com https://vk.ru https://m.vk.ru",
         "script-src 'self' https://telegram.org 'sha256-riitXBKGtl5y5ccA7GF6ccqJuwEVP5tm8j0ff/fbw9U='",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
@@ -138,6 +139,7 @@ async def image_busy_handler(request: Request, exc: ImageProcessorBusy) -> JSONR
 
 
 for router in (
+    vk_mini.router,
     vk_login.router,
     browser_login.router,
     academy.router,
@@ -203,6 +205,6 @@ if WEBAPP_DIR.exists():
         """Подставляем в ссылки на app.js/styles.css версию по mtime файла —
         адрес меняется сам при каждом деплое. index.html отдаём с no-store."""
         html = (WEBAPP_DIR / "index.html").read_text(encoding="utf-8")
-        for asset in ("app.js", "styles.css", "articles.js", "bootstrap.js"):
+        for asset in ("app.js", "styles.css", "articles.js", "bootstrap.js", "vk-platform.js", "vendor/vk-bridge.min.js"):
             html = html.replace(f"/static/{asset}", f"/static/{asset}?v={_asset_version(asset)}")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})

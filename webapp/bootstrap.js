@@ -4,7 +4,8 @@
   const script = document.currentScript;
   const params = new URLSearchParams(location.search);
   const launch = new URLSearchParams(location.hash.replace(/^#/, ''));
-  const embedded = params.get('web') !== '1' && (launch.has('tgWebAppData') ||
+  const vk = params.get('web') !== '1' && params.has('vk_app_id') && params.has('vk_user_id') && params.has('sign');
+  const embedded = !vk && params.get('web') !== '1' && (launch.has('tgWebAppData') ||
     Boolean(window.TelegramWebviewProxy || window.external && window.external.notify));
   const articles = script && script.dataset.articles || '/static/articles.js';
   const app = script && script.dataset.app || '/static/app.js';
@@ -25,6 +26,11 @@
   }
 
   (async () => {
+    if (vk) {
+      await load(script.dataset.vkBridge || '/static/vendor/vk-bridge.min.js', 15000);
+      await load(script.dataset.vk || '/static/vk-platform.js', 15000);
+      await window.CabinetVK.initialize();
+    }
     if (embedded) await load('https://telegram.org/js/telegram-web-app.js', 8000);
     await load(articles, 15000);
     await load(app, 15000);
@@ -39,6 +45,7 @@
     retry.textContent = 'Попробовать снова'; retry.onclick = () => location.reload();
     const web = document.createElement('a'); web.className = 'btn btn--ghost';
     const url = new URL(location.href); url.hash = ''; url.searchParams.set('web','1');
+    for (const key of [...url.searchParams.keys()]) if (key.startsWith('vk_') || key === 'sign') url.searchParams.delete(key);
     web.href = url.href; web.textContent = 'Открыть веб-вход';
     card.append(text,retry,web); view.appendChild(card);
     const intro = document.getElementById('intro'); if (intro) intro.classList.add('intro--hidden');

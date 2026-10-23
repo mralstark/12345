@@ -1,0 +1,7 @@
+{
+  "package": "@vkontakte/vk-bridge",
+  "version": "3.0.2",
+  "tarball": "https://registry.npmjs.org/@vkontakte/vk-bridge/-/vk-bridge-3.0.2.tgz",
+  "integrity": "sha512-MTp+nl0/jH4Sa2TXDyxNfy9VkhOhRQR1oQ4yhvthVDA4aWUa26npns7bRgfTuR3xDVGFiqW7zAwLnwcv3mL+dA==",
+  "browser_sha256": "827ba6f457cd9e73519b58b2c66564caf138645202f1bba37dca0b567f601bb4"
+}

@@ -126,6 +126,7 @@ async def get_current_user(request: Request, authorization: str = Header(default
     """Пользователь Mini App. Регионы и права дальше считает utils/access.py."""
     telegram_id: int | None
     browser_user = None
+    external_user_id = None
     full_name = ""
 
     if DEV_TELEGRAM_ID:
@@ -140,6 +141,16 @@ async def get_current_user(request: Request, authorization: str = Header(default
             same_origin(request)
         telegram_id = browser_user.telegram_id
         full_name = browser_user.full_name
+    elif authorization.partition(" ")[0].lower() == "vkma":
+        from services.vk_mini import launch_from_header, require_identity
+        launch = launch_from_header(authorization)
+        enforce_user_rate_limit("vkmini:" + launch["subject"], request.method, request.url.path)
+        async with async_session() as session:
+            external = await require_identity(session, launch)
+            external_user_id = external.user_id
+        if external_user_id is None:
+            raise HTTPException(403, "Заполните анкету и дождитесь одобрения руководителя")
+        telegram_id = None
     else:
         scheme, _, raw = authorization.partition(" ")
         if scheme.lower() != "tma" or not raw:
@@ -158,9 +169,12 @@ async def get_current_user(request: Request, authorization: str = Header(default
             part for part in (user_field.get("first_name"), user_field.get("last_name")) if part
         )
 
-    enforce_user_rate_limit(telegram_id if telegram_id is not None else f'user:{browser_user.id}', request.method, request.url.path)
+    if external_user_id is None:
+        enforce_user_rate_limit(telegram_id if telegram_id is not None else f'user:{browser_user.id}', request.method, request.url.path)
     async with async_session() as session:
-        user = await resolve_user(session, telegram_id, full_name) if telegram_id is not None else await resolve_user_by_id(session, browser_user.id)
+        user = (await resolve_user_by_id(session, external_user_id) if external_user_id is not None else
+                await resolve_user(session, telegram_id, full_name) if telegram_id is not None else
+                await resolve_user_by_id(session, browser_user.id))
         if user is None or not user.is_active:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -178,17 +192,27 @@ class TelegramIdentity:
     В остальном — тот же разбор, что и get_current_user."""
 
     def __init__(self, telegram_id: int | None, full_name: str, *, external_identity_id: int | None = None,
-                 verified_phone: str | None = None, user_id: int | None = None) -> None:
+                 verified_phone: str | None = None, user_id: int | None = None, provider: str | None = None) -> None:
         self.telegram_id = telegram_id
         self.full_name = full_name
         self.external_identity_id = external_identity_id
         self.verified_phone = verified_phone
         self.user_id = user_id
+        self.provider = provider or ("vk" if external_identity_id is not None else "telegram")
 
 
 async def get_telegram_identity(request: Request, authorization: str = Header(default="")) -> TelegramIdentity:
     if DEV_TELEGRAM_ID:
         return TelegramIdentity(int(DEV_TELEGRAM_ID), "")
+
+    if authorization.partition(" ")[0].lower() == "vkma":
+        from services.vk_mini import launch_from_header, require_identity
+        launch = launch_from_header(authorization)
+        enforce_user_rate_limit("vkmini:" + launch["subject"], request.method, request.url.path)
+        async with async_session() as session:
+            external = await require_identity(session, launch)
+            return TelegramIdentity(None, external.full_name, external_identity_id=external.id,
+                                    verified_phone=external.verified_phone, user_id=external.user_id, provider="vk_mini")
 
     if not authorization:
         from services.browser_login import same_origin
