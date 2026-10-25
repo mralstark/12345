@@ -1,4 +1,4 @@
-"""Apply only the known article-upload location change, preserving Certbot TLS.
+"""Apply known upload/comment updates, preserving Certbot TLS.
 
 Unknown template drift is deliberately left to sync_units.sh's existing guard.
 """
@@ -13,15 +13,30 @@ OLD = "location ~ ^/api/(documents|news|profile/me/avatar)$ {"
 NEW = "location ~ ^/api/(documents|news|profile/me/avatar|news/articles/[1-9][0-9]*/photos)$ {"
 OLD_COMMENT = "включён только для трёх маршрутов, которые действительно принимают файлы."
 NEW_COMMENT = "включён только для маршрутов, которые действительно принимают файлы."
+OLD_FRAME_COMMENT = "# Mini App внутри Telegram — отдельный WebView; фрейминг разрешён только Telegram."
+NEW_FRAME_COMMENT = ("# Встраивание в Telegram/VK ограничивает CSP приложения (api/main.py).\n"
+                     "    # Не добавляйте X-Frame-Options: DENY/SAMEORIGIN поверх этого списка.")
 
 
 def migrated_config(template, stamp, installed):
-    previous = template.replace(NEW, OLD).replace(NEW_COMMENT, OLD_COMMENT)
-    if template.count(NEW) != 1 or hashlib.sha256(previous.encode()).hexdigest() != stamp.strip():
+    if template.count(NEW) != 1:
         return None
-    if installed.count(OLD) != 1 or NEW in installed:
-        return None
-    return installed.replace(OLD, NEW)
+    # Recognize only exact predecessors, including deployments upgrading both
+    # changes together. Any other template drift still blocks the release.
+    frame_previous = template.replace(NEW_FRAME_COMMENT, OLD_FRAME_COMMENT)
+    variants = [template]
+    if template.count(NEW_FRAME_COMMENT) == 1:
+        variants.append(frame_previous)
+        if hashlib.sha256(frame_previous.encode()).hexdigest() == stamp.strip():
+            return installed.replace(OLD_FRAME_COMMENT, NEW_FRAME_COMMENT)
+    for variant in variants:
+        previous = variant.replace(NEW, OLD).replace(NEW_COMMENT, OLD_COMMENT)
+        if hashlib.sha256(previous.encode()).hexdigest() != stamp.strip():
+            continue
+        if installed.count(OLD) != 1 or NEW in installed:
+            return None
+        return installed.replace(OLD, NEW).replace(OLD_FRAME_COMMENT, NEW_FRAME_COMMENT)
+    return None
 
 
 def replace_file(path, content):
@@ -54,7 +69,7 @@ def migrate(template_path, stamp_path, config_path, run=subprocess.run):
         run(["systemctl", "reload", "nginx"], check=True)
         raise
     replace_file(stamp_path, hashlib.sha256(template.encode()).hexdigest() + "\n")
-    print("    nginx: article uploads enabled; TLS configuration preserved")
+    print("    nginx: known template update applied; TLS configuration preserved")
     return True
 
 

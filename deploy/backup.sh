@@ -7,12 +7,35 @@ BACKUP_DIR=${BACKUP_DIR:-/var/backups/bratstvo}
 BACKUP_KEY_FILE=${BACKUP_KEY_FILE:-/root/.bratstvo_backup_key}
 BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR:-}
 KEEP_DAYS=${KEEP_DAYS:-14}
+APP_DIR=${APP_DIR:-/opt/bratstvo}
 STAMP=$(date +%Y-%m-%dT%H%M%S)
 
 if [[ ! -f "$BACKUP_KEY_FILE" ]]; then
     echo "Нет ключа шифрования $BACKUP_KEY_FILE; бэкап не создан" >&2
     exit 1
 fi
+
+# Read the same configuration as the services; never source .env as shell code.
+# Keep the archive layout storage/... even when STORAGE_DIR has another name.
+storage_dir=$(
+    cd -- "$APP_DIR" || exit 1
+    .venv/bin/python - "$BACKUP_DIR" "$BACKUP_REMOTE_DIR" <<'PY'
+import sys
+from pathlib import Path
+from config import STORAGE_DIR
+
+storage = STORAGE_DIR.resolve(strict=True)
+if not storage.is_dir():
+    raise SystemExit("STORAGE_DIR должен указывать на существующий каталог")
+for destination in filter(None, sys.argv[1:]):
+    path = Path(destination)
+    if not path.is_absolute():
+        raise SystemExit("Каталоги резервных копий должны иметь абсолютные пути")
+    if path.resolve().is_relative_to(storage):
+        raise SystemExit("Каталог резервных копий не может находиться внутри STORAGE_DIR")
+print(storage)
+PY
+)
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
@@ -21,7 +44,7 @@ work_dir=$(mktemp -d "$BACKUP_DIR/.work.XXXXXXXX")
 trap 'rm -rf -- "$work_dir"' EXIT
 
 sudo -u postgres pg_dump --format=custom bratstvo > "$work_dir/database.dump"
-tar czf "$work_dir/storage.tar.gz" -C /var/lib/bratstvo storage
+tar czf "$work_dir/storage.tar.gz" --transform='flags=rh;s,^\.,storage,' -C "$storage_dir" .
 
 target="$BACKUP_DIR/bratstvo-$STAMP.tar.gz.enc"
 tmp_target="$target.tmp"
