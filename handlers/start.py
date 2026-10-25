@@ -23,6 +23,7 @@ from database.models import (
     Member,
     MembershipApplication,
     Region,
+    ROLE_SUPERUSER,
     TelegramPhoneVerification,
     User,
 )
@@ -32,6 +33,7 @@ from keyboards.main_menu import WELCOME_TEXT, register_welcome_keyboard
 from utils.counters import has_pending_application
 from utils.invites import parse_application_payload
 from utils.parser import normalize_phone
+from utils.roles import has_role
 from utils.users import resolve_user
 
 router = Router()
@@ -41,7 +43,7 @@ logger = logging.getLogger(__name__)
 def _phone_confirmation_block_reason(user: User | None) -> str | None:
     if user is not None and not user.is_active:
         return "Доступ к кабинету закрыт. Обратитесь к администратору."
-    if user is not None and user.view_as_user_id is not None:
+    if user is not None and has_role(user, ROLE_SUPERUSER) and user.view_as_user_id is not None:
         return "Сначала выйдите из режима «Войти как…», затем подтвердите свой номер."
     return None
 

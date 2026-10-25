@@ -77,6 +77,24 @@ async def test_contact_updates_registered_actor_and_own_member(session, world):
     assert "Номер подтверждён" in message.answer.call_args.args[0]
 
 
+async def test_revoked_superuser_can_confirm_own_phone_despite_stale_view_target(session, world):
+    actor, target = world["superuser"], world["leader_moscow"]
+    actor_member = await add_contact_card(session, actor, world["moscow"].id, "+79000000001")
+    target_member = await add_contact_card(session, target, world["moscow"].id, "+79000000002")
+    await start_impersonation(session, actor, target.id)
+    actor.role = "participant"
+    actor.is_superuser = False
+    await session.commit()
+    message = contact_message(actor.telegram_id)
+    await request_verified_phone(message)
+    assert hasattr(message.answer.call_args.kwargs["reply_markup"], "keyboard")
+    await save_verified_phone(message)
+    for row in (actor, target, actor_member, target_member):
+        await session.refresh(row)
+    assert actor.phone == actor_member.phone == "+79991112233"
+    assert target.phone == target_member.phone == "+79000000002"
+
+
 async def test_unknown_contact_can_confirm_phone_without_creating_user(session):
     from sqlalchemy import select
 
