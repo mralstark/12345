@@ -4,7 +4,7 @@
   const script = document.currentScript;
   const params = new URLSearchParams(location.search);
   const launch = new URLSearchParams(location.hash.replace(/^#/, ''));
-  const vk = params.get('web') !== '1' && params.has('vk_app_id') && params.has('vk_user_id') && params.has('sign');
+  const vk = params.get('web') !== '1' && ['vk_app_id', 'vk_user_id', 'sign'].some((name) => params.has(name));
   const embedded = !vk && params.get('web') !== '1' && (launch.has('tgWebAppData') ||
     Boolean(window.TelegramWebviewProxy || window.external && window.external.notify));
   const articles = script && script.dataset.articles || '/static/articles.js';

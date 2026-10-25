@@ -24,9 +24,9 @@ class StartIn(BaseModel):
     article_id: int | None = Field(default=None, ge=1, le=2147483647)
 
 
-def limit(request, scope, budget=5):
+def limit(request, scope, budget=5, global_budget=60):
     ip = request.client.host if request.client else ''
-    retry = _limiter.check(scope, ip, budget, 60) or _limiter.check(scope + '-global', 0, 60, 60)
+    retry = _limiter.check(scope, ip, budget, 60) or _limiter.check(scope + '-global', 0, global_budget, 60)
     if retry:
         raise HTTPException(429, 'Подождите минуту перед повторным входом', headers={'Retry-After':str(retry)})
 

@@ -12,7 +12,9 @@
       const timer = setTimeout(() => reject(new Error('VK не ответил. Повторите действие.')), timeout || 12000);
       Promise.resolve().then(() => bridge.send(method, args || {})).then(
         (result) => { clearTimeout(timer); resolve(result); },
-        () => { clearTimeout(timer); reject(new Error('Действие в VK отменено или недоступно.')); });
+        () => { clearTimeout(timer); reject(new Error(method === 'VKWebAppGetPhoneNumber'
+          ? 'VK не передал телефон. Введите контактный номер вручную — его проверит руководитель.'
+          : 'Действие в VK отменено или недоступно.')); });
     });
   }
 
@@ -50,14 +52,18 @@
       const profile = await send('VKWebAppGetUserInfo', {}, 4000).catch(() => null);
       // Profile is only an editable registration suggestion; server trusts sign.
       this.fullName = profile && String(profile.id) === params.get('vk_user_id')
-        ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').slice(0, 128) : '';
+        ? [profile.last_name, profile.first_name].filter(Boolean).join(' ').slice(0, 128) : '';
     },
     async requestPhone() {
       const data = await send('VKWebAppGetPhoneNumber', {}, 60000);
-      if (!data || !data.phone_number || !data.sign || data.is_verified === false) {
-        throw new Error('VK не передал подтверждённый номер телефона.');
+      if (!data || typeof data.phone_number !== 'string' || data.phone_number.length > 32 ||
+          !/^[+0-9()\s-]+$/.test(data.phone_number) ||
+          !/^[0-9]{10,15}$/.test(data.phone_number.replace(/\D/g, ''))) {
+        throw new Error('VK не передал номер. Введите контактный телефон вручную — его проверит руководитель.');
       }
-      return { phone_number: String(data.phone_number), sign: String(data.sign) };
+      const signed = /^[a-f0-9]{64}$/.test(data.sign || '') && data.is_verified !== false && data.isValid !== false;
+      // Unsupported proof can prefill an editable contact, never verify it.
+      return { phone_number: data.phone_number, sign: signed ? data.sign : null };
     },
     canDownload() { return typeof bridge.supports === 'function' && bridge.supports('VKWebAppDownloadFile'); },
     async download(file) {
@@ -67,7 +73,6 @@
       }
       await send('VKWebAppDownloadFile', {url:url.href, filename:file.filename}, 12000);
     },
-    open(url) { return send('VKWebAppOpenLink', {url}, 8000); },
     close() { return send('VKWebAppClose', {status:'success'}, 3000); },
   };
 })();

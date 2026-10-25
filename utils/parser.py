@@ -131,6 +131,23 @@ def normalize_keyword(word: str) -> str:
 TELEGRAM_USERNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{2,31}$")
 
 
+def validate_birth_date(value: date, today: date) -> date:
+    if value.year < 1900 or value > today:
+        raise ValueError("Дата рождения должна быть от 01.01.1900 до сегодняшнего дня")
+    return value
+
+
+def parse_birth_date(raw: str, today: date) -> date:
+    if not re.fullmatch(r"[0-9]{2}\.[0-9]{2}\.[0-9]{4}", raw.strip()):
+        raise ValueError("Введите дату рождения полностью — ДД.ММ.ГГГГ")
+    day, month, year = map(int, raw.strip().split('.'))
+    try:
+        value = date(year, month, day)
+    except ValueError:
+        raise ValueError("Такой даты рождения нет в календаре") from None
+    return validate_birth_date(value, today)
+
+
 def normalize_phone(raw: str) -> str:
     """Приводит номер из Telegram/формы к E.164 без разделителей.
 

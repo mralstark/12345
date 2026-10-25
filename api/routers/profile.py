@@ -7,7 +7,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,7 +39,7 @@ from services.news import (
     save_avatar,
     short_name,
 )
-from utils.parser import normalize_telegram_username
+from utils.parser import normalize_telegram_username, validate_birth_date
 from utils.tz import iso_utc
 from utils.tz import today as tz_today
 from utils.university_cells import resolve_member_cell
@@ -51,6 +51,7 @@ class ProfilePatch(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     telegram_username: str | None = Field(default=None, max_length=33)
     birth_date: date | None = None
+
     university_id: int | None = None
     faculty: str | None = Field(default=None, max_length=255)
     # Курс — единственное учебное поле, которое правит сам человек (план,
@@ -64,6 +65,11 @@ class ProfilePatch(BaseModel):
     # Показывать ли номер телефона остальным членам Братства в профиле.
     # Ник в телеграме такого выключателя не имеет: написать можно всем.
     show_phone: bool | None = None
+
+    @field_validator("birth_date")
+    @classmethod
+    def valid_birth_date(cls, value):
+        return validate_birth_date(value, tz_today()) if value is not None else value
 
 
 async def _own_member(user: User, session: AsyncSession) -> Member:

@@ -25,7 +25,7 @@ class StartIn(BaseModel):
 class PhoneIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     phone_number: str = Field(min_length=5, max_length=32)
-    sign: str = Field(min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
+    sign: str = Field(default="", max_length=256)
 
 
 class LinkIn(BaseModel):
@@ -54,7 +54,7 @@ async def link_preview(payload: LinkIn, request: Request, authorization: str = H
 
 @router.post("/start")
 async def start(payload: StartIn, request: Request, authorization: str = Header(default="")):
-    limit(request, "vk-mini-start", 15)
+    limit(request, "vk-mini-start", 120, global_budget=600)
     launch = vk_mini.launch_from_header(authorization)
     enforce_user_rate_limit("vkmini:" + launch["subject"], "POST", request.url.path)
     return await vk_mini.start(launch, " ".join(payload.full_name.split()), payload.link_token)
@@ -62,8 +62,9 @@ async def start(payload: StartIn, request: Request, authorization: str = Header(
 
 @router.post("/phone")
 async def phone(payload: PhoneIn, request: Request, authorization: str = Header(default="")):
-    limit(request, "vk-mini-phone", 10)
+    limit(request, "vk-mini-phone", 30, global_budget=300)
     launch = vk_mini.launch_from_header(authorization)
+    enforce_user_rate_limit("vkmini:" + launch["subject"], "POST", request.url.path)
     number = vk_mini.verify_phone(launch, payload.phone_number, payload.sign)
     async with async_session() as session:
         identity = await vk_mini.require_identity(session, launch)

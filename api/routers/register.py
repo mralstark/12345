@@ -8,8 +8,8 @@
 иного способа убедиться, что отбор на сайте для этого telegram_id и правда
 состоялся."""
 
-from datetime import datetime
 import unicodedata
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
@@ -39,7 +39,8 @@ from database.models import (
 from services.admin_actions import create_federal
 from services.applications import approve_application
 from utils.notify import escape_telegram_html, notify_telegram, send_cabinet_welcome
-from utils.parser import normalize_phone, normalize_telegram_username
+from utils.parser import normalize_phone, normalize_telegram_username, parse_birth_date
+from utils.tz import today as tz_today
 from utils.roles import region_display_name
 from utils.users import resolve_user, resolve_user_by_id
 
@@ -99,6 +100,9 @@ async def register_context(
         "regions": [{"id": r.id, "label": region_display_name(r)} for r in regions],
         "verified_phone": phone,
         "provider": identity.provider,
+        "manual_contact_allowed": identity.provider == "vk_mini",
+        "birth_date_min": "1900-01-01",
+        "birth_date_max": tz_today().isoformat(),
         "full_name": identity.full_name,
         "application": {"state": latest.state, "reason": latest.reject_reason} if latest else None,
         "existing_account": bool(identity.external_identity_id and await contact_has_account(session, phone)),
@@ -151,6 +155,9 @@ async def register_cells(
     identity: TelegramIdentity = Depends(get_telegram_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
+    region = await session.get(Region, region_id)
+    if region is None or not region.is_active:
+        raise HTTPException(400, "Выберите действующее отделение")
     rows = (await session.execute(
         select(UniversityCell)
         .where(UniversityCell.region_id == region_id, UniversityCell.is_active.is_(True))
@@ -211,6 +218,10 @@ class RegisterSubmit(BaseModel):
 
     @model_validator(mode="after")
     def require_university(self) -> "RegisterSubmit":
+        self.full_name = " ".join(self.full_name.split())
+        self.faculty = self.faculty.strip()
+        if len(self.full_name) < 2 or not self.faculty:
+            raise ValueError("Укажите ФИО и факультет")
         if self.university_id is None and not (self.university_name or "").strip():
             raise ValueError("Укажите ВУЗ")
         return self
@@ -232,14 +243,16 @@ async def register_submit(
         raise HTTPException(400, "Отделение не найдено")
     # Строго ДД.ММ.ГГГГ с годом — в отличие от utils/parser.py::parse_date_hint
     # (тот для быстрого ввода в чате и год не требует), у формальной анкеты
-    # маска на вводе (webapp/app.js::applyDateMask) уже гарантирует этот
-    # формат, так что сервер просто проверяет то же самое ещё раз.
+    # Маска упрощает ввод, но не заменяет серверную проверку календаря и
+    # диапазона. Клиентские ограничения можно обойти прямым API-запросом.
     try:
-        birth_date = datetime.strptime(payload.birth_date.strip(), "%d.%m.%Y").date()
+        birth_date = parse_birth_date(payload.birth_date, tz_today())
     except ValueError as exc:
-        raise HTTPException(400, "Не удалось разобрать дату рождения — формат ДД.ММ.ГГГГ") from exc
+        raise HTTPException(400, str(exc)) from None
 
     try:
+        if not re.fullmatch(r"[+0-9()\s-]+", payload.phone.strip()):
+            raise ValueError("Введите действующий номер телефона")
         submitted_phone = normalize_phone(payload.phone)
         telegram_username = (
             normalize_telegram_username(payload.telegram_username)
@@ -250,12 +263,13 @@ async def register_submit(
         raise HTTPException(400, str(exc)) from exc
 
     confirmed_phone = await verified_phone(session, identity)
-    if (IS_PRODUCTION or identity.external_identity_id is not None) and not confirmed_phone:
+    manual_contact = identity.provider == "vk_mini" and not confirmed_phone
+    if (IS_PRODUCTION or identity.external_identity_id is not None) and not confirmed_phone and not manual_contact:
         raise HTTPException(400, "Разрешите VK ID передать телефон и повторите вход" if identity.external_identity_id else "Подтвердите номер через Telegram")
     phone = confirmed_phone or submitted_phone
     if confirmed_phone is not None and submitted_phone != confirmed_phone:
         raise HTTPException(400, "Номер изменился — подтвердите его ещё раз")
-    if identity.external_identity_id is not None:
+    if identity.external_identity_id is not None and confirmed_phone:
         if await contact_has_account(session, phone):
             raise HTTPException(409, "С этим телефоном уже есть кабинет. Войдите в него через Telegram и подключите VK в разделе «Способы входа»")
     elif confirmed_phone:
@@ -270,7 +284,9 @@ async def register_submit(
     )
     if identity.external_identity_id is None:
         cross_provider = cross_provider & MembershipApplication.external_identity_id.is_not(None)
-    existing_request = (await session.execute(select(MembershipApplication.id).where(cross_provider).limit(1))).scalar_one_or_none()
+    # An unverified contact must neither discover nor reserve someone else's
+    # phone. Only a signed provider number participates in cross-account checks.
+    existing_request = (await session.execute(select(MembershipApplication.id).where(cross_provider).limit(1))).scalar_one_or_none() if confirmed_phone else None
     if existing_request is not None:
         raise HTTPException(409, "Заявка с этим телефоном уже отправлена. Дождитесь решения руководителя")
 
@@ -318,8 +334,8 @@ async def register_submit(
             university = University(name=university_name, region_id=region.id)
             session.add(university)
 
-    cell = await session.get(UniversityCell, payload.cell_id) if payload.cell_id else None
-    if cell is not None and (cell.region_id != region.id or not cell.is_active):
+    cell = await session.get(UniversityCell, payload.cell_id) if payload.cell_id is not None else None
+    if payload.cell_id is not None and (cell is None or cell.region_id != region.id or not cell.is_active):
         raise HTTPException(400, "Выберите действующую ячейку выбранного отделения")
 
     application = MembershipApplication(
@@ -366,6 +382,7 @@ async def register_submit(
     summary_lines = [
         f"ФИО: {escape_telegram_html(application.full_name)}",
         f"Телефон: {escape_telegram_html(application.phone)}",
+        "Проверка контакта: " + ("номер получен от провайдера" if confirmed_phone else "указан вручную; уточните перед одобрением"),
         f"Дата рождения: {birth_date.strftime('%d.%m.%Y')}",
         f"ВУЗ: {escape_telegram_html(university.name if university else '?')}",
         f"Ячейка Братства: {escape_telegram_html(cell.name if cell else 'региональное отделение')}",
