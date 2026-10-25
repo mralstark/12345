@@ -5232,6 +5232,13 @@
         phoneStatus.textContent = 'Ожидаю разрешение во ВКонтакте…';
         try {
           const proof = await vkMini.requestPhone();
+          if (!proof.sign && manualContactAllowed) {
+            if (gen !== viewGen) return;
+            phoneInput.value = proof.phone_number;
+            phoneStatus.textContent = 'Номер получен из VK как контактный. Его проверит руководитель; при необходимости исправьте его.';
+            phoneButton.disabled = false;
+            return;
+          }
           const result = await api('/auth/vk-mini/phone', {method:'POST', body:proof});
           const current = await api('/register/context');
           if (gen !== viewGen) return;
@@ -5239,7 +5246,7 @@
           showPhoneState(result.phone);
         } catch (error) {
           if (gen !== viewGen) return;
-          phoneStatus.textContent = error.message + (manualContactAllowed ? ' Можно продолжить с номером, указанным вручную.' : '');
+          phoneStatus.textContent = error.message + (manualContactAllowed && !/вручную/.test(error.message) ? ' Можно продолжить с номером, указанным вручную.' : '');
           phoneButton.disabled = false;
         }
         return;

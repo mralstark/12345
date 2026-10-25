@@ -57,10 +57,13 @@
     async requestPhone() {
       const data = await send('VKWebAppGetPhoneNumber', {}, 60000);
       if (!data || typeof data.phone_number !== 'string' || data.phone_number.length > 32 ||
-          !/^[a-f0-9]{64}$/.test(data.sign || '') || data.is_verified === false || data.isValid === false) {
-        throw new Error('VK не передал подписанный номер. Введите контактный телефон вручную — его проверит руководитель.');
+          !/^[+0-9()\s-]+$/.test(data.phone_number) ||
+          !/^[0-9]{10,15}$/.test(data.phone_number.replace(/\D/g, ''))) {
+        throw new Error('VK не передал номер. Введите контактный телефон вручную — его проверит руководитель.');
       }
-      return { phone_number: String(data.phone_number), sign: String(data.sign) };
+      const signed = /^[a-f0-9]{64}$/.test(data.sign || '') && data.is_verified !== false && data.isValid !== false;
+      // Unsupported proof can prefill an editable contact, never verify it.
+      return { phone_number: data.phone_number, sign: signed ? data.sign : null };
     },
     canDownload() { return typeof bridge.supports === 'function' && bridge.supports('VKWebAppDownloadFile'); },
     async download(file) {
