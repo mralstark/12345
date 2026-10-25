@@ -23,7 +23,9 @@ from database.models import (
     Member,
     MembershipApplication,
     Region,
+    ROLE_SUPERUSER,
     TelegramPhoneVerification,
+    User,
 )
 from handlers.apply import start_application
 from handlers.common import PENDING_APPLICATION_TEXT, show_main_menu
@@ -31,15 +33,35 @@ from keyboards.main_menu import WELCOME_TEXT, register_welcome_keyboard
 from utils.counters import has_pending_application
 from utils.invites import parse_application_payload
 from utils.parser import normalize_phone
+from utils.roles import has_role
 from utils.users import resolve_user
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 
+def _phone_confirmation_block_reason(user: User | None) -> str | None:
+    if user is not None and not user.is_active:
+        return "Доступ к кабинету закрыт. Обратитесь к администратору."
+    if user is not None and has_role(user, ROLE_SUPERUSER) and user.view_as_user_id is not None:
+        return "Сначала выйдите из режима «Войти как…», затем подтвердите свой номер."
+    return None
+
+
 @router.message(Command("phone"))
 async def request_verified_phone(message: Message) -> None:
     """Запасной путь для старых клиентов без WebApp.requestContact."""
+    if message.chat.type != "private":
+        await message.answer("Подтвердите номер в личном чате с ботом.")
+        return
+    async with async_session() as session:
+        user = (await session.execute(select(User).where(
+            User.telegram_id == message.from_user.id,
+        ))).scalar_one_or_none()
+        blocked = _phone_confirmation_block_reason(user)
+    if blocked:
+        await message.answer(blocked, reply_markup=ReplyKeyboardRemove())
+        return
     await message.answer(
         "Нажмите кнопку ниже. Telegram передаст боту только ваш номер после подтверждения.",
         reply_markup=ReplyKeyboardMarkup(
@@ -57,6 +79,9 @@ async def save_verified_phone(message: Message) -> None:
     Telegram сам проставляет ``contact.user_id`` для номера владельца. Это
     отличает подтверждённый номер от произвольного контакта из адресной книги.
     """
+    if message.chat.type != "private":
+        await message.answer("Подтвердите номер в личном чате с ботом.")
+        return
     contact = message.contact
     if contact is None or contact.user_id != message.from_user.id:
         await message.answer("Отправьте именно свой номер телефона.", reply_markup=ReplyKeyboardRemove())
@@ -67,23 +92,32 @@ async def save_verified_phone(message: Message) -> None:
         await message.answer("Telegram передал номер в неизвестном формате.", reply_markup=ReplyKeyboardRemove())
         return
 
+    result = "✅ Номер подтверждён. Вернитесь в приложение — поле заполнится автоматически."
     async with async_session() as session:
-        verification = await session.get(TelegramPhoneVerification, message.from_user.id)
-        if verification is None:
-            verification = TelegramPhoneVerification(telegram_id=message.from_user.id, phone=phone)
-            session.add(verification)
+        # A contact proves the real Telegram actor, never the view-as target.
+        # Lock that actor before inspecting the diagnostic mode or changing data.
+        user = (await session.execute(select(User).where(
+            User.telegram_id == message.from_user.id,
+        ).with_for_update())).scalar_one_or_none()
+        blocked = _phone_confirmation_block_reason(user)
+        if blocked:
+            result = blocked
         else:
-            verification.phone = phone
-        user = await resolve_user(session, message.from_user.id, message.from_user.full_name)
-        if user is not None:
-            user.phone = phone
-            member = await session.get(Member, user.member_id) if user.member_id else None
-            if member is not None:
-                member.phone = phone
-        await session.commit()
+            verification = await session.get(TelegramPhoneVerification, message.from_user.id)
+            if verification is None:
+                verification = TelegramPhoneVerification(telegram_id=message.from_user.id, phone=phone)
+                session.add(verification)
+            else:
+                verification.phone = phone
+            if user is not None:
+                user.phone = phone
+                member = await session.get(Member, user.member_id) if user.member_id else None
+                if member is not None:
+                    member.phone = phone
+            await session.commit()
 
     await message.answer(
-        "✅ Номер подтверждён. Вернитесь в приложение — поле заполнится автоматически.",
+        result,
         reply_markup=ReplyKeyboardRemove(),
     )
 
