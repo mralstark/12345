@@ -6,6 +6,7 @@ identifiers must never be assumed interchangeable across integrations.
 import base64
 import hashlib
 import hmac
+import re
 import secrets
 import time
 from urllib.parse import parse_qsl, urlencode
@@ -137,6 +138,8 @@ async def create_link(user_id):
 
 
 def verify_phone(launch, phone_number, signature):
+    if not re.fullmatch(r"[a-f0-9]{64}", signature):
+        raise HTTPException(400, "VK не передал поддерживаемую подпись телефона. Укажите контактный номер вручную")
     # VK signs the original phone field. Normalize only after authenticating it.
     raw = f"{VK_MINI_APP_ID}{VK_MINI_APP_SECRET}{launch['vk_user_id']}phone_number{phone_number}"
     expected = hashlib.sha256(raw.encode()).hexdigest()

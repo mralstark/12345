@@ -200,3 +200,89 @@ async def test_vk_framing_is_explicit_and_bridge_is_served_locally(client):
                               "https://vk.com", "https://m.vk.com", "https://vk.ru", "https://m.vk.ru"}
     assert 'data-vk="/static/vk-platform.js?v=' in response.text
     assert (await client.get("/static/vendor/vk-bridge.min.js")).status_code == 200
+
+
+def native_payload(world, **changes):
+    payload = {"full_name": "Новый Участник", "birth_date": "01.01.2000", "phone": "+79990001122",
+               "region_id": world["moscow"].id, "university_name": "Университет VK Mini",
+               "faculty": "Исторический", "course": 2, "education_level": "bachelor", "status": "activist"}
+    payload.update(changes)
+    return payload
+
+
+async def test_native_manual_contact_requires_review_and_never_becomes_identity_proof(client, session, world, monkeypatch):
+    monkeypatch.setattr("api.routers.register.IS_PRODUCTION", True)
+    await start(client)
+    context = (await client.get("/api/register/context", headers=headers())).json()
+    assert context["manual_contact_allowed"] and not context["verified_phone"]
+    response = await client.post("/api/register/submit", headers=headers(), json=native_payload(world))
+    assert response.status_code == 200, response.text
+    identity = (await session.execute(select(ExternalIdentity))).scalar_one()
+    assert identity.verified_phone is None and identity.user_id is None
+    assert (await client.get("/api/me", headers=headers())).status_code == 403
+    application = (await session.execute(select(MembershipApplication))).scalar_one()
+    user = await approve_application(session, application.id, world["leader_moscow"].id)
+    assert user.role == "participant" and not user.is_superuser
+    await session.refresh(identity)
+    assert identity.user_id == user.id and identity.verified_phone is None
+    assert (await client.get("/api/me", headers=headers())).json()["id"] == user.id
+
+
+@pytest.mark.parametrize("signature", ["", "a" * 32, "forged", "a" * 64])
+async def test_unsupported_or_forged_phone_never_silently_verifies(client, session, signature):
+    await start(client)
+    response = await client.post("/api/auth/vk-mini/phone", headers=headers(),
+                                 json={"phone_number": "+79990001122", "sign": signature})
+    assert response.status_code == 400, response.text
+    assert not (await client.get("/api/register/phone", headers=headers())).json()["verified"]
+    assert "+79990001122" not in response.text
+    if signature:
+        assert signature not in response.text
+
+
+@pytest.mark.parametrize("birth", ["31.02.2000", "29.02.2001", "99.99.9999", "01.01.3000", "01.01.1899", "1.1.2000", "не дата"])
+async def test_native_rejects_impossible_future_and_noncanonical_birth_dates(client, session, world, birth):
+    await start(client)
+    response = await client.post("/api/register/submit", headers=headers(), json=native_payload(world, birth_date=birth))
+    assert response.status_code == 400, response.text
+    assert not (await session.execute(select(MembershipApplication))).scalars().all()
+
+
+async def test_manual_phone_cannot_enumerate_or_reserve_existing_accounts(client, session, world):
+    session.add(TelegramPhoneVerification(telegram_id=world["federal"].telegram_id, phone="+79990001122"))
+    await session.commit()
+    await start(client)
+    response = await client.post("/api/register/submit", headers=headers(), json=native_payload(world))
+    assert response.status_code == 200, response.text
+    assert (await client.get("/api/me", headers=headers())).status_code == 403
+    assert (await client.get("/api/register/context", headers=headers())).json()["existing_account"] is False
+    # A verified VK user can still submit their own number. An unverified
+    # contact does not reserve it or expose whether a different cabinet exists.
+    await start(client, uid="80002")
+    response = await client.post("/api/register/submit", headers=headers("80002"), json=native_payload(world, phone="+79990003344"))
+    assert response.status_code == 200, response.text
+    await start(client, uid="80003")
+    await client.post("/api/auth/vk-mini/phone", headers=headers("80003"), json=phone_proof("80003", "+79990003344"))
+    response = await client.post("/api/register/submit", headers=headers("80003"), json=native_payload(world, phone="+79990003344"))
+    assert response.status_code == 200, response.text
+
+
+def test_birth_date_rules_apply_to_registration_profile_and_review():
+    from datetime import date
+    from pydantic import ValidationError
+    from api.routers.profile import ProfilePatch
+    from api.routers.applications import ApplicationPatch
+    from utils.parser import parse_birth_date
+    assert parse_birth_date("29.02.2000", date(2026, 10, 25)) == date(2000, 2, 29)
+    for model in [ProfilePatch, ApplicationPatch]:
+        for birth in ["3000-01-01", "1899-01-01", "2001-02-29"]:
+            with pytest.raises(ValidationError):
+                model(birth_date=birth)
+
+
+async def test_invalid_cell_and_blank_names_never_create_applications(client, session, world):
+    await start(client)
+    for changes in [{"cell_id": 999999}, {"full_name": "   "}, {"faculty": "   "}]:
+        response = await client.post("/api/register/submit", headers=headers(), json=native_payload(world, **changes))
+        assert response.status_code in {400, 422}, response.text
+    assert not (await session.execute(select(MembershipApplication))).scalars().all()

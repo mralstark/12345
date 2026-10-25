@@ -238,7 +238,8 @@
       greater_than_equal: 'Значение слишком мало',
       less_than_equal: 'Значение слишком велико',
     };
-    if (typeof console !== 'undefined' && console.warn) console.warn('Проверка формата:', detail);
+    // Validation payloads may contain phone numbers or one-time credentials.
+    // Keep submitted values out of browser diagnostics.
     return known[first.type] || 'Проверьте, правильно ли заполнены поля';
   }
 
@@ -442,6 +443,16 @@
     };
     input.addEventListener('input', format);
     if (input.value) format();
+  }
+
+  function birthDateProblem(raw, min, max) {
+    if (!/^[0-9]{2}\.[0-9]{2}\.[0-9]{4}$/.test(raw)) return 'Введите дату рождения полностью — ДД.ММ.ГГГГ';
+    const [day, month, year] = raw.split('.').map(Number);
+    const value = new Date(Date.UTC(year, month - 1, day));
+    if (value.getUTCFullYear() !== year || value.getUTCMonth() !== month - 1 || value.getUTCDate() !== day) return 'Такой даты нет в календаре';
+    const iso = raw.slice(6) + '-' + raw.slice(3, 5) + '-' + raw.slice(0, 2);
+    if (iso < min || iso > max) return 'Дата рождения должна быть от 01.01.1900 до сегодняшнего дня';
+    return '';
   }
 
   function money(kopecks) {
@@ -3564,6 +3575,7 @@
         '<div class="card__title">' + esc(a.full_name) + '</div>' +
         '<div class="row__sub">' + esc(a.region_name || '—') + ' · ' + esc(a.status_label) + '</div>' +
         '<div class="row__sub">' + esc(a.phone || '—') + ' · ' + dateRu(a.birth_date) + '</div>' +
+        (a.contact_note ? '<div class="row__sub">' + esc(a.contact_note) + '</div>' : '') +
         '<div class="row__sub">' + esc(a.university_name || 'ВУЗ не указан') + (a.faculty ? ' · ' + esc(a.faculty) : '') + '</div>' +
         '<div class="row__sub">' + esc(eduLine) + '</div>' +
         (a.workplace ? '<div class="row__sub">' + esc(a.workplace) + '</div>' : '') +
@@ -5129,12 +5141,12 @@
     const regions = data.regions || [];
     setView(
       '<div class="card register-card"><div class="card__title">Создание личного кабинета</div>' +
-      '<div class="register-lead">' + (vkRegistration ? 'Кабинет создаётся после проверки анкеты руководителем. Телефон передаётся с вашего разрешения через ' + vkLabel + '.' : 'Телефон — основной контакт. Telegram попросит разрешение передать боту ваш номер.') + '</div>' +
+      '<div class="register-lead">' + (vkMini ? 'Вход подтверждён ВКонтакте. Заполните анкету и укажите контактный телефон — руководитель проверит данные и откроет кабинет.' : vkRegistration ? 'Кабинет создаётся после проверки анкеты руководителем. Телефон передаётся с вашего разрешения через ' + vkLabel + '.' : 'Телефон — основной контакт. Telegram попросит разрешение передать боту ваш номер.') + '</div>' +
       (vkMini ? '<p class="row__sub">Уже есть кабинет в Telegram? Сначала подключите ВКонтакте через «Способы входа» в Telegram-кабинете.</p>' : '') +
       (data.application && data.application.state === 'rejected' ? '<div class="notice notice--warn">Предыдущая заявка отклонена. ' + esc(data.application.reason || 'Уточните данные у руководителя перед повторной подачей.') + '</div>' : '') +
       '<div class="field"><label>ФИО</label><input id="rName" placeholder="Иванов Иван Иванович" /></div>' +
-      '<div class="field"><label>Дата рождения</label><input id="rBirth" placeholder="20.02.2000" inputmode="numeric" /></div>' +
-      '<div class="field"><label>Телефон</label><div class="phone-verify"><input id="rPhone" />' +
+      '<div class="field"><label for="rBirth">Дата рождения</label><input id="rBirth" placeholder="20.02.2000" inputmode="numeric" maxlength="10" autocomplete="bday" aria-describedby="rBirthStatus" /><div class="field-hint" id="rBirthStatus" aria-live="polite">ДД.ММ.ГГГГ</div></div>' +
+      '<div class="field"><label for="rPhone">' + (vkMini ? 'Контактный телефон' : 'Телефон') + '</label><div class="phone-verify"><input id="rPhone" maxlength="32" autocomplete="tel" aria-describedby="rPhoneStatus" />' +
       '<button type="button" class="btn btn--ghost" id="rVerifyPhone">Подтвердить через Telegram</button></div>' +
       '<div class="field-hint" id="rPhoneStatus">Номер ещё не подтверждён</div></div>' +
       '<div class="field"><label>Ник в Telegram <span class="label-optional">необязательно</span></label>' +
@@ -5177,23 +5189,26 @@
     const submitButton = document.getElementById('rSubmit');
     const inTelegram = Boolean(tg && tg.initData);
     const canRequestContact = Boolean(inTelegram && typeof tg.requestContact === 'function');
+    const manualContactAllowed = Boolean(vkMini && data.manual_contact_allowed);
     let phoneVerified = Boolean(data.verified_phone);
+    let submitting = false;
 
-    applyPhoneMask(phoneInput);
+    if (manualContactAllowed) { phoneInput.type = 'tel'; phoneInput.inputMode = 'tel'; phoneInput.placeholder = '+7 900 000-00-00'; }
+    else applyPhoneMask(phoneInput);
     if (vkRegistration) document.getElementById('rName').value = data.full_name || '';
     function showPhoneState(phone) {
       phoneVerified = Boolean(phone);
       if (phone) phoneInput.value = phone;
-      phoneInput.readOnly = inTelegram || vkRegistration;
+      phoneInput.readOnly = phoneVerified || inTelegram || (vkRegistration && !manualContactAllowed);
       phoneStatus.textContent = phoneVerified
         ? '✓ Номер подтверждён ' + (vkRegistration ? vkLabel : 'Telegram')
-        : (vkRegistration ? 'Разрешите ' + vkLabel + ' передать номер телефона.' : canRequestContact
+        : (manualContactAllowed ? 'Введите номер для связи. Его проверит руководитель. Получение из VK — по желанию.' : vkRegistration ? 'Разрешите ' + vkLabel + ' передать номер телефона.' : canRequestContact
           ? 'Нажмите кнопку — Telegram покажет системное подтверждение'
           : (inTelegram ? 'Отправьте команду /phone в чат с ботом и снова откройте форму' : 'Введите номер телефона'));
       phoneStatus.classList.toggle('field-hint--success', phoneVerified);
-      phoneButton.textContent = phoneVerified ? 'Обновить номер' : (vkRegistration ? 'Подтвердить через ' + vkLabel : 'Подтвердить через Telegram');
+      phoneButton.textContent = phoneVerified ? 'Обновить номер' : (vkMini ? 'Получить из VK' : vkRegistration ? 'Подтвердить через ' + vkLabel : 'Подтвердить через Telegram');
       phoneButton.hidden = vkRegistration ? phoneVerified : !canRequestContact;
-      submitButton.disabled = (inTelegram || vkRegistration) && !phoneVerified;
+      submitButton.disabled = submitting || ((inTelegram || vkRegistration) && !phoneVerified && !manualContactAllowed);
     }
     showPhoneState(data.verified_phone);
 
@@ -5219,9 +5234,14 @@
           const proof = await vkMini.requestPhone();
           const result = await api('/auth/vk-mini/phone', {method:'POST', body:proof});
           const current = await api('/register/context');
+          if (gen !== viewGen) return;
           if (current.existing_account) { await renderRegisterView(gen, prefillRegionId); return; }
           showPhoneState(result.phone);
-        } catch (error) { phoneStatus.textContent = error.message; phoneButton.disabled = false; }
+        } catch (error) {
+          if (gen !== viewGen) return;
+          phoneStatus.textContent = error.message + (manualContactAllowed ? ' Можно продолжить с номером, указанным вручную.' : '');
+          phoneButton.disabled = false;
+        }
         return;
       }
       if (vkRegistration) { phoneButton.disabled = true; try { await beginVkLogin(false); } catch(e) { toast(e.message); phoneButton.disabled = false; } return; }
@@ -5244,7 +5264,19 @@
         fail(error);
       }
     };
-    applyDateMask(document.getElementById('rBirth'));
+    const birthInput = document.getElementById('rBirth');
+    applyDateMask(birthInput);
+    const birthMin = data.birth_date_min || '1900-01-01';
+    const birthMax = data.birth_date_max || new Date().toISOString().slice(0, 10);
+    const checkBirth = () => {
+      const problem = birthDateProblem(birthInput.value.trim(), birthMin, birthMax);
+      birthInput.setAttribute('aria-invalid', problem ? 'true' : 'false');
+      birthInput.setCustomValidity(problem);
+      document.getElementById('rBirthStatus').textContent = problem || 'Дата указана верно';
+      return problem;
+    };
+    birthInput.addEventListener('blur', checkBirth);
+    birthInput.addEventListener('input', () => { if (birthInput.value.length === 10 || birthInput.getAttribute('aria-invalid') === 'true') checkBirth(); });
 
     const courseSelect = document.getElementById('rCourse');
     const workplaceField = document.getElementById('rWorkplaceField');
@@ -5278,6 +5310,7 @@
       if (!regionId) return;
       try {
         const data = await api('/register/cells?region_id=' + regionId);
+        if (gen !== viewGen || regionSelect.value !== regionId) return;
         cellSelect.innerHTML += data.items.map((c) => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
       } catch (error) { /* ячейка необязательна */ }
     }
@@ -5306,6 +5339,7 @@
       uniTimer = setTimeout(async () => {
         try {
           const res = await api('/register/universities?q=' + encodeURIComponent(q));
+          if (gen !== viewGen || regionSelect.value !== regionId || uniInput.value.trim() !== q) return;
           uniSuggestions.innerHTML = res.items.map((u) =>
             '<button type="button" class="chip" data-uni="' + u.id + '" data-name="' + esc(u.name) + '">' + esc(u.name) + '</button>'
           ).join('');
@@ -5319,6 +5353,7 @@
     });
 
     document.getElementById('rSubmit').onclick = async () => {
+      if (submitting) return;
       // Все поля обязательны — эта анкета уже упрощённая версия отбора на
       // сайте, сокращать её дальше не нужно.
       const regionId = regionSelect.value ? Number(regionSelect.value) : null;
@@ -5326,10 +5361,12 @@
       const fullName = document.getElementById('rName').value.trim();
       if (fullName.length < 2) { toast('Введите ФИО'); return; }
       const birthRaw = document.getElementById('rBirth').value.trim();
-      if (!/^\d{2}\.\d{2}\.\d{4}$/.test(birthRaw)) { toast('Введите дату рождения полностью — ДД.ММ.ГГГГ'); return; }
+      const birthProblem = checkBirth();
+      if (birthProblem) { toast(birthProblem); birthInput.focus(); return; }
       const phone = document.getElementById('rPhone').value.trim();
       if (!phone) { toast('Введите телефон'); return; }
-      if (inTelegram && !phoneVerified) { toast('Сначала подтвердите номер через Telegram'); return; }
+      if (!/^[+0-9()\s-]+$/.test(phone) || phone.replace(/\D/g, '').length < 10 || phone.replace(/\D/g, '').length > 15) { toast('Введите действующий номер телефона'); return; }
+      if ((inTelegram || vkRegistration) && !phoneVerified && !manualContactAllowed) { toast('Сначала подтвердите номер телефона'); return; }
       let telegramUsername = document.getElementById('rTelegram').value.trim();
       if (telegramUsername && !telegramUsername.startsWith('@')) telegramUsername = '@' + telegramUsername;
       if (telegramUsername && !/^@[A-Za-z][A-Za-z0-9_]{2,31}$/.test(telegramUsername)) {
@@ -5352,7 +5389,7 @@
       if (!status) { toast('Выберите статус'); return; }
 
       const universityId = selectedUniversityId;
-
+      submitting = true; submitButton.disabled = true;
       try {
         await api('/register/submit', {
           method: 'POST',
@@ -5375,7 +5412,8 @@
         });
         if (vkRegistration) { startRender((next) => renderRegisterView(next, prefillRegionId)); return; }
         setView('<div class="empty">✅ Анкета отправлена — ждите подтверждения. Можно закрыть это окно.</div>', gen);
-      } catch (error) { fail(error); }
+      } catch (error) { if (gen === viewGen) fail(error); }
+      finally { submitting = false; if (gen === viewGen) showPhoneState(phoneVerified ? data.verified_phone || phoneInput.value : null); }
     };
   }
 
@@ -5415,11 +5453,14 @@
   let browserLoginGeneration = 0;
   function renderBrowserLogin() {
     const generation = ++browserLoginGeneration;
+    const miniId = state.authOptions && state.authOptions.vk_mini && String(state.authOptions.vk_mini.app_id);
+    const miniUrl = /^[0-9]{1,20}$/.test(miniId || '') ? 'https://vk.ru/app' + miniId : '';
     document.querySelector('.topbar').hidden = true;
     document.getElementById('tabs').hidden = true;
     setView('<div class="card browser-login"><div class="card__title">Личный кабинет</div>' +
       '<p>' + (state.authOptions && state.authOptions.vk ? 'Выберите способ входа в свой кабинет.' : 'Войдите в браузере, подтвердив вход в Telegram. Пароль и номер телефона вводить не нужно.') + '</p>' +
       '<button class="btn" id="browserLoginStart">Войти через Telegram</button>' +
+      (miniUrl ? '<a class="btn btn--vk" href="' + esc(miniUrl) + '" target="_blank" rel="noopener noreferrer">Открыть через ВКонтакте</a>' : '') +
       (state.authOptions && state.authOptions.vk ? '<button class="btn btn--vk" id="browserLoginVk">Войти с VK ID</button><p class="row__sub">Если у вас уже есть кабинет в Telegram, сначала подключите VK в разделе «Способы входа».</p>' : '') +
       '<div id="browserLoginStatus" aria-live="polite"></div></div>');
     const vkButton = document.getElementById('browserLoginVk');
@@ -5485,7 +5526,10 @@
         const result = await api('/auth/vk-mini/start', {method:'POST', body:{full_name:vkMini.fullName || ''}});
         if (!result.registered) { startRender((gen) => renderRegisterView(gen, null)); return; }
       } catch (error) {
-        setView('<div class="card register-card"><div class="card__title">Кабинет не открылся</div><p>' + esc(error.message) + '</p><button class="btn" id="miniRetry">Попробовать снова</button></div>');
+        const appId = state.authOptions && state.authOptions.vk_mini && String(state.authOptions.vk_mini.app_id);
+        const reopen = error.status === 401 && /^[0-9]{1,20}$/.test(appId || '')
+          ? '<a class="btn btn--ghost" target="_blank" rel="noopener noreferrer" href="https://vk.ru/app' + appId + '">Открыть заново в VK</a>' : '';
+        setView('<div class="card register-card"><div class="card__title">Кабинет не открылся</div><p>' + esc(error.message) + '</p><div class="btn-row"><button class="btn" id="miniRetry">Попробовать снова</button>' + reopen + '</div></div>');
         document.getElementById('miniRetry').onclick = () => boot().catch(fail);
         return;
       }

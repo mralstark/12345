@@ -12,7 +12,9 @@
       const timer = setTimeout(() => reject(new Error('VK не ответил. Повторите действие.')), timeout || 12000);
       Promise.resolve().then(() => bridge.send(method, args || {})).then(
         (result) => { clearTimeout(timer); resolve(result); },
-        () => { clearTimeout(timer); reject(new Error('Действие в VK отменено или недоступно.')); });
+        () => { clearTimeout(timer); reject(new Error(method === 'VKWebAppGetPhoneNumber'
+          ? 'VK не передал телефон. Введите контактный номер вручную — его проверит руководитель.'
+          : 'Действие в VK отменено или недоступно.')); });
     });
   }
 
@@ -50,12 +52,13 @@
       const profile = await send('VKWebAppGetUserInfo', {}, 4000).catch(() => null);
       // Profile is only an editable registration suggestion; server trusts sign.
       this.fullName = profile && String(profile.id) === params.get('vk_user_id')
-        ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').slice(0, 128) : '';
+        ? [profile.last_name, profile.first_name].filter(Boolean).join(' ').slice(0, 128) : '';
     },
     async requestPhone() {
       const data = await send('VKWebAppGetPhoneNumber', {}, 60000);
-      if (!data || !data.phone_number || !data.sign || data.is_verified === false) {
-        throw new Error('VK не передал подтверждённый номер телефона.');
+      if (!data || typeof data.phone_number !== 'string' || data.phone_number.length > 32 ||
+          !/^[a-f0-9]{64}$/.test(data.sign || '') || data.is_verified === false || data.isValid === false) {
+        throw new Error('VK не передал подписанный номер. Введите контактный телефон вручную — его проверит руководитель.');
       }
       return { phone_number: String(data.phone_number), sign: String(data.sign) };
     },
@@ -67,7 +70,6 @@
       }
       await send('VKWebAppDownloadFile', {url:url.href, filename:file.filename}, 12000);
     },
-    open(url) { return send('VKWebAppOpenLink', {url}, 8000); },
     close() { return send('VKWebAppClose', {status:'success'}, 3000); },
   };
 })();

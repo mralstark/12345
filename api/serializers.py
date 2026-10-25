@@ -232,6 +232,7 @@ def application_dict(
         "region_name": region_name,
         "full_name": application.full_name,
         "phone": application.phone,
+        "contact_note": "Контактный телефон указан в анкете. Уточните его перед одобрением." if application.external_identity_id is not None else None,
         "birth_date": application.birth_date.isoformat() if application.birth_date else None,
         "university_id": application.university_id,
         "university_name": university_name,

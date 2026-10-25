@@ -13,7 +13,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,8 @@ from services.applications import reject_application as svc_reject_application
 from utils.notify import notify_telegram, send_cabinet_welcome
 from utils.access import accessible_region_ids
 from utils.permissions import has_any_role
+from utils.parser import validate_birth_date
+from utils.tz import today as tz_today
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -59,6 +61,11 @@ class ApplicationPatch(BaseModel):
     birth_date: date | None = None
     faculty: str | None = Field(default=None, max_length=255)
     workplace: str | None = Field(default=None, max_length=255)
+
+    @field_validator("birth_date")
+    @classmethod
+    def valid_birth_date(cls, value):
+        return validate_birth_date(value, tz_today()) if value is not None else value
 
 
 @router.get("/pending")
