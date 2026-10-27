@@ -49,7 +49,8 @@ router = APIRouter(prefix="/register", tags=["register"])
 
 async def registered_user(session, identity):
     if identity.external_identity_id is not None:
-        return await resolve_user_by_id(session, identity.user_id) if identity.user_id is not None else None
+        external = await session.get(ExternalIdentity, identity.external_identity_id)
+        return await resolve_user_by_id(session, external.user_id) if external and external.user_id is not None else None
     return await resolve_user(session, identity.telegram_id, identity.full_name)
 
 
@@ -234,6 +235,12 @@ async def register_submit(
     identity: TelegramIdentity = Depends(get_telegram_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
+    if identity.external_identity_id is not None:
+        # Serialize registration against account linking and re-read ownership;
+        # the auth dependency's snapshot may precede a concurrent confirmation.
+        await session.execute(select(ExternalIdentity).where(
+            ExternalIdentity.id == identity.external_identity_id,
+        ).with_for_update().execution_options(populate_existing=True))
     existing = await registered_user(session, identity)
     if existing is not None:
         raise HTTPException(409, "У вас уже есть личный кабинет")

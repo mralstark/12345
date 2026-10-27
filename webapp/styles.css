@@ -2384,3 +2384,17 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
   .article-editor-footer .btn { flex:1 1 45%; padding-inline:12px; }
   .article-teaser__title { font-size:28px; }
 }
+/* Account linking: a copyable code fits narrow VK/Telegram webviews. */
+.account-pair-code {
+  font-family: inherit;
+  font-size: clamp(1rem, 5vw, 1.3rem);
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-align: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.account-pair-steps { padding-left: 1.3em; line-height: 1.6; }
+.account-pair-steps li + li { margin-top: .5em; }
+.account-pair .btn--block { margin-top: 12px; }
+.account-pair__result:not(:empty) { margin-top: 16px; }
