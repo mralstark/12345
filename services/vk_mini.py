@@ -100,8 +100,6 @@ async def confirm_pair(code, user_id):
     if not enabled():
         raise HTTPException(503, "Подключение VK Mini App ещё не завершено")
     async with async_session() as session:
-        user = (await session.execute(select(User).where(User.id == user_id)
-            .with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
         attempt = await pair_attempt(session, code)
         identity = (await session.execute(select(ExternalIdentity).where(
             ExternalIdentity.id == int(attempt.code_verifier), ExternalIdentity.provider == PROVIDER,
@@ -117,6 +115,11 @@ async def confirm_pair(code, user_id):
         ).returning(OAuthLoginAttempt.state_hash))).scalar_one_or_none()
         if consumed is None:
             raise HTTPException(409, "Код подключения устарел или уже использован")
+        # Do not lock User before ExternalIdentity: approval may need its
+        # reviewer FK while holding the identity. The unique identity constraint
+        # serializes conflicting links; current user state is re-read here.
+        user = (await session.execute(select(User).where(User.id == user_id)
+            .execution_options(populate_existing=True))).scalar_one_or_none()
         attach(identity, user, applications)
         try:
             await session.commit()
