@@ -26,7 +26,8 @@ async def retry_startup_network(operation, attempts=5):
     """Startup operations are idempotent; retry transport failures only."""
     for attempt in range(attempts):
         try:
-            return await asyncio.wait_for(operation(), timeout=20)
+            # Preserve aiogram's normal 60-second transport budget, with an outer bound.
+            return await asyncio.wait_for(operation(), timeout=65)
         except (TelegramNetworkError, TimeoutError):
             if attempt + 1 == attempts:
                 raise
