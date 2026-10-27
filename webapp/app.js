@@ -3789,9 +3789,9 @@
       // Фамилия и имя, как в ленте и в чужом профиле: отчество осталось бы
       // единственным местом, где человек выглядит иначе, чем везде.
       profileHeadHtml(profile, shortName(profile.full_name)) +
-      '<div class="btn-row"><button class="btn btn--block" id="pEdit">Редактировать</button></div>' +
+      '<div class="btn-row"><button class="btn btn--block" id="pEdit">Редактировать</button>' +
       (state.authOptions && (state.authOptions.vk || state.authOptions.vk_mini) ? '<button type="button" class="btn btn--ghost btn--block" id="profileLoginSettings">Способы входа</button>' : '') +
-      '<div id="profileTabBody" class="ptab-body"></div>'
+      '</div><div id="profileTabBody" class="ptab-body"></div>'
     , gen);
 
     // Вкладок больше нет: публикации ушли вместе с личными постами, и
@@ -5607,7 +5607,7 @@
           document.getElementById('miniCancelLink').onclick = () => { vkMini.clearLink(); boot().catch(fail); };
           return;
         }
-        setView('<div class="card register-card"><div class="card__title">Подключить ВКонтакте</div><p>Кабинет в Telegram: <strong>' + esc(target.full_name) + '</strong>.</p><p>Все роли, задания и история сохранятся.</p><p class="row__sub">Подтверждайте, только если это ваш кабинет и ссылку создали вы сами.</p><div class="btn-row"><button class="btn" id="miniConfirmLink">Подключить мой VK-аккаунт</button><button class="btn btn--ghost" id="miniCancelLink">Отмена</button></div></div>');
+        setView('<div class="card register-card"><div class="card__title">Подключить ВКонтакте</div><p>Кабинет в Telegram: <strong>' + esc(target.full_name) + '</strong>.</p><p>Все роли, задания и история сохранятся. Если из VK уже отправлена повторная анкета, она будет закрыта после подключения.</p><p class="row__sub">Подтверждайте, только если это ваш кабинет и ссылку создали вы сами.</p><div class="btn-row"><button class="btn" id="miniConfirmLink">Подключить мой VK-аккаунт</button><button class="btn btn--ghost" id="miniCancelLink">Отмена</button></div></div>');
         submitOnce(document.getElementById('miniConfirmLink'), 'Подключаю…', async () => {
           try {
             await api('/auth/vk-mini/start', {method:'POST', body:{full_name:vkMini.fullName || '',link_token:vkMini.linkToken}});
