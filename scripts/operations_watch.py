@@ -71,13 +71,18 @@ async def database_available():
 
 async def telegram_available():
     from utils.notify import get_notifier_bot, close_notifier_bot
-    try:
-        bot = get_notifier_bot()
-        return bot is not None and bool(await bot.get_me(request_timeout=8))
-    except Exception:
-        return False
-    finally:
-        await close_notifier_bot()
+    for attempt in range(3):
+        try:
+            bot = get_notifier_bot()
+            if bot is not None and bool(await bot.get_me(request_timeout=8)):
+                return True
+        except Exception:
+            pass
+        finally:
+            await close_notifier_bot()
+        if attempt < 2:
+            await asyncio.sleep(1)
+    return False
 
 
 def collect(backup_dir):

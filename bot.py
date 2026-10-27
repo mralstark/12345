@@ -6,6 +6,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from config import (
@@ -19,6 +20,18 @@ from handlers import apply, fallback, impersonate, start, tasks
 from services.notifier import notifier_loop
 from utils.bot_rate_limit import BotRateLimitMiddleware
 from utils.bot_security import ActiveBotUserMiddleware
+
+
+async def retry_startup_network(operation, attempts=5):
+    """Startup operations are idempotent; retry transport failures only."""
+    for attempt in range(attempts):
+        try:
+            return await asyncio.wait_for(operation(), timeout=20)
+        except (TelegramNetworkError, TimeoutError):
+            if attempt + 1 == attempts:
+                raise
+            logging.warning("Telegram startup transport retry %s/%s", attempt + 1, attempts)
+            await asyncio.sleep(min(2 ** (attempt + 1), 16))
 
 
 async def main() -> None:
@@ -52,7 +65,7 @@ async def main() -> None:
     # очищает то, что было выставлено раньше — иначе Telegram хранит старый
     # список на своей стороне. /start остаётся рабочим независимо от этого —
     # встроенная кнопка Telegram у самого чата с ботом.
-    await bot.set_my_commands([])
+    await retry_startup_network(lambda: bot.set_my_commands([]))
 
     # Кнопка меню чата (рядом со строкой ввода, всегда на виду) — открывает
     # кабинет в один тап, не дожидаясь /start и инлайн-кнопки под сообщением.
@@ -60,9 +73,9 @@ async def main() -> None:
     # покажет кабинет, новому — те же две кнопки, что и по /start (см.
     # api/auth.py::get_current_user, keyboards/main_menu.py::WELCOME_TEXT).
     if WEBAPP_URL:
-        await bot.set_chat_menu_button(
+        await retry_startup_network(lambda: bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(text="Личный кабинет", web_app=WebAppInfo(url=WEBAPP_URL))
-        )
+        ))
 
     dp.include_router(start.router)
     dp.include_router(tasks.router)
@@ -72,7 +85,9 @@ async def main() -> None:
 
     # Deployments must not discard /start, login confirmations or other messages
     # received while the service was restarting.
-    await bot.delete_webhook(drop_pending_updates=False)
+    await retry_startup_network(lambda: bot.delete_webhook(drop_pending_updates=False))
+    # Cache the authenticated bot identity before polling; aiogram reuses it.
+    await retry_startup_network(bot.me)
     asyncio.create_task(notifier_loop(bot))
     await dp.start_polling(bot)
 
