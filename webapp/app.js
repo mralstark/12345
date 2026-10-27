@@ -1011,7 +1011,7 @@
     const button = document.getElementById('cabinetSwitch');
     const items = cabinetItems();
     // Один кабинет — переключать не на что, кнопке в шапке делать нечего.
-    if (items.length <= 1 && !(state.authOptions && state.authOptions.vk)) {
+    if (items.length <= 1 && !(state.authOptions && (state.authOptions.vk || state.authOptions.vk_mini))) {
       button.hidden = true;
       return;
     }
@@ -1066,7 +1066,18 @@
   }
 
   async function loginSettings() {
-    if (state.authOptions && state.authOptions.vk_mini && !state.authOptions.vk) return miniLoginSettings();
+    if (vkMini || state.authOptions && state.authOptions.vk_mini && !state.authOptions.vk) return miniLoginSettings();
+    if (state.authOptions && state.authOptions.vk_mini && state.authOptions.vk) {
+      modal('Способы входа', '<p>Подключите нужный способ входа к своему кабинету.</p><div class="btn-row"><button type="button" class="btn btn--vk" id="chooseMiniLogin">Приложение ВКонтакте</button><button type="button" class="btn btn--ghost" id="chooseVkIdLogin">VK ID в браузере</button></div>', () => {
+        document.getElementById('chooseMiniLogin').onclick = () => miniLoginSettings().catch(fail);
+        document.getElementById('chooseVkIdLogin').onclick = () => vkIdLoginSettings().catch(fail);
+      });
+      return;
+    }
+    return vkIdLoginSettings();
+  }
+
+  async function vkIdLoginSettings() {
     const account = await api('/auth/vk/account');
     modal('Способы входа', '<p>' + (account.connected ? 'VK ID подключён. Вы можете входить в этот же кабинет из браузера.' : 'Подключите VK ID к этому кабинету, чтобы входить в браузере. Ваши роли, задания и история сохранятся.') + '</p>' +
       (account.connected ? '<div class="notice">VK ID подключён</div>' : '<button type="button" class="btn btn--vk" id="connectVk">Подключить VK ID</button>') +
@@ -1091,9 +1102,12 @@
     modal('Способы входа', '<p>' + (account.connected
       ? 'ВКонтакте подключён к этому кабинету. Роли, задания и история общие с Telegram.'
       : 'Подключите приложение ВКонтакте к своему кабинету. Роли, задания и история сохранятся.') + '</p>' +
-      (account.can_link ? '<button type="button" class="btn btn--vk" id="connectMini">Подключить ВКонтакте</button><div id="miniLinkResult"></div>' :
+      (account.connected ? '<div class="notice">ВКонтакте подключён</div>' : account.can_link ? '<button type="button" class="btn btn--vk" id="connectMini">Подключить ВКонтакте</button><div id="miniLinkResult"></div>' :
       '<p class="row__sub">Для подключения способа входа заново откройте кабинет в Telegram.</p>') +
+      (account.can_link && !account.connected ? '<button type="button" class="btn btn--ghost btn--block" id="enterMiniPair">Ввести код из ВКонтакте</button>' : '') +
       (account.can_unlink ? '<button type="button" class="btn btn--ghost" id="disconnectMini">Отключить ВКонтакте</button>' : ''), () => {
+      const enterPair = document.getElementById('enterMiniPair');
+      if (enterPair) enterPair.onclick = miniPairConfirmation;
       submitOnce(document.getElementById('connectMini'), 'Готовлю ссылку…', async () => {
         try {
           const result = await api('/auth/vk-mini/link', {method:'POST'});
@@ -1110,6 +1124,74 @@
         await api('/auth/vk-mini/link', {method:'DELETE'}); closeModal(); toast('ВКонтакте отключён');
       });
     });
+  }
+
+  function miniPairConfirmation() {
+    modal('Подключить свой VK-аккаунт', '<p>В приложении VK нажмите «У меня уже есть кабинет», получите код и введите его здесь.</p>' +
+      '<div class="field"><label for="miniPairCode">Код из ВКонтакте</label><input id="miniPairCode" class="account-pair-code" placeholder="XXXX-XXXX-XXXX" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" /></div>' +
+      '<p class="row__sub">Подключайте только свой аккаунт. Не вводите код, присланный другим человеком.</p><button type="button" class="btn btn--block" id="miniPairPreview">Проверить код</button>', () => {
+      const input = document.getElementById('miniPairCode');
+      input.focus();
+      submitOnce(document.getElementById('miniPairPreview'), 'Проверяю…', async () => {
+        const code = input.value.replace(/[ -]/g, '').toUpperCase();
+        if (!/^[A-HJ-NP-Z2-9]{12}$/.test(code)) { toast('Введите 12 символов кода из VK'); return; }
+        try {
+          const target = await api('/auth/vk-mini/pair-preview', {method:'POST', body:{code}});
+          modal('Подтвердить подключение', '<p>К вашему кабинету будет подключён аккаунт <strong>VK ID ' + esc(target.vk_user_id) + '</strong>.</p>' +
+            '<p><a href="https://vk.ru/id' + esc(target.vk_user_id) + '" target="_blank" rel="noopener noreferrer">Проверить страницу ВКонтакте</a></p>' +
+            '<p>Проверьте, что это ваш аккаунт и код получили вы сами. Роли, задания и история останутся в этом кабинете.</p>' +
+            '<p class="row__sub">Если из VK уже отправлена повторная анкета, она будет закрыта после подключения.</p>' +
+            '<div class="btn-row"><button type="button" class="btn" id="miniPairConfirm">Это мой аккаунт, подключить</button><button type="button" class="btn btn--ghost" id="miniPairCancel">Отмена</button></div>', () => {
+            document.getElementById('miniPairCancel').onclick = closeModal;
+            submitOnce(document.getElementById('miniPairConfirm'), 'Подключаю…', async () => {
+              try {
+                await api('/auth/vk-mini/pair-confirm', {method:'POST', body:{code}});
+                closeModal(); toast('ВКонтакте подключён. Вернитесь в VK и откройте кабинет.');
+              } catch (error) { fail(error); }
+            });
+          });
+        } catch (error) { fail(error); }
+      });
+    });
+  }
+
+  async function renderMiniPair(gen) {
+    setView('<div class="card register-card account-pair"><div class="card__title">Войти в свой кабинет</div>' +
+      '<p>Однократно подключите свой VK-аккаунт к кабинету Telegram. После этого он будет открываться здесь с вашими ролями, заданиями и прогрессом.</p>' +
+      '<button type="button" class="btn btn--block" id="miniCreatePair">Получить код подключения</button>' +
+      '<div id="miniPairResult" class="account-pair__result" aria-live="polite"></div><button type="button" class="btn btn--ghost btn--block" id="miniPairBack">Назад</button></div>', gen);
+    document.getElementById('miniPairBack').onclick = () => startRender((next) => renderRegisterView(next, null));
+    submitOnce(document.getElementById('miniCreatePair'), 'Готовлю код…', async () => {
+      try {
+        const result = await api('/auth/vk-mini/pair', {method:'POST'});
+        if (gen !== viewGen) return;
+        const formatted = result.code.match(/.{1,4}/g).join('-');
+        document.getElementById('miniPairResult').innerHTML = '<div class="field"><label for="miniPairValue">Код действует 10 минут</label><input id="miniPairValue" class="account-pair-code" readonly value="' + esc(formatted) + '" /></div>' +
+          '<button type="button" class="btn btn--ghost btn--block" id="miniPairCopy">Скопировать код</button>' +
+          '<ol class="account-pair-steps"><li>Откройте свой кабинет в Telegram.</li><li>В «Профиле» нажмите «Способы входа» → «Ввести код из ВКонтакте».</li><li>Введите код и подтвердите свой VK-аккаунт.</li><li>Вернитесь сюда и нажмите «Открыть мой кабинет».</li></ol>' +
+          '<p class="row__sub">Не отправляйте код другим людям. Подключение подтверждается только в вашем Telegram-кабинете.</p>' +
+          '<button type="button" class="btn btn--block" id="miniPairCheck">Открыть мой кабинет</button>';
+        const codeInput = document.getElementById('miniPairValue');
+        codeInput.onclick = () => codeInput.select();
+        document.getElementById('miniPairCopy').onclick = async () => {
+          try { await navigator.clipboard.writeText(formatted); toast('Код скопирован'); }
+          catch (error) { codeInput.focus(); codeInput.select(); toast('Выделенный код можно скопировать вручную'); }
+        };
+        submitOnce(document.getElementById('miniPairCheck'), 'Проверяю…', async () => {
+          try {
+            const status = await api('/auth/vk-mini/start', {method:'POST', body:{}});
+            if (gen !== viewGen) return;
+            if (status.registered) await boot();
+            else toast('Подтвердите подключение в своём Telegram-кабинете');
+          } catch (error) { fail(error); }
+        });
+      } catch (error) { if (gen === viewGen) fail(error); }
+    });
+  }
+
+  function wireMiniPairEntry() {
+    const button = document.getElementById('miniExistingCabinet');
+    if (button) button.onclick = () => startRender(renderMiniPair);
   }
 
   function switchCabinet(value) {
@@ -3708,6 +3790,7 @@
       // единственным местом, где человек выглядит иначе, чем везде.
       profileHeadHtml(profile, shortName(profile.full_name)) +
       '<div class="btn-row"><button class="btn btn--block" id="pEdit">Редактировать</button></div>' +
+      (state.authOptions && (state.authOptions.vk || state.authOptions.vk_mini) ? '<button type="button" class="btn btn--ghost btn--block" id="profileLoginSettings">Способы входа</button>' : '') +
       '<div id="profileTabBody" class="ptab-body"></div>'
     , gen);
 
@@ -3716,6 +3799,8 @@
     const body = document.getElementById('profileTabBody');
     body.innerHTML = myAboutHtml(profile);
     wireProfileTabBody(profile);
+    const loginSettingsButton = document.getElementById('profileLoginSettings');
+    if (loginSettingsButton) loginSettingsButton.onclick = () => loginSettings().catch(fail);
 
     document.getElementById('pEdit').onclick = () => {
       state.profileEdit = true;
@@ -5123,7 +5208,8 @@
     const vkRegistration = data.provider === 'vk' || data.provider === 'vk_mini';
     const vkLabel = vkMini ? 'ВКонтакте' : 'VK ID';
     if (data.application && data.application.state === 'pending') {
-      setView('<div class="card register-card"><div class="card__title">Заявка на рассмотрении</div><p>Руководитель отделения проверит анкету. После одобрения здесь откроется ваш кабинет.</p><div class="btn-row"><button type="button" class="btn" id="registerRefresh">Проверить статус</button>' + (vkRegistration && !vkMini ? '<button type="button" class="btn btn--ghost" id="registerLogout">Выйти</button>' : '') + '</div></div>', gen);
+      setView('<div class="card register-card"><div class="card__title">Заявка на рассмотрении</div><p>Руководитель отделения проверит анкету. После одобрения здесь откроется ваш кабинет.</p><div class="btn-row"><button type="button" class="btn" id="registerRefresh">Проверить статус</button>' + (vkRegistration && !vkMini ? '<button type="button" class="btn btn--ghost" id="registerLogout">Выйти</button>' : '') + '</div>' + (vkMini ? '<button type="button" class="btn btn--ghost btn--block" id="miniExistingCabinet">У меня уже есть кабинет в Telegram</button>' : '') + '</div>', gen);
+      wireMiniPairEntry();
       document.getElementById('registerRefresh').onclick = () => startRender((next) => renderRegisterView(next, prefillRegionId));
       const logout = document.getElementById('registerLogout');
       if (logout) logout.onclick = async () => { logout.disabled = true; try { await api('/auth/browser/logout',{method:'POST'}); location.href='/'; } catch (error) { fail(error); logout.disabled = false; } };
@@ -5131,7 +5217,8 @@
     }
     if (vkRegistration && data.existing_account) {
       if (vkMini) {
-        setView('<div class="card register-card"><div class="card__title">У вас уже есть кабинет</div><p>Откройте свой кабинет в Telegram → «Способы входа» → «Подключить ВКонтакте». Перейдите по одноразовой ссылке и подтвердите подключение.</p><p class="row__sub">Роли и история сохранятся. Если Telegram недоступен, обратитесь к руководителю отделения.</p></div>', gen);
+        setView('<div class="card register-card"><div class="card__title">У вас уже есть кабинет</div><p>Подключите ВКонтакте к существующему кабинету Telegram. Повторная регистрация не требуется.</p><button type="button" class="btn btn--block" id="miniExistingCabinet">У меня уже есть кабинет в Telegram</button><p class="row__sub">Роли и история сохранятся. Если Telegram недоступен, обратитесь к руководителю отделения.</p></div>', gen);
+        wireMiniPairEntry();
         return;
       }
       setView('<div class="card register-card"><div class="card__title">У вас уже есть кабинет</div><p>Войдите через Telegram, откройте меню кабинетов → «Способы входа» и подключите VK ID. Так сохранятся ваши роли и история.</p><p class="row__sub">Если Telegram недоступен, обратитесь к руководителю отделения. По одному совпадению телефона доступ не выдаётся.</p><button type="button" class="btn" id="registerChooseOther">Выбрать другой способ входа</button></div>', gen);
@@ -5142,7 +5229,7 @@
     setView(
       '<div class="card register-card"><div class="card__title">Создание личного кабинета</div>' +
       '<div class="register-lead">' + (vkMini ? 'Вход подтверждён ВКонтакте. Заполните анкету и укажите контактный телефон — руководитель проверит данные и откроет кабинет.' : vkRegistration ? 'Кабинет создаётся после проверки анкеты руководителем. Телефон передаётся с вашего разрешения через ' + vkLabel + '.' : 'Телефон — основной контакт. Telegram попросит разрешение передать боту ваш номер.') + '</div>' +
-      (vkMini ? '<p class="row__sub">Уже есть кабинет в Telegram? Сначала подключите ВКонтакте через «Способы входа» в Telegram-кабинете.</p>' : '') +
+      (vkMini ? '<button type="button" class="btn btn--ghost btn--block" id="miniExistingCabinet">У меня уже есть кабинет в Telegram</button><p class="row__sub">Подключите его один раз и входите через VK без повторной регистрации.</p>' : '') +
       (data.application && data.application.state === 'rejected' ? '<div class="notice notice--warn">Предыдущая заявка отклонена. ' + esc(data.application.reason || 'Уточните данные у руководителя перед повторной подачей.') + '</div>' : '') +
       '<div class="field"><label>ФИО</label><input id="rName" placeholder="Иванов Иван Иванович" /></div>' +
       '<div class="field"><label for="rBirth">Дата рождения</label><input id="rBirth" placeholder="20.02.2000" inputmode="numeric" maxlength="10" autocomplete="bday" aria-describedby="rBirthStatus" /><div class="field-hint" id="rBirthStatus" aria-live="polite">ДД.ММ.ГГГГ</div></div>' +
@@ -5183,6 +5270,7 @@
       '</div>'
     , gen);
 
+    wireMiniPairEntry();
     const phoneInput = document.getElementById('rPhone');
     const phoneStatus = document.getElementById('rPhoneStatus');
     const phoneButton = document.getElementById('rVerifyPhone');

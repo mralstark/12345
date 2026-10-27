@@ -2,7 +2,7 @@
 import time
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import delete, select
 
 from api.auth import get_current_user
@@ -31,6 +31,40 @@ class PhoneIn(BaseModel):
 class LinkIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     link_token: str = Field(min_length=43, max_length=43, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class PairIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str = Field(min_length=12, max_length=12, pattern=r"^[A-HJ-NP-Z2-9]{12}$")
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def normalize_code(cls, value):
+        if isinstance(value, str) and len(value) <= 32:
+            return value.replace("-", "").replace(" ", "").upper()
+        return value
+
+
+@router.post("/pair")
+async def pair(request: Request, authorization: str = Header(default="")):
+    limit(request, "vk-mini-pair", 10, global_budget=100)
+    launch = vk_mini.launch_from_header(authorization)
+    enforce_user_rate_limit("vkmini:" + launch["subject"], "POST", request.url.path)
+    return await vk_mini.create_pair(launch)
+
+
+@router.post("/pair-preview")
+async def pair_preview(payload: PairIn, request: Request, user: User = Depends(get_current_user)):
+    require_fresh_telegram(request, user)
+    limit(request, "vk-mini-pair-preview", 10, global_budget=100)
+    return await vk_mini.preview_pair(payload.code)
+
+
+@router.post("/pair-confirm")
+async def pair_confirm(payload: PairIn, request: Request, user: User = Depends(get_current_user)):
+    require_fresh_telegram(request, user)
+    limit(request, "vk-mini-pair-confirm", 5, global_budget=60)
+    return await vk_mini.confirm_pair(payload.code, user.id)
 
 
 @router.post("/link-preview")

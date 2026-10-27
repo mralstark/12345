@@ -30,6 +30,13 @@ async def approve_application(session: AsyncSession, application_id: int, review
     reviewer_id — None для автоматического одобрения без участия человека
     (api/routers/register.py — доверенные заранее известные люди, см.
     config.AUTO_FEDERAL_FULL_NAMES)."""
+    external_id = (await session.execute(select(MembershipApplication.external_identity_id).where(
+        MembershipApplication.id == application_id,
+    ))).scalar_one_or_none()
+    if external_id is not None:
+        # Link, registration and approval serialize on the same identity first.
+        await session.execute(select(ExternalIdentity).where(ExternalIdentity.id == external_id)
+            .with_for_update().execution_options(populate_existing=True))
     application = (await session.execute(select(MembershipApplication).where(MembershipApplication.id == application_id)
         .with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
     if application is None:

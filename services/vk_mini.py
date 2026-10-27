@@ -17,13 +17,113 @@ from sqlalchemy.exc import IntegrityError
 
 from config import VK_MINI_APP_ID, VK_MINI_APP_SECRET
 from database.db import async_session
-from database.models import ExternalIdentity, OAuthLoginAttempt, User
+from database.models import (
+    APPLICATION_STATE_PENDING, APPLICATION_STATE_REJECTED,
+    ExternalIdentity, MembershipApplication, OAuthLoginAttempt, User,
+)
 from services.browser_login import digest
 from utils.parser import normalize_phone
+from utils.tz import now as tz_now
 
 PROVIDER = "vk_mini"
 MAX_AGE = 3600
 LINK_TTL = 600
+PAIR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+async def pending_applications(session, identity_id):
+    # Caller holds the identity lock, as does application approval.
+    return list((await session.execute(select(MembershipApplication).where(
+        MembershipApplication.external_identity_id == identity_id,
+        MembershipApplication.state == APPLICATION_STATE_PENDING,
+    ).order_by(MembershipApplication.id).with_for_update())).scalars())
+
+
+def attach(identity, user, applications):
+    if user is None or not user.is_active or user.view_as_user_id is not None:
+        raise HTTPException(403, "Подключение к этому кабинету недоступно")
+    if identity.user_id is not None and identity.user_id != user.id:
+        raise HTTPException(409, "Этот VK-аккаунт уже подключён к другому кабинету")
+    identity.user_id = user.id
+    # A mistaken second registration must not remain in the review queue.
+    for application in applications:
+        application.state = APPLICATION_STATE_REJECTED
+        application.reject_reason = "Владелец подключил существующий кабинет Telegram"
+        application.reviewed_at = tz_now().replace(tzinfo=None)
+        application.reviewed_by_user_id = user.id
+
+
+async def create_pair(launch):
+    """A VK-bound one-time code; confirmation uses fresh Telegram initData."""
+    code = "".join(secrets.choice(PAIR_ALPHABET) for _ in range(12))
+    now = int(time.time())
+    async with async_session() as session:
+        identity = await find_identity(session, launch, lock=True)
+        if identity is None:
+            raise HTTPException(401, "Заново откройте приложение во ВКонтакте")
+        if identity.user_id is not None:
+            raise HTTPException(409, "ВКонтакте уже подключён к кабинету. Откройте его заново")
+        binding = digest(PROVIDER + ":" + launch["subject"])
+        await session.execute(delete(OAuthLoginAttempt).where(
+            (OAuthLoginAttempt.expires_at <= now) |
+            ((OAuthLoginAttempt.purpose == "mini_pair") & (OAuthLoginAttempt.binding_hash == binding)),
+        ))
+        session.add(OAuthLoginAttempt(state_hash=digest(code), binding_hash=binding,
+            code_verifier=str(identity.id), purpose="mini_pair", expires_at=now + LINK_TTL))
+        await session.commit()
+    return {"code": code, "expires_in": LINK_TTL}
+
+
+async def pair_attempt(session, code):
+    attempt = (await session.execute(select(OAuthLoginAttempt).where(
+        OAuthLoginAttempt.state_hash == digest(code), OAuthLoginAttempt.purpose == "mini_pair",
+        OAuthLoginAttempt.expires_at > int(time.time()),
+    ))).scalar_one_or_none()
+    if attempt is None:
+        raise HTTPException(409, "Код подключения устарел или уже использован. Получите новый в VK")
+    return attempt
+
+
+async def preview_pair(code):
+    if not enabled():
+        raise HTTPException(503, "Подключение VK Mini App ещё не завершено")
+    async with async_session() as session:
+        attempt = await pair_attempt(session, code)
+        identity = await session.get(ExternalIdentity, int(attempt.code_verifier))
+        if (identity is None or identity.provider != PROVIDER or identity.user_id is not None
+                or not hmac.compare_digest(attempt.binding_hash, digest(PROVIDER + ":" + identity.subject))):
+            raise HTTPException(409, "Этот VK-аккаунт уже подключён или недоступен")
+        return {"vk_user_id": identity.subject.split(":", 1)[1]}
+
+
+async def confirm_pair(code, user_id):
+    if not enabled():
+        raise HTTPException(503, "Подключение VK Mini App ещё не завершено")
+    async with async_session() as session:
+        user = (await session.execute(select(User).where(User.id == user_id)
+            .with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
+        attempt = await pair_attempt(session, code)
+        identity = (await session.execute(select(ExternalIdentity).where(
+            ExternalIdentity.id == int(attempt.code_verifier), ExternalIdentity.provider == PROVIDER,
+        ).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
+        if (identity is None or not hmac.compare_digest(
+                attempt.binding_hash, digest(PROVIDER + ":" + identity.subject))):
+            raise HTTPException(409, "Подключение недоступно. Получите новый код в VK")
+        applications = await pending_applications(session, identity.id)
+        consumed = (await session.execute(delete(OAuthLoginAttempt).where(
+            OAuthLoginAttempt.state_hash == digest(code), OAuthLoginAttempt.purpose == "mini_pair",
+            OAuthLoginAttempt.binding_hash == attempt.binding_hash,
+            OAuthLoginAttempt.expires_at > int(time.time()),
+        ).returning(OAuthLoginAttempt.state_hash))).scalar_one_or_none()
+        if consumed is None:
+            raise HTTPException(409, "Код подключения устарел или уже использован")
+        attach(identity, user, applications)
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(409, "К кабинету уже подключён другой VK-аккаунт. Проверьте способы входа") from None
+    return {"ok": True}
 
 
 def enabled():
@@ -91,6 +191,7 @@ async def require_identity(session, launch):
 async def start(launch, full_name="", link_token=None):
     async with async_session() as session:
         identity = await find_identity(session, launch, lock=True)
+        applications = await pending_applications(session, identity.id) if identity and link_token else []
         if identity is None:
             identity = ExternalIdentity(provider=PROVIDER, subject=launch["subject"], full_name=full_name)
             session.add(identity)
@@ -104,11 +205,7 @@ async def start(launch, full_name="", link_token=None):
             if attempt is None:
                 raise HTTPException(409, "Ссылка подключения использована или устарела. Создайте новую в Telegram")
             user = await session.get(User, attempt.user_id)
-            if user is None or not user.is_active or user.view_as_user_id is not None:
-                raise HTTPException(403, "Подключение к этому кабинету недоступно")
-            if identity.user_id is not None and identity.user_id != user.id:
-                raise HTTPException(409, "Этот VK-аккаунт уже подключён к другому кабинету")
-            identity.user_id = user.id
+            attach(identity, user, applications)
         if identity.user_id is not None:
             user = await session.get(User, identity.user_id)
             if user is None or not user.is_active:
