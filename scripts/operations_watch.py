@@ -14,6 +14,12 @@ import time
 from urllib.parse import urlsplit
 
 
+def tls_context():
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return context
+
+
 def health_url(url):
     connection = None
     try:
@@ -21,7 +27,7 @@ def health_url(url):
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             return False
         connection = http.client.HTTPSConnection(parsed.hostname, parsed.port or 443,
-                                                timeout=8, context=ssl.create_default_context())
+                                                timeout=8, context=tls_context())
         connection.request("GET", parsed.path or "/")
         response = connection.getresponse()
         return response.status == 200 and json.loads(response.read(1024)) == {"status": "ok"}
@@ -34,7 +40,7 @@ def health_url(url):
 
 def certificate_days(hostname):
     with socket.create_connection((hostname, 443), timeout=5) as raw:
-        with ssl.create_default_context().wrap_socket(raw, server_hostname=hostname) as channel:
+        with tls_context().wrap_socket(raw, server_hostname=hostname) as channel:
             return (ssl.cert_time_to_seconds(channel.getpeercert()["notAfter"]) - time.time()) / 86400
 
 

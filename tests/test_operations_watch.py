@@ -1,8 +1,17 @@
 import os
 import time
+import ssl
 from pathlib import Path
 
-from scripts.operations_watch import backup_fresh, record_state
+from scripts.operations_watch import backup_fresh, record_state, tls_context, health_url
+
+
+def test_monitor_requires_authenticated_modern_tls_and_https():
+    context = tls_context()
+    assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
+    assert context.check_hostname and context.verify_mode == ssl.CERT_REQUIRED
+    assert health_url("file:///etc/passwd") is False
+    assert health_url("http://example.test/healthz") is False
 
 
 def test_backup_age_and_authentication_are_both_required(tmp_path):
