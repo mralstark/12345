@@ -4,6 +4,7 @@
 """
 
 import logging
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -55,6 +56,7 @@ from services.images import ImageProcessorBusy
 from utils.notify import close_notifier_bot
 
 logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("uvicorn.error")
 
 WEBAPP_DIR = BASE_DIR / "webapp"
 LANDING_DIR = BASE_DIR / "landing"
@@ -62,6 +64,8 @@ LANDING_DIR = BASE_DIR / "landing"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from utils.safe_logging import install_secret_redaction
+    install_secret_redaction()
     validate_security_config()
     await init_db()
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -110,7 +114,24 @@ _CONTENT_SECURITY_POLICY = "; ".join(
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await idempotency_store.execute(request, call_next)
+    status_code = 500
+    try:
+        response = await idempotency_store.execute(request, call_next)
+        status_code = response.status_code
+    finally:
+        actor_id = getattr(request.state, "audit_actor_id", None)
+        if actor_id is not None and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            route = request.scope.get("route")
+            route_path = getattr(route, "path", "unmatched")
+            if request.url.path.startswith("/api/") and not route_path.startswith("/api/"):
+                route_path = "/api" + route_path
+            # Route templates exclude attacker-supplied path/query/body values.
+            audit_logger.info("security-audit %s", json.dumps({
+                "version": 1, "actor_id": actor_id,
+                "effective_user_id": getattr(request.state, "audit_effective_user_id", actor_id),
+                "method": request.method, "route": route_path,
+                "status": status_code,
+            }))
     response.headers.setdefault("Content-Security-Policy", _CONTENT_SECURITY_POLICY)
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")

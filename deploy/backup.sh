@@ -8,7 +8,8 @@ BACKUP_KEY_FILE=${BACKUP_KEY_FILE:-/root/.bratstvo_backup_key}
 BACKUP_REMOTE_DIR=${BACKUP_REMOTE_DIR:-}
 KEEP_DAYS=${KEEP_DAYS:-14}
 APP_DIR=${APP_DIR:-/opt/bratstvo}
-STAMP=$(date +%Y-%m-%dT%H%M%S)
+STAMP=$(date -u +%Y-%m-%dT%H%M%S-%N)
+CODE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 
 if [[ ! -f "$BACKUP_KEY_FILE" ]]; then
     echo "Нет ключа шифрования $BACKUP_KEY_FILE; бэкап не создан" >&2
@@ -45,10 +46,11 @@ trap 'rm -rf -- "$work_dir"' EXIT
 
 sudo -u postgres pg_dump --format=custom bratstvo > "$work_dir/database.dump"
 tar czf "$work_dir/storage.tar.gz" --transform='flags=rh;s,^\.,storage,' -C "$storage_dir" .
+install -m 600 "$APP_DIR/.env" "$work_dir/application.env"
 
 target="$BACKUP_DIR/bratstvo-$STAMP.tar.gz.enc"
 tmp_target="$target.tmp"
-tar czf - -C "$work_dir" database.dump storage.tar.gz \
+tar czf - -C "$work_dir" database.dump storage.tar.gz application.env \
     | openssl enc -aes-256-cbc -pbkdf2 -salt -pass "file:$BACKUP_KEY_FILE" -out "$tmp_target"
 
 # Проверяем расшифровку и структуру до публикации файла.
@@ -56,6 +58,8 @@ openssl enc -d -aes-256-cbc -pbkdf2 -pass "file:$BACKUP_KEY_FILE" -in "$tmp_targ
     | tar tzf - >/dev/null
 mv "$tmp_target" "$target"
 chmod 600 "$target"
+"$APP_DIR/.venv/bin/python" "$CODE_DIR/scripts/backup_integrity.py" sign "$target" --key-file "$BACKUP_KEY_FILE"
+"$APP_DIR/.venv/bin/python" "$CODE_DIR/scripts/backup_integrity.py" verify "$target" --key-file "$BACKUP_KEY_FILE"
 
 if [[ -n "$BACKUP_REMOTE_DIR" ]]; then
     if [[ ! -d "$BACKUP_REMOTE_DIR" ]]; then
@@ -63,8 +67,11 @@ if [[ -n "$BACKUP_REMOTE_DIR" ]]; then
         exit 1
     fi
     install -m 600 "$target" "$BACKUP_REMOTE_DIR/$(basename "$target")"
+    install -m 600 "$target.hmac" "$BACKUP_REMOTE_DIR/$(basename "$target").hmac"
     find "$BACKUP_REMOTE_DIR" -maxdepth 1 -type f -name 'bratstvo-*.tar.gz.enc' -mtime "+$KEEP_DAYS" -delete
+    find "$BACKUP_REMOTE_DIR" -maxdepth 1 -type f -name 'bratstvo-*.tar.gz.enc.hmac' -mtime "+$KEEP_DAYS" -delete
 fi
 
 find "$BACKUP_DIR" -maxdepth 1 -type f -name 'bratstvo-*.tar.gz.enc' -mtime "+$KEEP_DAYS" -delete
+find "$BACKUP_DIR" -maxdepth 1 -type f -name 'bratstvo-*.tar.gz.enc.hmac' -mtime "+$KEEP_DAYS" -delete
 echo "Зашифрованный бэкап проверен: $target"

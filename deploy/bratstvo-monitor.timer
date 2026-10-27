@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Bratstvo operational health every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=20
+Unit=bratstvo-monitor.service
+
+[Install]
+WantedBy=timers.target

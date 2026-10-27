@@ -3,6 +3,7 @@
 Unknown template drift is deliberately left to sync_units.sh's existing guard.
 """
 import hashlib
+from itertools import product
 import os
 from pathlib import Path
 import shutil
@@ -16,26 +17,34 @@ NEW_COMMENT = "включён только для маршрутов, котор
 OLD_FRAME_COMMENT = "# Mini App внутри Telegram — отдельный WebView; фрейминг разрешён только Telegram."
 NEW_FRAME_COMMENT = ("# Встраивание в Telegram/VK ограничивает CSP приложения (api/main.py).\n"
                      "    # Не добавляйте X-Frame-Options: DENY/SAMEORIGIN поверх этого списка.")
+OLD_ACCESS_LOG = '                    \'"$http_referer" "$http_user_agent"\';'
+NEW_ACCESS_LOG = "                    '$request_time';"
 
 
 def migrated_config(template, stamp, installed):
     if template.count(NEW) != 1:
         return None
-    # Recognize only exact predecessors, including deployments upgrading both
-    # changes together. Any other template drift still blocks the release.
-    frame_previous = template.replace(NEW_FRAME_COMMENT, OLD_FRAME_COMMENT)
-    variants = [template]
-    if template.count(NEW_FRAME_COMMENT) == 1:
-        variants.append(frame_previous)
-        if hashlib.sha256(frame_previous.encode()).hexdigest() == stamp.strip():
-            return installed.replace(OLD_FRAME_COMMENT, NEW_FRAME_COMMENT)
-    for variant in variants:
-        previous = variant.replace(NEW, OLD).replace(NEW_COMMENT, OLD_COMMENT)
+    features = [((OLD, NEW), (OLD_COMMENT, NEW_COMMENT)),
+                ((OLD_FRAME_COMMENT, NEW_FRAME_COMMENT),), ((OLD_ACCESS_LOG, NEW_ACCESS_LOG),)]
+    # Enumerate exact known predecessors only. Changes to limits/TLS or any
+    # other template bytes still invalidate the saved hash and block deployment.
+    for mask in product((False, True), repeat=len(features)):
+        if not any(mask):
+            continue
+        pairs = [pair for enabled, feature in zip(mask, features) if enabled for pair in feature]
+        if any(template.count(new) != 1 for old, new in pairs):
+            continue
+        previous = template
+        for old, new in pairs:
+            previous = previous.replace(new, old)
         if hashlib.sha256(previous.encode()).hexdigest() != stamp.strip():
             continue
-        if installed.count(OLD) != 1 or NEW in installed:
+        if any(installed.count(old) != 1 for old, new in pairs):
             return None
-        return installed.replace(OLD, NEW).replace(OLD_FRAME_COMMENT, NEW_FRAME_COMMENT)
+        candidate = installed
+        for old, new in pairs:
+            candidate = candidate.replace(old, new)
+        return candidate
     return None
 
 

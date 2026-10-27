@@ -181,6 +181,9 @@ async def get_current_user(request: Request, authorization: str = Header(default
                 "Доступ не открыт. Напишите боту /start — там либо ссылка на подачу заявки, "
                 "либо создание личного кабинета, если вы уже приняты.",
             )
+        actor = getattr(user, "_impersonated_by", None) or user
+        request.state.audit_actor_id = actor.id
+        request.state.audit_effective_user_id = user.id
         ensure_impersonation_read_only(user, request.method, request.url.path)
         session.expunge(user)
         return user

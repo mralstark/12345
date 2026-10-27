@@ -59,6 +59,8 @@ install_if_changed() {  # <файл в проекте> <путь в систем
 install_if_changed "$APP_DIR/deploy/bratstvo-api.service" /etc/systemd/system/bratstvo-api.service bratstvo-api.service
 install_if_changed "$APP_DIR/deploy/bratstvo-api.socket"  /etc/systemd/system/bratstvo-api.socket  bratstvo-api.socket
 install_if_changed "$APP_DIR/deploy/bratstvo-bot.service" /etc/systemd/system/bratstvo-bot.service bratstvo-bot.service
+install_if_changed "$APP_DIR/deploy/bratstvo-monitor.service" /etc/systemd/system/bratstvo-monitor.service bratstvo-monitor.service
+install_if_changed "$APP_DIR/deploy/bratstvo-monitor.timer" /etc/systemd/system/bratstvo-monitor.timer bratstvo-monitor.timer
 
 if [ "$units_changed" = "1" ]; then
     systemctl daemon-reload
@@ -68,6 +70,10 @@ if [ "$units_changed" = "1" ]; then
         echo "    перезапускаю порт (описание сокета изменилось)"
         systemctl restart bratstvo-api.socket
     fi
+fi
+
+if [ -f /etc/systemd/system/bratstvo-monitor.timer ]; then
+    systemctl enable --now bratstvo-monitor.timer
 fi
 
 # --- nginx: запрещаем тихий drift ---------------------------------------------
