@@ -24,6 +24,7 @@ def backup_fixture(tmp_path):
     (app / "config.py").write_text(
         "import os\nfrom pathlib import Path\nSTORAGE_DIR=Path(os.environ['STORAGE_DIR'])\n"
     )
+    (app / ".env").write_text("SYNTHETIC_SETTING=fixture-only\n")
     storage = tmp_path / "custom uploads"
     (storage / "photos").mkdir(parents=True)
     (storage / "photos" / "sample.png").write_bytes(b"synthetic-image")
@@ -59,12 +60,16 @@ def test_custom_storage_round_trip_keeps_restore_layout_and_private_modes(tmp_pa
     assert archive.stat().st_mode & 0o777 == 0o600
     assert archive.parent.stat().st_mode & 0o777 == 0o700
     assert (remote / archive.name).read_bytes() == archive.read_bytes()
+    from scripts.backup_integrity import verify
+    verify(archive, Path(env["BACKUP_KEY_FILE"]))
+    assert (remote / (archive.name + ".hmac")).read_bytes() == Path(str(archive) + ".hmac").read_bytes()
     decrypted = subprocess.run([
         "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-pass",
         "file:" + env["BACKUP_KEY_FILE"], "-in", str(archive),
     ], capture_output=True, check=True).stdout
     with tarfile.open(fileobj=io.BytesIO(decrypted), mode="r:gz") as outer:
-        assert set(outer.getnames()) == {"database.dump", "storage.tar.gz"}
+        assert set(outer.getnames()) == {"database.dump", "storage.tar.gz", "application.env"}
+        assert outer.extractfile("application.env").read() == b"SYNTHETIC_SETTING=fixture-only\n"
         assert outer.extractfile("database.dump").read() == b"synthetic-pg-dump"
         with tarfile.open(fileobj=io.BytesIO(outer.extractfile("storage.tar.gz").read()), mode="r:gz") as inner:
             assert inner.extractfile("storage/photos/sample.png").read() == b"synthetic-image"

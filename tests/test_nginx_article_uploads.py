@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 from deploy.migrate_nginx_article_uploads import (
-    OLD, NEW, OLD_COMMENT, NEW_COMMENT, OLD_FRAME_COMMENT, NEW_FRAME_COMMENT, migrate, migrated_config,
+    OLD, NEW, OLD_COMMENT, NEW_COMMENT, OLD_FRAME_COMMENT, NEW_FRAME_COMMENT,
+    OLD_ACCESS_LOG, NEW_ACCESS_LOG, migrate, migrated_config,
 )
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "deploy" / "nginx-bratstvo.conf"
@@ -39,7 +40,7 @@ def test_known_migration_is_repeatable_preserves_tls_and_checks_before_reload(tm
     before = installed.read_text(encoding="utf-8")
     calls = []
     assert migrate(template, stamp, installed, run=lambda cmd, **kw: calls.append(cmd))
-    assert installed.read_text(encoding="utf-8") == before.replace(OLD, NEW)
+    assert installed.read_text(encoding="utf-8") == before.replace(OLD, NEW).replace(OLD_COMMENT, NEW_COMMENT)
     assert calls == [["nginx", "-t"], ["systemctl", "reload", "nginx"]]
     assert not migrate(template, stamp, installed, run=lambda *a, **k: pytest.fail("no repeat reload"))
 
@@ -60,8 +61,22 @@ def test_exact_frame_comment_predecessors_preserve_installed_tls(with_upload_cha
     stamp = hashlib.sha256(previous.encode()).hexdigest()
     expected = installed.replace(OLD_FRAME_COMMENT, NEW_FRAME_COMMENT)
     if with_upload_change:
-        expected = expected.replace(OLD, NEW)
+        expected = expected.replace(OLD, NEW).replace(OLD_COMMENT, NEW_COMMENT)
     assert migrated_config(text, stamp, installed) == expected
+    assert migrated_config(text.replace("512k", "50m"), stamp, installed) is None
+
+
+@pytest.mark.parametrize("upload,frame", [(False, False), (False, True), (True, False), (True, True)])
+def test_private_access_log_migration_keeps_tls_and_unknown_drift_guard(upload, frame):
+    text = TEMPLATE.read_text(encoding="utf-8")
+    previous = text.replace(NEW_ACCESS_LOG, OLD_ACCESS_LOG)
+    if upload:
+        previous = previous.replace(NEW, OLD).replace(NEW_COMMENT, OLD_COMMENT)
+    if frame:
+        previous = previous.replace(NEW_FRAME_COMMENT, OLD_FRAME_COMMENT)
+    installed = previous + "\nssl_certificate /private/cert.pem;\n"
+    stamp = hashlib.sha256(previous.encode()).hexdigest()
+    assert migrated_config(text, stamp, installed) == text + "\nssl_certificate /private/cert.pem;\n"
     assert migrated_config(text.replace("512k", "50m"), stamp, installed) is None
 
 

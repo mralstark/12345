@@ -1,0 +1,19 @@
+[Unit]
+Description=Read-only Bratstvo health, TLS, disk and backup checks
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/bratstvo
+ExecStart=/opt/bratstvo/.venv/bin/python -m scripts.operations_watch
+TimeoutStartSec=60
+StateDirectory=bratstvo-monitor
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/bratstvo-monitor
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

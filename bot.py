@@ -23,6 +23,8 @@ from utils.bot_security import ActiveBotUserMiddleware
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    from utils.safe_logging import install_secret_redaction
+    install_secret_redaction()
 
     validate_security_config()
     token = require_bot_token()
