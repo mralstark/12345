@@ -91,6 +91,8 @@ async def change_status(session: AsyncSession, task: Task, actor: User, new_stat
         task.review_is_read = False
     if new_status == TASK_STATUS_DONE:
         task.overdue_notified = False
+        task.overdue_assignee_notified = False
+        task.overdue_author_notified = False
         task.reviewed_at = task.updated_at
     if is_author and new_status in (TASK_STATUS_NEW, TASK_STATUS_IN_PROGRESS):
         task.reviewed_at = task.updated_at

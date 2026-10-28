@@ -55,6 +55,11 @@ DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{BASE_DIR / 'brat
 APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Europe/Moscow")
 
 STORAGE_DIR = Path(os.getenv("STORAGE_DIR") or (BASE_DIR / "storage"))
+BOT_HEALTH_FILE = Path(os.getenv("BOT_HEALTH_FILE") or (
+    "/var/lib/bratstvo-bot/health.json" if IS_PRODUCTION and os.name == "posix" else STORAGE_DIR / ".bot-health.json"
+))
+# Explicit opt-in; never infer a recipient from roles or personal contacts.
+OPERATIONS_ALERT_TELEGRAM_ID = os.getenv("OPERATIONS_ALERT_TELEGRAM_ID", "").strip()
 
 # Технические superuser'ы: полный доступ ко всем регионам без инвайт-кода.
 # Задел на переходный период (план «Убираем технического superuser») — новых
@@ -94,6 +99,10 @@ MIN_FREE_STORAGE_BYTES = int(os.getenv("MIN_FREE_STORAGE_MB", "512")) * 1024 * 1
 def validate_security_config() -> None:
     """Не позволяем production запуститься с отладочным обходом или с
     устаревшей настройкой, выдающей админские права по пользовательскому ФИО."""
+    if OPERATIONS_ALERT_TELEGRAM_ID:
+        value = OPERATIONS_ALERT_TELEGRAM_ID.removeprefix("-")
+        if not value.isascii() or not value.isdigit() or not 1 <= len(value) <= 19 or not 0 < int(value) < 2**63:
+            raise RuntimeError("OPERATIONS_ALERT_TELEGRAM_ID должен быть числовым ID получателя")
     if VK_MINI_APP_ID or VK_MINI_APP_SECRET:
         if (not VK_MINI_APP_ID or len(VK_MINI_APP_ID) > 20 or
                 not all(c in "0123456789" for c in VK_MINI_APP_ID) or int(VK_MINI_APP_ID) <= 0):

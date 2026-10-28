@@ -8,6 +8,8 @@ Type=simple
 User=bratstvo
 Group=bratstvo
 WorkingDirectory=/opt/bratstvo
+StateDirectory=bratstvo-bot
+StateDirectoryMode=0700
 # .env читает сам python-dotenv из WorkingDirectory — EnvironmentFile не нужен.
 ExecStart=/opt/bratstvo/.venv/bin/python bot.py
 Restart=always
