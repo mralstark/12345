@@ -586,6 +586,7 @@ class EventAttendance(Base):
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), index=True)
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id"), index=True)
     attended: Mapped[bool] = mapped_column(Boolean, default=True)
+    reminder_sent_on: Mapped[date_ | None] = mapped_column(Date, nullable=True)
 
     event: Mapped["Event"] = relationship(back_populates="attendance")
     member: Mapped["Member"] = relationship(back_populates="attendance")
@@ -635,6 +636,8 @@ class Task(Base):
     # дедлайна — чтобы не слать его повторно при каждом цикле нотификатора.
     deadline_notified_on: Mapped[date_ | None] = mapped_column(Date, nullable=True)
     overdue_notified: Mapped[bool] = mapped_column(Boolean, default=False)
+    overdue_assignee_notified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    overdue_author_notified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     author: Mapped["User"] = relationship(foreign_keys=[from_user_id])
     assignee: Mapped["User"] = relationship(foreign_keys=[to_user_id])

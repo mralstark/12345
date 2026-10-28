@@ -64,17 +64,22 @@ async def check_birthdays(bot: Bot) -> int:
         ]
 
         for member_id, full_name, phone, birth_date, region_name, leader_telegram_id in birthdays:
-            notice = BirthdayNotice(member_id=member_id, year=today.year)
-            session.add(notice)
+            existing = (await session.execute(select(BirthdayNotice.id).where(
+                BirthdayNotice.member_id == member_id, BirthdayNotice.year == today.year,
+            ))).scalar_one_or_none()
+            if existing is not None:
+                continue
+            session.add(BirthdayNotice(member_id=member_id, year=today.year))
             try:
-                await session.commit()
+                # Claim inside the transaction, but do not commit a sent marker
+                # until Telegram confirms it. A competing worker waits here.
+                await session.flush()
             except IntegrityError:
-                # Уже отправляли сегодня (уникальный индекс member_id+year).
                 await session.rollback()
                 continue
 
             age = today.year - birth_date.year
-            await notify_telegram(
+            receipt = await notify_telegram(
                 leader_telegram_id,
                 f"🎂 <b>День рождения</b>\n\n"
                 f"Сегодня {age} лет — {escape_telegram_html(full_name)} "
@@ -82,7 +87,11 @@ async def check_birthdays(bot: Bot) -> int:
                 f"{escape_telegram_html('Телефон: ' + phone) if phone else ''}",
                 bot=bot,
             )
-            sent += 1
+            if receipt:
+                await session.commit()
+                sent += 1
+            else:
+                await session.rollback()
 
     return sent
 
@@ -107,17 +116,17 @@ async def check_deadlines(bot: Bot) -> int:
         for task, assignee in result.all():
             if task.deadline_notified_on == today:
                 continue
-            task.deadline_notified_on = today
-            await session.commit()
-
             when = "сегодня" if task.deadline == today else format_date_ru(task.deadline)
-            await notify_telegram(
+            receipt = await notify_telegram(
                 assignee.telegram_id,
                 f"⏰ <b>Приближается срок</b>\n\n«{escape_telegram_html(task.title)}» — "
                 f"до {escape_telegram_html(when)}.",
                 bot=bot,
             )
-            sent += 1
+            if receipt:
+                task.deadline_notified_on = today
+                await session.commit()
+                sent += 1
 
     return sent
 
@@ -137,25 +146,37 @@ async def check_overdue(bot: Bot) -> int:
             )
         )
         for task in result.scalars().all():
-            task.overdue_notified = True
-            await session.commit()
-
             assignee = await session.get(User, task.to_user_id)
             author = await session.get(User, task.from_user_id)
             text = (
                 f"🔴 <b>Задача просрочена</b>\n\n"
                 f"«{escape_telegram_html(task.title)}»\nСрок был: {format_date_ru(task.deadline)}"
             )
-            if assignee:
-                await notify_telegram(assignee.telegram_id, text, bot=bot)
-                sent += 1
-            if author and author.id != task.to_user_id:
-                await notify_telegram(
-                    author.telegram_id,
-                    text + f"\nИсполнитель: {escape_telegram_html(assignee.full_name if assignee else '—')}",
-                    bot=bot,
-                )
-                sent += 1
+            if not task.overdue_assignee_notified:
+                if assignee and assignee.telegram_id:
+                    receipt = await notify_telegram(assignee.telegram_id, text, bot=bot)
+                    if receipt:
+                        task.overdue_assignee_notified = True
+                        sent += 1
+                else:
+                    task.overdue_assignee_notified = True  # No Telegram recipient.
+                await session.commit()
+            if not task.overdue_author_notified:
+                if author and author.telegram_id and author.id != task.to_user_id:
+                    receipt = await notify_telegram(
+                        author.telegram_id,
+                        text + f"\nИсполнитель: {escape_telegram_html(assignee.full_name if assignee else '—')}",
+                        bot=bot,
+                    )
+                    if receipt:
+                        task.overdue_author_notified = True
+                        sent += 1
+                elif author and author.id == task.to_user_id:
+                    task.overdue_author_notified = task.overdue_assignee_notified
+                else:
+                    task.overdue_author_notified = True
+            task.overdue_notified = task.overdue_assignee_notified and task.overdue_author_notified
+            await session.commit()
 
     return sent
 
@@ -190,26 +211,34 @@ async def check_event_reminders(bot: Bot) -> int:
             starts_at = datetime.combine(event.date, event.time or time_(0, 0), tzinfo=now.tzinfo)
             if starts_at - EVENT_REMINDER_LEAD > now or starts_at <= now:
                 continue
-            event.reminder_sent_on = today
-            await session.commit()
-
             when = format_date_ru(event.date) + (event.time.strftime(', %H:%M') if event.time else '')
             attendees = await session.execute(
-                select(User.telegram_id, User.full_name)
+                select(EventAttendance, User.telegram_id, User.full_name)
                 .select_from(EventAttendance)
                 .join(Member, Member.id == EventAttendance.member_id)
                 .join(User, User.member_id == Member.id)
                 .where(EventAttendance.event_id == event.id, EventAttendance.attended.is_(True))
             )
-            for telegram_id, full_name in attendees.all():
-                await notify_telegram(
+            all_delivered = True
+            for attendance, telegram_id, full_name in attendees.all():
+                if not telegram_id or attendance.reminder_sent_on == today:
+                    continue
+                receipt = await notify_telegram(
                     telegram_id,
                     f"📅 <b>Напоминание</b>\n\n{escape_telegram_html(first_and_patronymic(full_name))}, "
                     f"через 24 часа — «{escape_telegram_html(event.title)}» "
                     f"({escape_telegram_html(when)}). Вы отметились как «иду».",
                     bot=bot,
                 )
-                sent += 1
+                if receipt:
+                    attendance.reminder_sent_on = today
+                    await session.commit()
+                    sent += 1
+                else:
+                    all_delivered = False
+            if all_delivered:
+                event.reminder_sent_on = today
+                await session.commit()
 
     return sent
 

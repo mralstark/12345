@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 from urllib.parse import urlsplit
+from utils.bot_health import read_health, readiness_issues
 
 
 def tls_context():
@@ -85,6 +86,21 @@ async def telegram_available():
     return False
 
 
+def bot_readiness():
+    from config import BOT_HEALTH_FILE
+    try:
+        import pwd
+        result = subprocess.run(["systemctl", "show", "bratstvo-bot", "-p", "MainPID",
+                                 "-p", "InvocationID", "-p", "User"],
+                                capture_output=True, text=True, timeout=5, check=True)
+        properties = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+        uid = pwd.getpwnam(properties["User"]).pw_uid
+        data = read_health(BOT_HEALTH_FILE, int(properties["MainPID"]), properties["InvocationID"], uid)
+        return readiness_issues(data)
+    except (OSError, ValueError, KeyError, ImportError, subprocess.SubprocessError):
+        return ["bot-state-unavailable"]
+
+
 def collect(backup_dir):
     from config import BASE_DIR, STORAGE_DIR, WEBAPP_URL, validate_security_config
     issues = []
@@ -104,8 +120,8 @@ def collect(backup_dir):
         issues.append("tls-validation")
     if not asyncio.run(database_available()):
         issues.append("database")
-    if not asyncio.run(telegram_available()):
-        issues.append("telegram-transport")
+    # getMe succeeding does not prove the main process can receive updates.
+    issues.extend(bot_readiness())
     usage = shutil.disk_usage(STORAGE_DIR)
     if usage.free < max(512 * 1024 * 1024, usage.total * 0.05):
         issues.append("disk-space")
@@ -156,6 +172,10 @@ def record_state(directory, issues, now=None):
 
 
 if __name__ == "__main__":
+    from utils.safe_logging import install_secret_redaction
+    from config import OPERATIONS_ALERT_TELEGRAM_ID
+    from services.operations_alerts import alert_health
+    install_secret_redaction()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, default=Path("/var/lib/bratstvo-monitor"))
     parser.add_argument("--backup-dir", type=Path, default=Path("/var/backups/bratstvo"))
@@ -165,4 +185,5 @@ if __name__ == "__main__":
     except Exception:
         issues = ["monitor-check-failed"]
     result = record_state(args.state_dir, issues)
+    asyncio.run(alert_health(args.state_dir, result, OPERATIONS_ALERT_TELEGRAM_ID))
     raise SystemExit(1 if result["issues"] else 0)

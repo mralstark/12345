@@ -11,7 +11,6 @@ import html
 import logging
 
 from aiogram import Bot
-from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import (
     TelegramAPIError,
     TelegramBadRequest,
@@ -28,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import BOT_PROXY_URL, BOT_TOKEN, WEBAPP_URL
 from database.models import ROLE_LABELS, User
 from utils.parser import first_and_patronymic
+from utils.telegram_transport import create_bot_session
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def get_notifier_bot() -> Bot | None:
     if not BOT_TOKEN:
         return None
     if _bot is None:
-        session = AiohttpSession(proxy=BOT_PROXY_URL) if BOT_PROXY_URL else None
+        session = create_bot_session(proxy=BOT_PROXY_URL)
         _bot = Bot(token=BOT_TOKEN, session=session)
     return _bot
 

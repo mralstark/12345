@@ -8,3 +8,5 @@ bandit>=1.8
 pip-audit>=2.7
 # FileCache tooling: fixed lock-file and directory ownership vulnerabilities.
 filelock>=4.2.1,<5
+# CacheControl decoder: CVE-2026-114613 (strict-map-key leak / stale-stack reference).
+msgpack>=1.2.3,<2

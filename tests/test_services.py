@@ -1,6 +1,9 @@
 """Поведение сервисов: подбор категории, повторы, уведомления о днях рождения."""
 
 from datetime import date, timedelta
+from unittest.mock import AsyncMock
+
+import pytest
 
 from sqlalchemy import func, select
 
@@ -24,6 +27,12 @@ from services.tasks import create_task, effective_status
 from utils.balance_calc import get_balance, get_event_fact
 from utils.tz import now as tz_now
 from utils.tz import today as tz_today
+
+
+@pytest.fixture(autouse=True)
+def accepted_telegram_delivery(monkeypatch):
+    # These tests exercise successful delivery, not a missing transport returning None.
+    monkeypatch.setattr("services.notifier.notify_telegram", AsyncMock(return_value=True))
 
 
 async def test_default_categories_created_once(session, world):
