@@ -2429,6 +2429,7 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .article-tool:hover, .article-tool:focus-visible { background:var(--accent-soft); color:var(--accent); }
 .article-editable { min-height:280px; margin:24px 0; padding:6px 0 24px; outline:none; }
 .article-editable:focus { outline:none; }
+.article-editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 8px; border-radius: 4px; }
 .article-editable:empty::before, .article-editable figcaption:empty::before { content:attr(data-placeholder); color:var(--hint); pointer-events:none; }
 .article-editor-footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:12px; align-items:center; border-top:1px solid var(--border); padding-top:24px; }
 .article-editor-footer > .row__sub { flex:1 1 100%; }
