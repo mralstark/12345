@@ -2415,7 +2415,7 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .browser-login > .btn { display:flex; width:100%; justify-content:center; margin-top:12px; }
 .article-content hr { width:64px; border:0; border-top:1px solid var(--rule-strong); margin:40px auto; }
 .article-end { text-align:center; color:var(--accent); font-size:9px; margin:48px 0 0; }
-.article-bottom { width:min(100%,720px); margin:0 auto; padding:24px 28px; box-sizing:border-box; }
+.article-bottom { width:min(100%,720px); margin:0 auto; padding:24px 28px; box-sizing:border-box; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; }
 .article-save-state { font-size:12px; line-height:1.5; color:var(--hint); text-align:right; max-width:52%; }
 .article-save-state--error { color:var(--danger); }
 .article-title-input, .article-summary-input { display:block; width:100%; padding:0; background:transparent; border:0; border-radius:0; resize:vertical; outline-offset:6px; color:var(--text); }
@@ -2509,6 +2509,10 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
   .character-portrait #avatarMeta { margin: 0; align-self: end; }
   .character-portrait #avatarEdit { margin: 0; align-self: start; justify-self: start; }
   .academy-progress .radar-svg { max-width: 280px; }
+}
+@media (max-width: 380px) {
+  .profile-top { flex-direction: column; gap: 16px; }
+  .profile-top__main { width: 100%; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-reduced-motion: reduce) {
   body::before { display: none; }
