@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  // Visual system: locally hosted Forum + Google Sans, graphite / warm gold.
+  // Studio visual system: Forum + Google Sans, graphite / warm gold / frosted surfaces.
   // Keep a JS revision so Telegram's existing version check refreshes old CSS too.
 
   // Самопроверка версии: у некоторых клиентов Telegram (замечено на
@@ -559,6 +559,19 @@
   // всем экраном на любое действие. 140 мс выбраны так, чтобы переход
   // читался, но не заставлял ждать: на кнопку жмут подряд.
   let lastRenderedTab = null;
+  let fieldLabelSequence = 0;
+
+  function associateFieldLabels(root) {
+    root.querySelectorAll('.field label').forEach((label) => {
+      if (label.htmlFor || label.control) return;
+      const field = label.closest('.field');
+      const controls = field.querySelectorAll('input:not([type="hidden"]), select, textarea');
+      if (controls.length !== 1) return;
+      const control = controls[0];
+      if (!control.id) control.id = 'cabinet-field-' + (++fieldLabelSequence);
+      label.htmlFor = control.id;
+    });
+  }
 
   function setView(html, gen) {
     if (gen !== undefined && gen !== viewGen) throw STALE_RENDER;
@@ -566,7 +579,12 @@
     const changed = lastRenderedTab !== state.tab;
     const from = tabDirection(lastRenderedTab, state.tab);
     lastRenderedTab = state.tab;
-    node.innerHTML = html;
+    node.dataset.screen = state.tab || '';
+    const section = state.me && gen !== undefined && tabsConfig().find((item) => item.id === state.tab);
+    const hasOwnHeading = ['profile', 'person', 'academyManage'].includes(state.tab);
+    node.innerHTML = (section && !hasOwnHeading
+      ? '<header class="screen-heading"><h1>' + esc(section.label) + '</h1></header>' : '') + html;
+    associateFieldLabels(node);
     if (!changed) return;
     // Перезапуск анимации: без снятия класса и обращения к offsetWidth
     // повторное добавление того же класса браузер не считает изменением.
@@ -591,7 +609,19 @@
   }
   function on(selector, event, handler, root) {
     (root || document).querySelectorAll(selector).forEach((node) => {
-      if (event !== 'click' || node.tagName !== 'BUTTON') { node.addEventListener(event, handler); return; }
+      if (event !== 'click' || node.tagName !== 'BUTTON') {
+        node.addEventListener(event, handler);
+        if (event === 'click' && node.matches('.row--clickable, .row--tap, tr[data-region]')) {
+          if (!node.hasAttribute('tabindex')) node.tabIndex = 0;
+          if (node.tagName !== 'TR' && !node.hasAttribute('role')) node.setAttribute('role', 'button');
+          node.addEventListener('keydown', (action) => {
+            if (action.target === node && (action.key === 'Enter' || action.key === ' ')) {
+              action.preventDefault(); node.click();
+            }
+          });
+        }
+        return;
+      }
       let busy = false;
       node.addEventListener(event, async (action) => {
         if (busy) return;
@@ -634,6 +664,7 @@
   // нельзя: их рисует само окно. Форма новости держит ссылки на выбранные
   // фотографии, и отпускать их надо в любом случае.
   let modalCleanups = [];
+  let modalReturnFocus = null;
 
   function onModalClose(handler) {
     modalCleanups.push(handler);
@@ -641,10 +672,11 @@
 
   function modal(title, bodyHtml, onMount) {
     closeModal();
+    modalReturnFocus = document.activeElement;
     const root = document.getElementById('modalRoot');
     root.innerHTML =
-      '<div class="modal-backdrop"><div class="modal">' +
-      '<div class="modal__header"><div class="modal__title">' + esc(title) + '</div>' +
+      '<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">' +
+      '<div class="modal__header"><h2 class="modal__title" id="modalTitle">' + esc(title) + '</h2>' +
       '<button type="button" class="modal__close" id="modalCloseX" aria-label="Закрыть">×</button></div>' +
       bodyHtml +
       '</div></div>';
@@ -652,6 +684,21 @@
     backdrop.addEventListener('click', (event) => { if (event.target === backdrop) closeModal(); });
     document.getElementById('modalCloseX').onclick = closeModal;
     if (onMount) onMount(root);
+    associateFieldLabels(root);
+    document.body.classList.add('has-modal');
+    document.querySelectorAll('.topbar, #view, #tabs').forEach((node) => { node.inert = true; });
+    const dialog = root.querySelector('.modal');
+    dialog.focus({preventScroll: true});
+    backdrop.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeModal(); }
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(dialog.querySelectorAll('button, a[href], input, select, textarea, [tabindex]'))
+        .filter((node) => !node.disabled && node.tabIndex >= 0 && node.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); dialog.focus(); }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog)) { event.preventDefault(); first.focus(); }
+    });
   }
 
   function closeModal() {
@@ -659,6 +706,10 @@
     modalCleanups = [];
     for (const handler of pending) handler();
     document.getElementById('modalRoot').innerHTML = '';
+    document.body.classList.remove('has-modal');
+    document.querySelectorAll('.topbar, #view, #tabs').forEach((node) => { node.inert = false; });
+    if (modalReturnFocus && modalReturnFocus.isConnected) modalReturnFocus.focus({preventScroll: true});
+    modalReturnFocus = null;
   }
 
   // Строкой — как раньше, объектом — когда одной фразы мало: у снятия с
@@ -876,7 +927,7 @@
     const hidden = items.length > NAV_SLOTS ? items.slice(NAV_SLOTS - 1) : [];
 
     let html = visible.map((item) =>
-      '<button class="tab' + (activeId === item.id ? ' tab--active' : '') + '" data-tab="' + item.id + '">' +
+      '<button type="button" class="tab' + (activeId === item.id ? ' tab--active' : '') + '" data-tab="' + item.id + '"' + (activeId === item.id ? ' aria-current="page"' : '') + '>' +
       tabIcon(item.id) +
       '<span class="tab__label">' + esc(item.label) + '</span>' +
       (item.badge ? '<span class="tab__badge">' + item.badge + '</span>' : '') +
@@ -885,7 +936,7 @@
     if (hidden.length) {
       const activeInside = hidden.some((item) => item.id === activeId);
       const badgeInside = hidden.some((item) => item.badge);
-      html += '<button class="tab' + (activeInside ? ' tab--active' : '') + '" id="tabMore">' +
+      html += '<button type="button" class="tab' + (activeInside ? ' tab--active' : '') + '" id="tabMore" aria-haspopup="dialog">' +
         tabIcon('more') + '<span class="tab__label">Ещё</span>' +
         (badgeInside ? '<span class="tab__dot"></span>' : '') + '</button>';
     }
@@ -2990,7 +3041,7 @@
     // стоит название мероприятия.
     const rows = data.items.length ? data.items.map((task) =>
       '<div class="row row--clickable" data-task="' + task.id + '">' +
-      '<div class="row__main"><div class="row__title">' + (task.is_unread ? '<span class="task-unread" aria-label="Новая задача"></span>' : '') + esc(task.title) + '</div>' +
+      '<div class="row__main"><div class="row__title">' + (task.is_unread ? '<span class="task-unread" role="img" aria-label="Новая задача"></span>' : '') + esc(task.title) + '</div>' +
       '<div class="row__sub">' +
       esc(task.kind === 'event'
         ? task.from_name || 'мероприятие'
@@ -3186,7 +3237,7 @@
       '<div class="stat"><div class="stat__label">Мероприятий · ' + esc(data.period_label) + '</div><div class="stat__value">' + (data.totals.events || 0) + '</div></div>' +
       '</div>' +
       '<div class="card"><div class="card__title">Сравнение регионов · ' + esc(data.period_label) + '</div>' +
-      '<div class="table-scroll"><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>'
+      '<div class="table-scroll" role="region" aria-label="Сравнение регионов: таблица с горизонтальной прокруткой" tabindex="0"><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>'
     , gen);
 
     bindPeriod(period, 'an', () => startRender(renderAnalytics));
@@ -3772,7 +3823,7 @@
         ? '<img class="avatar avatar--lg" src="' + data.avatar + '" alt="">'
         : '<span class="avatar avatar--lg avatar--letter">' + esc((name || '?').trim()[0] || '?') + '</span>') +
       '<div class="profile-top__main">' +
-      '<div class="profile-top__name"><span class="pf-name">' + esc(name) + '</span>' +
+      '<div class="profile-top__name"><h1 class="pf-name">' + esc(name) + '</h1>' +
       memberBadgeHtml(data.is_member) + '</div>' +
       roleLineHtml(data.role_title) +
       bureauLineHtml(data.bureau_title) +
@@ -4228,22 +4279,22 @@
     // просто картинка. Видео живёт в #avatarHolder, который переключение
     // вкладок ролей ниже не трогает — иначе оно бы перезапускалось при
     // каждом клике.
-    const showWave = VIDEO_OUTFITS.indexOf(active.id) !== -1;
+    const showWave = VIDEO_OUTFITS.indexOf(active.id) !== -1 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     setView(
-      '<div class="card" style="text-align:center">' +
-      '<div id="avatarHolder" style="width:220px;max-width:100%;aspect-ratio:3/4;margin:0 auto;border-radius:16px;overflow:hidden;position:relative">' +
+      '<div class="card character-portrait">' +
+      '<div id="avatarHolder" class="character-portrait__frame">' +
       (showWave
-        ? '<video src="/static/avatars/' + active.id + '_wave.mp4" id="avatarWaveVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:1;transition:opacity .6s ease"></video>' +
-          '<video src="/static/avatars/' + active.id + '_idle.mp4" id="avatarIdleVideo" muted playsinline loop style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s ease"></video>'
+        ? '<video src="/static/avatars/' + active.id + '_wave.mp4" poster="' + esc(active.image) + '" id="avatarWaveVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:1;transition:opacity .6s ease"></video>' +
+          '<video src="/static/avatars/' + active.id + '_idle.mp4" poster="' + esc(active.image) + '" id="avatarIdleVideo" muted playsinline loop style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s ease"></video>'
         : '<img src="' + active.image + '" alt="' + esc(active.label) + '" class="avatar-idle" style="width:100%;height:100%;object-fit:cover;display:block">') +
       '</div>' +
-      '<div class="row__sub" id="avatarMeta" style="margin-top:var(--space-8)">' + renderAvatarMeta(data, active) + '</div>' +
-      '<button class="btn" id="avatarEdit" style="margin-top:var(--space-12)">Сменить образ</button>' +
+      '<div class="row__sub" id="avatarMeta">' + renderAvatarMeta(data, active) + '</div>' +
+      '<button class="btn" id="avatarEdit">Сменить образ</button>' +
       '</div>' +
       (data.academy_enabled ? '<div class="card academy-progress"><div class="card__title">Мой прогресс</div>' +
       '<div class="row__sub">Диаграмма показывает развитие твоих навыков при выполнении заданий</div>' + buildRadarSvg(data.radar) + '</div>' : '') +
-      '<div class="card"><div class="card__title">' + (data.academy_enabled ? 'Задания' : 'Награды') + '</div><div id="questsCard">' + renderQuestsCard(data) + '</div></div>'
+      '<div class="card character-quests"><div class="card__title">' + (data.academy_enabled ? 'Задания' : 'Награды') + '</div><div id="questsCard">' + renderQuestsCard(data) + '</div></div>'
     , gen);
 
     if (showWave) {
@@ -4555,9 +4606,9 @@
     const head = '<div class="post__head">' +
       '<div class="post__author post__author--static">' +
       avatarHtml(item.avatar, item.byline) +
-      '<span class="post__byline">' + esc(item.byline || item.author_name || '') + '</span>' +
+      '<span class="post__identity"><span class="post__byline">' + esc(item.byline || item.author_name || '') + '</span>' +
+      '<time class="post__time" datetime="' + esc(item.created_at || '') + '">' + timeRu(item.created_at) + '</time></span>' +
       '</div>' +
-      '<span class="post__time">' + timeRu(item.created_at) + '</span>' +
       (item.can_delete
         ? '<button type="button" class="post__menu" data-del-news="' + item.id + '" aria-label="Действия с постом">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">' +
@@ -4571,7 +4622,7 @@
     // согласен», не втягивая в разговор.
     const actions = '<div class="post__actions">' +
       '<button type="button" class="act' + (liked ? ' act--on' : '') + '" data-like="' + item.id + '">' +
-      iconLike(Boolean(liked)) + '<span>' + (likeCount || '') + '</span></button>' +
+      iconLike(Boolean(liked)) + '<span class="sr-only">Поддержать публикацию</span><span>' + (likeCount || '') + '</span></button>' +
       '<span class="act act--views">' + iconEye() + '<span>' + (item.views || 0) + '</span></span>' +
       '</div>';
 
@@ -4581,7 +4632,7 @@
       (articleCover ? '<img class="article-teaser__cover" src="' + esc(articleCover.url) + '" alt="" loading="lazy">' : '') +
       '<span class="article-teaser__body"><span class="article-kicker">Статья</span><span class="article-teaser__title">' + esc(item.article_title || item.text) + '</span>' +
       (item.article_summary ? '<span class="article-teaser__summary">' + esc(item.article_summary) + '</span>' : '') +
-      '<span class="article-teaser__read">Читать статью <span aria-hidden="true">→</span></span></span></button>';
+      '<span class="article-teaser__read">Читать статью <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg></span></span></button>';
     return '<div class="post' + (isArticle ? ' post--article' : '') + '" data-post="' + item.id + '">' +
       head +
       (isArticle ? articleCard : newsPhotosHtml(item) + (item.text ? postTextHtml(item) : '')) +
@@ -5552,7 +5603,7 @@
     const miniUrl = /^[0-9]{1,20}$/.test(miniId || '') ? 'https://vk.ru/app' + miniId : '';
     document.querySelector('.topbar').hidden = true;
     document.getElementById('tabs').hidden = true;
-    setView('<div class="card browser-login"><div class="card__title">Личный кабинет</div>' +
+    setView('<div class="card browser-login"><header class="browser-login__brand"><img src="/static/emblem-white.png" width="56" height="64" alt="Братство Академистов"><h1>Личный кабинет</h1></header>' +
       '<p>' + (state.authOptions && state.authOptions.vk ? 'Выберите способ входа в свой кабинет.' : 'Войдите в браузере, подтвердив вход в Telegram. Пароль и номер телефона вводить не нужно.') + '</p>' +
       '<button class="btn" id="browserLoginStart">Войти через Telegram</button>' +
       (miniUrl ? '<a class="btn btn--vk" href="' + esc(miniUrl) + '" target="_blank" rel="noopener noreferrer">Открыть через ВКонтакте</a>' : '') +
@@ -5682,13 +5733,14 @@
         try { await api('/auth/browser/logout', { method: 'POST' }); location.reload(); }
         catch (error) { fail(error); }
       };
-      document.querySelector('.topbar').appendChild(button);
+      document.querySelector('.topbar__actions').appendChild(button);
     }
     const requestedArticle = Number(params.get('article'));
     if (requestedArticle > 0) { if (introEl) introEl.classList.add('intro--hidden'); }
     else showIntroGreeting(state.me.full_name);
 
     document.getElementById('userName').textContent = state.me.full_name;
+    document.getElementById('userName').title = state.me.full_name;
     // Подпись под именем — только про управление. Статус члена Братства оттуда
     // убран: рядом с именем в профиле его показывает герб, а в шапке он висел
     // на всех вкладках и дублировал сам себя.
