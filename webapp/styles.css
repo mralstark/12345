@@ -2571,7 +2571,9 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
     background: var(--surface);
   }
 }
+.academy-layout { grid-column: 1 / -1; min-width: 0; }
 .academy-intro { color: var(--hint); margin: 0 0 20px; }
+.academy-materials h2, .academy-empty h2 { font-family: 'Forum', serif; font-weight: 400; }
 .academy-sections { margin-bottom: 20px; }
 .academy-materials { padding: 0; overflow: hidden; }
 .academy-book { display: flex; align-items: center; gap: 24px; padding: 24px; }

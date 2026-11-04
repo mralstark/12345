@@ -4108,18 +4108,18 @@
       : '<div class="academy-empty"><h2>Вокабуляр готовится</h2><p>Здесь появятся термины Академиста и их значения.</p></div>';
     const bookRows = books.items.map((book) => '<article class="academy-book">' +
       '<div class="academy-book__main"><h2>' + esc(book.title) + '</h2><p class="row__sub">PDF · ' +
-      esc((book.size_bytes / (1024 * 1024)).toLocaleString('ru-RU', {maximumFractionDigits:1, minimumFractionDigits:1})) + ' МБ</p></div>' +
+      esc(book.size_bytes < 1024 * 1024 ? Math.max(1, Math.ceil(book.size_bytes / 1024)) + ' КБ' : (book.size_bytes / (1024 * 1024)).toLocaleString('ru-RU', {maximumFractionDigits:1}) + ' МБ') + '</p></div>' +
       '<button type="button" class="btn btn--ghost academy-book__download" data-academy-book="' + book.id +
       '" aria-label="' + esc('Скачать PDF: ' + book.title) + '">Скачать PDF</button></article>').join('');
     const terms = vocabulary.items.map((item) => '<div class="academy-term"><dt>' + esc(item.term) +
       '</dt><dd>' + esc(item.definition) + '</dd></div>').join('');
-    setView('<p class="academy-intro">Книги и вокабуляр Академиста</p>' +
+    setView('<div class="academy-layout"><p class="academy-intro">Книги и вокабуляр Академиста</p>' +
       '<div class="chips academy-sections" aria-label="Разделы Академии">' +
       [['library','Библиотека'],['vocabulary','Вокабуляр']].map(([id,label]) =>
         '<button type="button" class="chip' + (section === id ? ' chip--active' : '') + '" data-academy-section="' + id +
         '" aria-pressed="' + (section === id) + '">' + label + '</button>').join('') + '</div>' +
       '<section class="card academy-materials" aria-label="' + (section === 'library' ? 'Библиотека' : 'Вокабуляр Академиста') + '">' +
-      (section === 'library' ? (bookRows || empty) : '<h2 class="academy-vocabulary-title">Вокабуляр Академиста</h2>' + (terms ? '<dl class="academy-vocabulary">' + terms + '</dl>' : empty)) + '</section>', gen);
+      (section === 'library' ? (bookRows || empty) : '<h2 class="academy-vocabulary-title">Вокабуляр Академиста</h2>' + (terms ? '<dl class="academy-vocabulary">' + terms + '</dl>' : empty)) + '</section></div>', gen);
     on('[data-academy-section]', 'click', (event) => {
       state.academySection = event.currentTarget.dataset.academySection;
       startRender(renderAcademy);
