@@ -5,14 +5,22 @@ section order and action flow. It updates shared styles rather than adding a UI 
 
 ## Direction
 
-- Graphite/ink background with two static, broad warm/cool color fields.
-- Locally hosted Forum display typography and Google Sans reading/control text.
+- Original matte obsidian texture with sparse gold mineral veins, softened by quiet
+  warm/cool light fields. The locally hosted JPEG is decorative, with a graphite fallback.
+- Display headings retain Forum and their original heading-specific overrides.
+  Reading/control text uses Times New Roman where installed, with locally hosted Tinos
+  as the phone fallback; regular, bold and italic faces include Cyrillic. Tinos comes
+  from pinned upstream sources with the SIL OFL and provenance stored beside the fonts.
 - Warm gold identifies primary actions, selection and progress.
-- Translucent panels have a fine edge and restrained inset highlight. Sticky chrome
-  and dialogs use stronger backdrop blur. Nested cards avoid a second blur layer.
-- Unsupported backdrop filters retain opaque defaults. Reduced transparency or
-  reduced motion selects opaque surfaces; forced colors retains visible boundaries.
-- No new image/font downloads, CDN, runtime package, animation framework or tracking.
+- Translucent panels reveal the wallpaper through 22px blur with restrained saturation,
+  a bright rim and a shaded lower edge. Sticky chrome uses 26px blur; dialogs retain
+  a dense reading surface. Nested cards avoid a second blur layer.
+- Unsupported backdrop filters retain opaque defaults. Reduced transparency or increased contrast selects
+  opaque surfaces; reduced motion disables motion while retaining static glass.
+  Forced colors retains visible boundaries.
+- No external image/font requests, CDN, runtime package, animation framework or tracking.
+  `webapp/backgrounds/obsidian-gold-v1.jpg` is an original generated material texture;
+  found marble photographs served as visual research and were not copied into the app.
 
 ## Layout and interactions
 

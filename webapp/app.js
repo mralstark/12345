@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  // Studio visual system: Forum + Google Sans, graphite / warm gold / frosted surfaces.
+  // Studio visual system: Forum + Times New Roman / Tinos, matte obsidian / warm gold / optical glass.
   // Keep a JS revision so Telegram's existing version check refreshes old CSS too.
 
   // Самопроверка версии: у некоторых клиентов Telegram (замечено на
