@@ -10,9 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
+from config import ACADEMY_LEGACY_READ_ONLY
 from api.routers.character import _quest_dict
 from database.models import ROLE_SUPERUSER, Member, MemberQuestProgress, Quest, QuestActivity, User
-from services.academy import clear_assignment, lock_progress, log_activity, require_academy, require_student
+from services.academy import clear_assignment, lock_progress, log_activity, require_academy, require_student, require_legacy_write
 from utils.access import AccessDenied, actor_cell, require_same_cell
 from utils.notify import escape_telegram_html, notify_telegram
 from utils.tz import now as tz_now
@@ -67,8 +68,8 @@ async def list_member_quests(
     # знал ни сколько у человека звёзд, ни сколько ему открылось.
     return {
         "items": items,
-        "academy_enabled": member.is_active and member.status == "activist",
-        "can_review": user.member_id != member_id or has_role(user, ROLE_SUPERUSER),
+        "academy_enabled": member.is_active and member.status == "activist" and not ACADEMY_LEGACY_READ_ONLY,
+        "can_review": (user.member_id != member_id or has_role(user, ROLE_SUPERUSER)) and not ACADEMY_LEGACY_READ_ONLY,
         "history": [{"id": h.id, "quest": titles.get(h.quest_id, "Задание"),
                      "action": h.action, "note": h.note, "created_at": h.created_at.isoformat() + "Z"} for h in history],
         "claimed": sum(i["stars_claimed"] for i in items),
@@ -210,6 +211,7 @@ async def reject_member_quest(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
+    require_legacy_write()
     member = await _get_member(session, member_id)
     await require_academy(session, user, member)
     require_same_cell(await actor_cell(session, user), member.cell_id)
@@ -233,6 +235,7 @@ async def reject_member_quest(
 @router.post("/{quest_id}/cancel")
 async def cancel_member_quest(member_id: int, quest_id: int,
                             user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)) -> dict:
+    require_legacy_write()
     member = await _get_member(session, member_id)
     await require_academy(session, user, member)
     quest = await session.get(Quest, quest_id)

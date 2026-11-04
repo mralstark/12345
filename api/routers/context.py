@@ -1,6 +1,7 @@
 """Кто я, какие регионы доступны, сводка главного экрана (ТЗ §5)."""
 
 from datetime import timedelta
+from config import ACADEMY_LEGACY_READ_ONLY
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -126,8 +127,9 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
         # веб решает по этому полю, показывать ли переключатель кабинетов.
         "has_personal_cabinet": user.member_id is not None,
         "personal_status_label": personal_status_label,
-        "academy_enabled": bool(member and member.is_active and member.status == MEMBER_STATUS_ACTIVIST),
-        "can_manage_academy": can_manage_academy(user),
+        "academy_enabled": bool(member and member.is_active and member.status == MEMBER_STATUS_ACTIVIST) and not ACADEMY_LEGACY_READ_ONLY,
+        "academy_materials_enabled": True,
+        "can_manage_academy": can_manage_academy(user) and not ACADEMY_LEGACY_READ_ONLY,
         # Подпись и область рассылки проверяются сервером по доступным регионам.
         "can_post_news": can_post_news(user),
         "counters": {

@@ -28,6 +28,9 @@ os.environ.pop("DEV_TELEGRAM_ID", None)
 os.environ.pop("CREDENTIALS_DIRECTORY", None)
 os.environ["DATA_BOOTSTRAP_CIPHERTEXT"] = ""
 os.environ["DATA_RUNTIME_CIPHERTEXT"] = ""
+# Historical workflow regression tests use the reversible pre-archive mode.
+# Dedicated tests below exercise retirement with the production default.
+os.environ["ACADEMY_LEGACY_READ_ONLY"] = "0"
 _key_fd, _key_name = tempfile.mkstemp(prefix="bratstvo-test-key-", suffix=".json")
 with os.fdopen(_key_fd, "w", encoding="utf-8") as _key_stream:
     json.dump({"active": "test", "keys": {"test": base64.urlsafe_b64encode(secrets.token_bytes(64)).decode()}}, _key_stream)

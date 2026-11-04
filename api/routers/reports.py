@@ -112,7 +112,8 @@ async def download_region_report(
     if user is None or not user.is_active:
         raise HTTPException(403, "Доступ закрыт")
     enforce_user_rate_limit(user.telegram_id, "GET", "/api/downloads")
-    await require_view(session, user, data["rid"])
+    if data.get("kind") != "academy_book":
+        await require_view(session, user, data["rid"])
     cell = await actor_cell(session, user)
     kind = data.get("kind", "report")
     if kind == "report" and cell is not None:
@@ -124,15 +125,20 @@ async def download_region_report(
         document = await session.get(Document, data.get("document_id"))
         if document is None or document.region_id != data["rid"]:
             raise HTTPException(404, "Документ удалён или перемещён")
-    if kind not in {"report", "finance", "document"}:
+    if kind not in {"report", "finance", "document", "academy_book"}:
         raise HTTPException(403, "Ссылка недействительна")
     path = export_path(data["file"])
     if not path.is_file():
-        raise HTTPException(410, "Файл больше недоступен. Сформируйте отчёт заново")
+        raise HTTPException(410, "Файл больше недоступен. Подготовьте его заново")
     if kind == "document":
         path = (STORAGE_DIR / document.stored_path).resolve()
         if STORAGE_DIR.resolve() not in path.parents or not path.is_file():
             raise HTTPException(404, "Файл отсутствует на диске")
+    elif kind == "academy_book":
+        from services.academy_materials import authorized_book
+        book, path = await authorized_book(session, data.get("book_id"))
+        if book.source_sha256 != data.get("book_revision"):
+            raise HTTPException(410, "Книга обновлена. Подготовьте файл заново")
     media_type = {".pdf": "application/pdf", ".csv": "text/csv; charset=utf-8", ".txt": "text/plain; charset=utf-8",
                   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

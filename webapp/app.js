@@ -370,8 +370,10 @@
     const promise = (async () => {
       const source = new URL(path, location.origin);
       const documentMatch = source.pathname.match(/^\/documents\/(\d+)\/download$/);
+      const bookMatch = source.pathname.match(/^\/academy\/books\/(\d+)\/download$/);
       let payload;
-      if (documentMatch) payload = { kind: 'document', document_id: Number(documentMatch[1]) };
+      if (bookMatch) payload = { kind: 'academy_book', book_id: Number(bookMatch[1]) };
+      else if (documentMatch) payload = { kind: 'document', document_id: Number(documentMatch[1]) };
       else if (source.pathname === '/finance/export.csv') payload = {
         kind: 'finance', region_id: Number(source.searchParams.get('region_id')),
         period: source.searchParams.get('period') || 'year', offset: Number(source.searchParams.get('offset') || 0),
@@ -764,7 +766,7 @@
       return [
         { id: 'home', label: 'Главная', badge: (state.me.counters || {}).news },
         { id: 'myEvents', label: 'Мероприятия', badge: (state.me.counters || {}).personal_events },
-        { id: 'character', label: state.me.academy_enabled ? 'Академия' : 'Мои награды', badge: (state.me.counters || {}).personal_academy },
+        { id: 'character', label: 'Академия' },
         { id: 'tasks', label: 'Задачи', badge: (state.me && state.me.counters || {}).new_tasks },
         { id: 'profile', label: 'Профиль' },
         { id: 'shop', label: 'Магазин' },
@@ -788,6 +790,7 @@
       }
       items.push({ id: 'bureau', label: 'Бюро' });
       items.push({ id: 'tasks', label: 'Задачи', badge: counters.management_tasks });
+      items.push({ id: 'character', label: 'Академия' });
       return items;
     }
 
@@ -800,7 +803,7 @@
     const items = [
       { id: 'dashboard', label: 'Сводка' },
       { id: 'members', label: 'Состав', badge: counters.new_purchases },
-      ...(state.me.can_manage_academy ? [{ id: 'academyManage', label: 'Академия', badge: ((counters.regions || {})[state.regionId] || {}).academy }] : []),
+      { id: 'character', label: 'Академия' },
       { id: 'events', label: 'Мероприятия', badge: ((counters.regions || {})[state.regionId] || {}).events },
     ];
     // У federal/coordinator/superuser задачи — в их собственном кабинете
@@ -1270,6 +1273,7 @@
   }
 
   function renderTab() {
+    if (state.tab === 'academyManage') state.tab = 'character';
     document.body.dataset.cabinetMode = state.cabinetMode || 'personal';
     document.body.dataset.screen = state.tab || 'home';
     const renderers = {
@@ -1290,8 +1294,8 @@
       news: renderNews,
       regions: renderRegionsTab,
       applications: renderApplicationsTab,
-      academyManage: renderAcademyManage,
-      character: renderCharacter,
+      academyManage: renderAcademy,
+      character: renderAcademy,
       shop: renderShop,
       myEvents: renderParticipantEvents,
     };
@@ -1539,7 +1543,7 @@
       '<div class="field"><label>Комментарий</label><input id="mComment" value="' + esc(member ? member.comment || '' : '') + '" ' + (editable ? '' : 'disabled') + ' /></div>' +
       '<div class="btn-row">' +
       (editable ? '<button class="btn" id="mSave">Сохранить</button>' : '') +
-      (member && state.me.can_manage_academy ? '<button class="btn btn--ghost" id="mQuests">Академия</button>' : '') +
+      (member ? '<button class="btn btn--ghost" id="mTask" hidden>Поставить задачу</button>' : '') +
       (member ? '<button class="btn btn--ghost" id="mPurchases">Покупки' +
         (member.has_unseen_purchases ? ' <span class="dot dot--alert"></span>' : '') + '</button>' : '') +
       (editable && member ? '<button class="btn btn--danger" id="mDelete">Исключить</button>' : '') +
@@ -1566,7 +1570,16 @@
         updateMilestoneFields();
 
         document.getElementById('mClose').onclick = closeModal;
-        if (member && state.me.can_manage_academy) document.getElementById('mQuests').onclick = () => memberQuestsModal(member, true);
+        if (member) {
+          const taskButton = document.getElementById('mTask');
+          api('/tasks/assignees?personal=false').then((people) => {
+            const person = people.items.find((p) => p.member_id === member.id);
+            if (person && taskButton && taskButton.isConnected && state.cabinetMode !== 'personal') {
+              taskButton.hidden = false;
+              taskButton.onclick = () => taskForm(person.id).catch(fail);
+            }
+          }).catch(() => {});
+        }
         if (member) document.getElementById('mPurchases').onclick = () => memberPurchasesModal(member, editable);
         if (!editable) return;
 
@@ -3163,13 +3176,16 @@
     api(readPath, { method: 'POST' }).then(refreshMe).catch(() => {});
   }
 
-  async function taskForm() {
+  async function taskForm(assigneeId) {
     const people = await api('/tasks/assignees?' + tasksScope());
     if (!people.items.length) { toast('Нет доступных исполнителей'); return; }
+    if (assigneeId && !people.items.some((p) => p.id === assigneeId)) {
+      toast('Этому участнику сейчас нельзя назначить задачу'); return;
+    }
 
     modal('Новая задача',
       '<div class="field"><label>Исполнитель</label><select id="tAssignee">' +
-      people.items.map((p) => '<option value="' + p.id + '">' + esc(p.full_name) + (p.role_label ? ' · ' + esc(p.role_label) : '') + '</option>').join('') +
+      people.items.map((p) => '<option value="' + p.id + '"' + (p.id === assigneeId ? ' selected' : '') + '>' + esc(p.full_name) + (p.role_label ? ' · ' + esc(p.role_label) : '') + '</option>').join('') +
       '</select></div>' +
       '<div class="field"><label>Название</label><input id="tTitle" /></div>' +
       '<div class="field"><label>Описание</label><textarea id="tText"></textarea></div>' +
@@ -3202,6 +3218,7 @@
             });
             closeModal();
             toast('Задача поставлена');
+            state.tab = 'tasks'; state.tasksBox = 'outbox'; renderTabs();
             startRender(renderTasks);
           } catch (error) { fail(error); }
         };
@@ -4072,7 +4089,49 @@
     };
   }
 
-  // --- Академия (геймификация, MVP) ---------------------------------------------
+  // --- Академия: утверждённые материалы ----------------------------------------
+  async function renderAcademy(gen) {
+    const section = state.academySection === 'vocabulary' ? 'vocabulary' : 'library';
+    const focusedSection = document.activeElement && document.activeElement.dataset.academySection;
+    let books, vocabulary;
+    try {
+      [books, vocabulary] = await Promise.all([api('/academy/books'), api('/academy/vocabulary')]);
+    } catch (error) {
+      if (error === STALE_RENDER) throw error;
+      setView('<div class="card academy-empty" role="status"><h2>Материалы не загрузились</h2>' +
+        '<p>' + esc(error.status === 401 || error.status === 403 ? error.message : 'Проверьте соединение и попробуйте ещё раз.') + '</p><button class="btn" id="academyRetry">Повторить</button></div>', gen);
+      document.getElementById('academyRetry').onclick = () => startRender(renderAcademy);
+      return;
+    }
+    const empty = section === 'library'
+      ? '<div class="academy-empty"><h2>Библиотека пополняется</h2><p>Здесь появятся книги, доступные для скачивания в PDF.</p></div>'
+      : '<div class="academy-empty"><h2>Вокабуляр готовится</h2><p>Здесь появятся термины Академиста и их значения.</p></div>';
+    const bookRows = books.items.map((book) => '<article class="academy-book">' +
+      '<div class="academy-book__main"><h2>' + esc(book.title) + '</h2><p class="row__sub">PDF · ' +
+      esc(book.size_bytes < 1024 * 1024 ? Math.max(1, Math.ceil(book.size_bytes / 1024)) + ' КБ' : (book.size_bytes / (1024 * 1024)).toLocaleString('ru-RU', {maximumFractionDigits:1}) + ' МБ') + '</p></div>' +
+      '<button type="button" class="btn btn--ghost academy-book__download" data-academy-book="' + book.id +
+      '" aria-label="' + esc('Скачать PDF: ' + book.title) + '">Скачать PDF</button></article>').join('');
+    const terms = vocabulary.items.map((item) => '<div class="academy-term"><dt>' + esc(item.term) +
+      '</dt><dd>' + esc(item.definition) + '</dd></div>').join('');
+    setView('<div class="academy-layout"><p class="academy-intro">Книги и вокабуляр Академиста</p>' +
+      '<div class="chips academy-sections" aria-label="Разделы Академии">' +
+      [['library','Библиотека'],['vocabulary','Вокабуляр']].map(([id,label]) =>
+        '<button type="button" class="chip' + (section === id ? ' chip--active' : '') + '" data-academy-section="' + id +
+        '" aria-pressed="' + (section === id) + '">' + label + '</button>').join('') + '</div>' +
+      '<section class="card academy-materials" aria-label="' + (section === 'library' ? 'Библиотека' : 'Вокабуляр Академиста') + '">' +
+      (section === 'library' ? (bookRows || empty) : '<h2 class="academy-vocabulary-title">Вокабуляр Академиста</h2>' + (terms ? '<dl class="academy-vocabulary">' + terms + '</dl>' : empty)) + '</section></div>', gen);
+    on('[data-academy-section]', 'click', (event) => {
+      state.academySection = event.currentTarget.dataset.academySection;
+      startRender(renderAcademy);
+    });
+    on('[data-academy-book]', 'click', (event) => {
+      const id = Number(event.currentTarget.dataset.academyBook);
+      download('/academy/books/' + id + '/download', 'book.pdf').catch(fail);
+    });
+    if (focusedSection) document.querySelector('[data-academy-section="' + section + '"]').focus();
+  }
+
+  // --- Прежние достижения и награды: данные сохранены ---------------------------
   // Персонаж — не собирается из частей, а выбирается из готовых образов
   // (картинки отдаёт бэкенд, см. api/routers/character.py::OUTFITS).
 

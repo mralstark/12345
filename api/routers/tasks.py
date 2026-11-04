@@ -56,7 +56,8 @@ async def assignees(
 ) -> dict:
     if personal:
         return {"items": []}
-    return {"items": [await user_brief(session, person) for person in await correspondents(session, user)]}
+    return {"items": [{**await user_brief(session, person), "member_id": person.member_id}
+                      for person in await correspondents(session, user)]}
 
 
 async def _event_task_items(session: AsyncSession, member_id: int) -> list[dict]:
