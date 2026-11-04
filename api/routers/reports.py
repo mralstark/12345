@@ -4,8 +4,9 @@ import asyncio
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from utils.private_files import private_file_response
 
 from api.auth import get_current_user, get_db
 from config import STORAGE_DIR
@@ -102,7 +103,7 @@ async def prepare_region_report(
 async def download_region_report(
     file_id: str, t: str = Query(default="", max_length=2048),
     session: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     from api.rate_limit import enforce_user_rate_limit
     data = decode_ticket(t)
     if file_id != data["file"]:
@@ -136,6 +137,6 @@ async def download_region_report(
                   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                   ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}[path.suffix]
-    return FileResponse(path, media_type=media_type,
+    return await private_file_response(path, media_type=media_type,
                         headers={"Content-Disposition": _content_disposition(data["name"]),
                                  "Cache-Control": "no-store", "Access-Control-Allow-Origin": "https://web.telegram.org"})

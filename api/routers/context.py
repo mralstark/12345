@@ -204,16 +204,14 @@ async def dashboard(
     else:
         month_income, month_expense = await get_totals(session, region_id, month_start, month_end)
 
-    new_members_stmt = select(func.count(Member.id)).where(
+    new_members_stmt = select(Member.activist_joined_at).where(
         Member.region_id == region_id,
         Member.is_active.is_(True),
         Member.activist_joined_at.is_not(None),
-        Member.activist_joined_at >= month_start,
-        Member.activist_joined_at <= month_end,
     )
     if cell is not None:
         new_members_stmt = new_members_stmt.where(Member.cell_id == cell.id)
-    new_members = (await session.execute(new_members_stmt)).scalar() or 0
+    new_members = sum(month_start <= joined <= month_end for joined in (await session.execute(new_members_stmt)).scalars())
 
     upcoming_stmt = (
         select(Event, Member.full_name)

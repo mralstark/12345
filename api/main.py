@@ -50,7 +50,7 @@ from config import (
     STORAGE_DIR,
     validate_security_config,
 )
-from database.db import init_db
+from database.db import init_db, check_database_encryption
 from utils.access import AccessDenied
 from services.images import ImageProcessorBusy
 from utils.notify import close_notifier_bot
@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
     install_secret_redaction()
     validate_security_config()
     await init_db()
+    await check_database_encryption()
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     yield
     await close_notifier_bot()

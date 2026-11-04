@@ -146,13 +146,13 @@ async def get_cell(
     members_result = await session.execute(
         select(Member)
         .where(Member.cell_id == cell.id, Member.is_active.is_(True))
-        .order_by(Member.status, Member.full_name)
+        .order_by(Member.status, Member.id)
     )
     events_result = await session.execute(
         select(Event).where(Event.cell_id == cell.id).order_by(Event.date.desc()).limit(50)
     )
 
-    members = list(members_result.scalars().all())
+    members = sorted(members_result.scalars().all(), key=lambda m: (m.status, m.full_name.casefold(), m.id))
     # Кто из состава вообще может стать руководителем: назначение роли — это
     # повышение существующего аккаунта (services/admin_actions::_resolve_or_promote),
     # а человек без саморегистрации его ещё не имеет. Без этого признака список

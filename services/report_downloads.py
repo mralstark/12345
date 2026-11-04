@@ -5,7 +5,6 @@ activity are checked again on download. Files expire in ten minutes; disk usage
 and generation concurrency are bounded.
 """
 import asyncio
-import base64
 import hashlib
 import hmac
 import json
@@ -19,6 +18,8 @@ from fastapi import HTTPException
 
 from config import BOT_TOKEN, MEDIA_SIGNING_KEY, STORAGE_DIR
 from utils.storage import ensure_storage_capacity
+from utils.private_files import write_private_file
+from utils.data_crypto import DataEncryptionError, decrypt_bytes, encrypt_bytes
 
 TTL = 600
 MAX_FILE_BYTES = 20 * 1024 * 1024
@@ -43,12 +44,12 @@ def decode_ticket(ticket: str) -> dict:
         raw, signature = ticket.split(".")
         if not hmac.compare_digest(signature, _signature(raw)):
             raise ValueError
-        data = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
+        data = json.loads(decrypt_bytes(raw, "download-ticket"))
         if (data["exp"] <= time.time() or data["exp"] > time.time() + TTL + 5 or
                 not _FILE_ID.fullmatch(data["file"])):
             raise ValueError
         return data
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError, DataEncryptionError):
         raise HTTPException(403, "Ссылка устарела. Сформируйте отчёт заново") from None
 
 
@@ -96,7 +97,7 @@ async def save_export(payload: bytes, user_id: int, region_id: int, format: str,
                 file.unlink(missing_ok=True)
             else:
                 used += file.stat().st_size
-        if used + len(payload) > MAX_CACHE_BYTES:
+        if used + len(payload) + 128 > MAX_CACHE_BYTES:
             raise HTTPException(503, "Сейчас формируется много отчётов. Попробуйте через несколько минут")
         try:
             ensure_storage_capacity(len(payload))
@@ -104,11 +105,8 @@ async def save_export(payload: bytes, user_id: int, region_id: int, format: str,
             raise HTTPException(507, str(exc)) from exc
         file_id = secrets.token_hex(24) + "." + suffix
         path = export_path(file_id)
-        # Create private and exclusive, without a chmod-after-write window.
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(payload)
+        await asyncio.to_thread(write_private_file, path, payload)
         data = {"uid": user_id, "rid": region_id, "file": file_id, "name": filename, "exp": int(now) + TTL,
                 "kind": kind, "cell_id": cell_id, "document_id": document_id}
-        raw = base64.urlsafe_b64encode(json.dumps(data, ensure_ascii=False).encode()).decode().rstrip("=")
+        raw = encrypt_bytes(json.dumps(data, ensure_ascii=False).encode(), "download-ticket")
         return raw + "." + _signature(raw)

@@ -6,6 +6,10 @@
 
 import os
 import tempfile
+import atexit
+import base64
+import json
+import secrets
 from pathlib import Path
 
 TEST_DB = Path(tempfile.gettempdir()) / "bratstvo_test.db"
@@ -21,6 +25,14 @@ os.environ["MIN_FREE_STORAGE_MB"] = "0"
 os.environ["SUPERUSER_TELEGRAM_IDS"] = ""
 os.environ["AUTO_FEDERAL_TELEGRAM_IDS"] = ""
 os.environ.pop("DEV_TELEGRAM_ID", None)
+os.environ.pop("CREDENTIALS_DIRECTORY", None)
+os.environ["DATA_BOOTSTRAP_CIPHERTEXT"] = ""
+os.environ["DATA_RUNTIME_CIPHERTEXT"] = ""
+_key_fd, _key_name = tempfile.mkstemp(prefix="bratstvo-test-key-", suffix=".json")
+with os.fdopen(_key_fd, "w", encoding="utf-8") as _key_stream:
+    json.dump({"active": "test", "keys": {"test": base64.urlsafe_b64encode(secrets.token_bytes(64)).decode()}}, _key_stream)
+os.environ["DATA_ENCRYPTION_KEY_FILE"] = _key_name
+atexit.register(lambda: Path(_key_name).unlink(missing_ok=True))
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402

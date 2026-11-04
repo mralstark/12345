@@ -26,7 +26,8 @@ async def academy_overview(
     cell = await actor_cell(session, user)
     if cell is not None:
         member_stmt = member_stmt.where(Member.cell_id == cell.id)
-    members = list((await session.execute(member_stmt.order_by(Member.full_name))).scalars().all())
+    members = list((await session.execute(member_stmt.order_by(Member.id))).scalars().all())
+    members.sort(key=lambda m: (m.full_name.casefold(), m.id))
     quests = list((await session.execute(
         select(Quest).where(Quest.is_active.is_(True)).order_by(Quest.position)
     )).scalars().all())

@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import func, select
 
-from database.db import async_session, init_db
+from database.db import async_session, init_db, check_database_encryption
 from database.models import (
     EVENT_STATUS_DONE,
     EVENT_STATUS_PLANNED,
@@ -73,6 +73,7 @@ async def _get_or_create_user(session, full_name: str, role: str, telegram_id: i
 async def main() -> None:
     random.seed(17)
     await init_db()
+    await check_database_encryption()
     today = tz_today()
 
     async with async_session() as session:

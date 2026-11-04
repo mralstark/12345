@@ -4,4 +4,7 @@ After=postgresql.service
 
 [Service]
 Type=oneshot
+LoadCredential=data-keyring:/run/bratstvo-keys/data-keyring.json
+LimitCORE=0
+MemorySwapMax=0
 ExecStart=/bin/bash /opt/bratstvo/deploy/backup.sh

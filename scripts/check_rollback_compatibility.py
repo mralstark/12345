@@ -1,4 +1,4 @@
-"""Refuse old readers that would expose private article drafts during rollback."""
+"""Refuse old readers incompatible with drafts, identities or encrypted storage."""
 import asyncio
 import sys
 import tarfile
@@ -33,6 +33,11 @@ async def safe_to_restore(path):
     supports_web = archive_supports_web_identities(path)
     async with engine.connect() as conn:
         tables = await conn.run_sync(lambda c:set(inspect(c).get_table_names()))
+        if "data_encryption_state" in tables and (await conn.execute(text("SELECT 1 FROM data_encryption_state LIMIT 1"))).first():
+            with tarfile.open(path, "r:gz") as archive:
+                names = {name.removeprefix("./") for name in archive.getnames()}
+                if not {"database/encrypted.py", "database/protected_fields.py", "utils/data_crypto.py", "utils/private_files.py"} <= names:
+                    return False
         if not supports_web and {'external_identities','users'} <= tables:
             web_users = await conn.scalar(text("SELECT count(*) FROM external_identities e JOIN users u ON u.id=e.user_id WHERE u.telegram_id IS NULL"))
             if web_users:
@@ -54,7 +59,7 @@ async def main():
     finally:
         await engine.dispose()
     if not safe:
-        print("Rollback refused: previous code cannot safely handle private drafts or web identities")
+        print("Rollback refused: previous code cannot safely handle private drafts, web identities or encrypted storage")
         raise SystemExit(1)
 
 

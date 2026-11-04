@@ -58,9 +58,9 @@ async def gather_region_report(
         select(Member, University.name)
         .outerjoin(University, University.id == Member.university_id)
         .where(Member.region_id == region_id, Member.is_active.is_(True))
-        .order_by(Member.status, Member.full_name)
+        .order_by(Member.status, Member.id)
     )
-    member_rows = list(members_result.all())
+    member_rows = sorted(members_result.all(), key=lambda row: (row[0].status, row[0].full_name.casefold(), row[0].id))
     report.members = [
         (
             member.full_name,

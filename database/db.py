@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from config import DATABASE_URL
 from database.models import Base
+from database.encryption_state import ensure_encryption_ready
 
 # A connection can be closed by PostgreSQL during a restart/idle timeout.
 # Check it before checkout rather than returning a random 500 on the next visit.
@@ -17,6 +18,12 @@ async def init_db() -> None:
     в scripts/, а не здесь: create_all такого не умеет."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def check_database_encryption() -> None:
+    """Run after structural migrations, before serving API or polling Telegram."""
+    async with engine.begin() as conn:
+        await ensure_encryption_ready(conn)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

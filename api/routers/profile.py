@@ -6,10 +6,12 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from utils.private_files import private_file_response
 
 from api.auth import get_current_user, get_db
 from api.serializers import member_dict
@@ -347,7 +349,7 @@ async def avatar(
     member_id: int,
     t: str = "",
     session: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     """По подписи из ссылки, а не по заголовку: запрос делает тег <img>
     (см. services/news.py::photo_token — там та же причина)."""
     if not avatar_token_valid(member_id, t):
@@ -358,7 +360,7 @@ async def avatar(
     path = (STORAGE_DIR / member.avatar_path).resolve()
     if not path.is_file() or STORAGE_DIR.resolve() not in path.parents:
         raise HTTPException(404, "Файл не найден")
-    return FileResponse(
+    return await private_file_response(
         path,
         headers={"Cache-Control": "private, max-age=120", "X-Content-Type-Options": "nosniff"},
     )

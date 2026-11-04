@@ -231,8 +231,8 @@ async def get_event(
     members_stmt = select(Member).where(Member.region_id == event.region_id, Member.is_active.is_(True))
     if cell is not None:
         members_stmt = members_stmt.where(Member.cell_id == cell.id)
-    members_result = await session.execute(members_stmt.order_by(Member.full_name))
-    members = list(members_result.scalars().all())
+    members_result = await session.execute(members_stmt.order_by(Member.id))
+    members = sorted(members_result.scalars().all(), key=lambda m: (m.full_name.casefold(), m.id))
 
     tx_result = await session.execute(
         select(Transaction).where(Transaction.event_id == event.id).order_by(Transaction.date.desc())

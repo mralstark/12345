@@ -51,7 +51,8 @@ async def test_formats_survive_complete_article_lifecycle(client, session, world
     photo = (await session.execute(select(NewsPhoto))).scalars().one()
     assert photo.stored_path.startswith(f"news/{a['id']}/")
     assert ".." not in photo.stored_path
-    stored = Image.open(io.BytesIO((STORAGE_DIR / photo.stored_path).read_bytes()))
+    from utils.private_files import read_private_file
+    stored = Image.open(io.BytesIO(read_private_file(STORAGE_DIR / photo.stored_path)))
     if animated:
         assert stored.n_frames == Image.open(io.BytesIO(raw)).n_frames
         assert stored.n_frames > 1

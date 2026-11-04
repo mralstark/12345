@@ -28,9 +28,19 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from database.protected_fields import protected
+
 
 class Base(DeclarativeBase):
     pass
+
+
+class DataEncryptionState(Base):
+    __tablename__ = "data_encryption_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key_id: Mapped[str] = mapped_column(String(32))
+    schema_hash: Mapped[str] = mapped_column(String(64))
+    canary: Mapped[str] = mapped_column(Text)
 
 
 class ExternalIdentity(Base):
@@ -39,10 +49,10 @@ class ExternalIdentity(Base):
     __table_args__ = (UniqueConstraint("provider", "subject"), UniqueConstraint("provider", "user_id"))
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     provider: Mapped[str] = mapped_column(String(16), default="vk", server_default="vk")
-    subject: Mapped[str] = mapped_column(String(64))
+    subject: Mapped[str] = mapped_column(protected("external_identities", "subject"))
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    full_name: Mapped[str] = mapped_column(String(128), default="")
-    verified_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    full_name: Mapped[str] = mapped_column(protected("external_identities", "full_name"), default="")
+    verified_phone: Mapped[str | None] = mapped_column(protected("external_identities", "verified_phone"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -50,7 +60,7 @@ class OAuthLoginAttempt(Base):
     __tablename__ = "oauth_login_attempts"
     state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     binding_hash: Mapped[str] = mapped_column(String(64))
-    code_verifier: Mapped[str] = mapped_column(String(128))
+    code_verifier: Mapped[str] = mapped_column(protected("oauth_login_attempts", "code_verifier"))
     purpose: Mapped[str] = mapped_column(String(16))
     return_article_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
@@ -64,7 +74,7 @@ class BrowserSession(Base):
     grant_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     external_identity_id: Mapped[int | None] = mapped_column(ForeignKey("external_identities.id", ondelete="CASCADE"), nullable=True, index=True)
-    code: Mapped[str] = mapped_column(String(6))
+    code: Mapped[str] = mapped_column(protected("browser_sessions", "code"))
     expires_at: Mapped[int] = mapped_column(BigInteger, index=True)
 
 
@@ -184,8 +194,8 @@ class TelegramPhoneVerification(Base):
 
     __tablename__ = "telegram_phone_verifications"
 
-    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    phone: Mapped[str] = mapped_column(String(16), nullable=False)
+    telegram_id: Mapped[int] = mapped_column(protected("telegram_phone_verifications", "telegram_id"), primary_key=True)
+    phone: Mapped[str] = mapped_column(protected("telegram_phone_verifications", "phone"), nullable=False)
     verified_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
@@ -198,8 +208,8 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
-    full_name: Mapped[str] = mapped_column(String(128))
+    telegram_id: Mapped[int | None] = mapped_column(protected("users", "telegram_id"), unique=True, index=True, nullable=True)
+    full_name: Mapped[str] = mapped_column(protected("users", "full_name"))
     role: Mapped[str] = mapped_column(String(16))
     # Независимые управленческие полномочия. ``role`` остаётся основной
     # ролью для старых клиентов, а эти признаки позволяют одному человеку
@@ -209,7 +219,7 @@ class User(Base):
     is_federal: Mapped[bool] = mapped_column(Boolean, default=False)
     is_coordinator: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    phone: Mapped[str | None] = mapped_column(protected("users", "phone"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Режим «войти как» (utils/users.resolve_user, IMPERSONATOR_ROLES) — кого
@@ -347,14 +357,14 @@ class Member(Base):
     # None — «региональный» человек, не привязан к конкретному вузу
     # (регионы без ячеек, либо человек не относится ни к одной ячейке).
     cell_id: Mapped[int | None] = mapped_column(ForeignKey("university_cells.id"), nullable=True, index=True)
-    full_name: Mapped[str] = mapped_column(String(128))
-    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    full_name: Mapped[str] = mapped_column(protected("members", "full_name"))
+    phone: Mapped[str | None] = mapped_column(protected("members", "phone"), nullable=True)
     # Формат "@username" — свободный текст, не связан с User.telegram_id
     # (тот числовой и приходит только через саморегистрацию); ник вводится
     # руками при заполнении/регистрации карточки, для внешней связи.
-    telegram_username: Mapped[str | None] = mapped_column(String(33), nullable=True)
+    telegram_username: Mapped[str | None] = mapped_column(protected("members", "telegram_username"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default=MEMBER_STATUS_ACTIVIST)
-    birth_date: Mapped[date_ | None] = mapped_column(Date, nullable=True)
+    birth_date: Mapped[date_ | None] = mapped_column(protected("members", "birth_date"), nullable=True)
     # Три вехи членства — не путать с датой создания записи (comment):
     # человека можно завести в системе позже, чем он реально пришёл, и не
     # каждая веха у него уже случилась (активист может не иметь ни
@@ -362,14 +372,14 @@ class Member(Base):
     # руководитель обязан заполнить веху, соответствующую статусу, который
     # он присваивает (посвящение — для «член Братства», выпуск — для
     # «выпускник»); более ранние вехи можно дозаполнить когда угодно.
-    activist_joined_at: Mapped[date_ | None] = mapped_column(Date, nullable=True)
-    member_inducted_at: Mapped[date_ | None] = mapped_column(Date, nullable=True)
-    alumni_graduated_at: Mapped[date_ | None] = mapped_column(Date, nullable=True)
-    comment: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    activist_joined_at: Mapped[date_ | None] = mapped_column(protected("members", "activist_joined_at"), nullable=True)
+    member_inducted_at: Mapped[date_ | None] = mapped_column(protected("members", "member_inducted_at"), nullable=True)
+    alumni_graduated_at: Mapped[date_ | None] = mapped_column(protected("members", "alumni_graduated_at"), nullable=True)
+    comment: Mapped[str | None] = mapped_column(protected("members", "comment"), nullable=True)
     # Свободный текст заменён на ссылку в каталог (scripts/migrate_university_catalog.py
     # переносит старые значения). None — человек ещё не учится/уже не учится.
     university_id: Mapped[int | None] = mapped_column(ForeignKey("universities.id"), nullable=True, index=True)
-    faculty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    faculty: Mapped[str | None] = mapped_column(protected("members", "faculty"), nullable=True)
     # Текущий курс (1-6); None, если ещё не поступил ИЛИ уже окончил вуз —
     # различает graduated_university ниже. Это чисто академический факт
     # (закончил учиться), не путать со статусом «Выпускник» (member.status —
@@ -381,7 +391,7 @@ class Member(Base):
     # Длительность программы в годах. По ТЗ не вводится руками (всегда 4) —
     # поле остаётся ради bump_courses и на случай будущей необходимости.
     study_years: Mapped[int] = mapped_column(Integer, default=4)
-    workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    workplace: Mapped[str | None] = mapped_column(protected("members", "workplace"), nullable=True)
     # Учебный год (см. services/education.py), за который курс уже повышен —
     # идемпотентность ежегодного автообновления 1 сентября.
     course_bumped_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -398,7 +408,7 @@ class Member(Base):
     avatar_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Свободный рассказ о себе, который человек пишет сам. Показывается всем,
     # кто открыл его профиль, — в отличие от контактов ниже.
-    about: Mapped[str | None] = mapped_column(String(600), nullable=True)
+    about: Mapped[str | None] = mapped_column(protected("members", "about"), nullable=True)
     # Показывать ли телефон в профиле остальным членам Братства. По умолчанию
     # нет: номер человек сдавал для учёта, а не для показа. Ник в телеграме
     # такого флага не имеет — написать друг другу можно всегда, ради этого
@@ -468,7 +478,7 @@ class Transaction(Base):
     amount: Mapped[int] = mapped_column(Integer)  # копейки, всегда > 0
     type: Mapped[str] = mapped_column(String(16))  # income / expense
     date: Mapped[date_] = mapped_column(Date, index=True)
-    comment: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    comment: Mapped[str | None] = mapped_column(protected("transactions", "comment"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     region: Mapped["Region"] = relationship(back_populates="transactions")
@@ -485,13 +495,13 @@ class Event(Base):
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)
     # None — мероприятие регионально-городское, не привязано к вузу.
     cell_id: Mapped[int | None] = mapped_column(ForeignKey("university_cells.id"), nullable=True, index=True)
-    title: Mapped[str] = mapped_column(String(128))
+    title: Mapped[str] = mapped_column(protected("events", "title"))
     date: Mapped[date_] = mapped_column(Date, index=True)
     # Необязательное — старые мероприятия и разовые встречи «на весь день»
     # его не имеют; без него напоминание (см. reminder_sent_on ниже) шлётся
     # от полуночи начала дня мероприятия.
     time: Mapped[time_ | None] = mapped_column(Time, nullable=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(protected("events", "description"), nullable=True)
     # Ответственный — человек из состава региона (Member), а не пользователь системы:
     # в волне 1 организаторы мероприятий кабинета не имеют (ТЗ §18).
     responsible_member_id: Mapped[int | None] = mapped_column(ForeignKey("members.id"), nullable=True)
@@ -542,7 +552,7 @@ class EventTask(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), index=True)
-    title: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str] = mapped_column(protected("event_tasks", "title"))
     due_date: Mapped[date_] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(16), default=EVENT_STATUS_PLANNED)
     position: Mapped[int] = mapped_column(Integer, default=0)
@@ -601,9 +611,9 @@ class Document(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)
     event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True, index=True)
-    title: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str] = mapped_column(protected("documents", "title"))
     stored_path: Mapped[str] = mapped_column(String(512))  # относительно STORAGE_DIR
-    original_name: Mapped[str] = mapped_column(String(255))
+    original_name: Mapped[str] = mapped_column(protected("documents", "original_name"))
     content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     doc_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # устав / протокол / шаблон / материалы
@@ -621,8 +631,8 @@ class Task(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     from_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     to_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    title: Mapped[str] = mapped_column(String(255))
-    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    title: Mapped[str] = mapped_column(protected("tasks", "title"))
+    text: Mapped[str | None] = mapped_column(protected("tasks", "text"), nullable=True)
     deadline: Mapped[date_ | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default=TASK_STATUS_NEW)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -630,7 +640,7 @@ class Task(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(protected("tasks", "review_note"), nullable=True)
     review_is_read: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Дата, за которую исполнителю уже отправлено напоминание о приближении
     # дедлайна — чтобы не слать его повторно при каждом цикле нотификатора.
@@ -661,20 +671,20 @@ class NewsPost(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    text: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(protected("news_posts", "text"))
     # Articles share the feed, signatures, moderation and media with posts.
     # Publishing a draft creates a new feed ID so read cursors cannot hide it.
     publication_state: Mapped[str] = mapped_column(String(16), default="published", server_default="published", index=True)
     content_kind: Mapped[str] = mapped_column(String(16), default="post", server_default="post")
-    article_title: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    article_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    article_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    article_title: Mapped[str | None] = mapped_column(protected("news_posts", "article_title"), nullable=True)
+    article_summary: Mapped[str | None] = mapped_column(protected("news_posts", "article_summary"), nullable=True)
+    article_content: Mapped[str | None] = mapped_column(protected("news_posts", "article_content"), nullable=True)
     article_revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     article_source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     article_source_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     article_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # «Братство Академистов», «Академисты | Москва» либо имя участника.
-    byline: Mapped[str] = mapped_column(String(128), default="")
+    byline: Mapped[str] = mapped_column(protected("news_posts", "byline"), default="")
     # Чем подписан пост: personal — человеком, bratstvo — от всего Братства,
     # otdelenie — от отделения или ячейки. Хранится, а не выводится из текста
     # подписи: по строке это гадание, а от вида зависят и аватар, и то,
@@ -710,7 +720,7 @@ class NewsPhoto(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("news_posts.id"), index=True)
     stored_path: Mapped[str] = mapped_column(String(512))  # относительно STORAGE_DIR
-    original_name: Mapped[str] = mapped_column(String(255))
+    original_name: Mapped[str] = mapped_column(protected("news_photos", "original_name"))
     content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     # Порядок в галерее — тот, в котором автор выбрал файлы.
@@ -851,7 +861,7 @@ class NewsNotification(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("news_posts.id"), index=True)
     # Переписка с ботом: у личного чата совпадает с telegram_id человека.
-    chat_id: Mapped[int] = mapped_column(BigInteger)
+    chat_id: Mapped[int] = mapped_column(protected("news_notifications", "chat_id"))
     message_id: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -867,7 +877,7 @@ class NewsComment(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("news_posts.id"), index=True)
     author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    text: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(protected("news_comments", "text"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     author: Mapped["User"] = relationship()
@@ -913,21 +923,21 @@ class MembershipApplication(Base):
     # Ячейка Братства выбирается отдельно от места учёбы: вуз может быть в
     # другом городе или обучение может быть заочным.
     cell_id: Mapped[int | None] = mapped_column(ForeignKey("university_cells.id"), nullable=True, index=True)
-    telegram_id: Mapped[int | None] = mapped_column(BigInteger, index=True, nullable=True)
+    telegram_id: Mapped[int | None] = mapped_column(protected("membership_applications", "telegram_id"), index=True, nullable=True)
     external_identity_id: Mapped[int | None] = mapped_column(ForeignKey("external_identities.id"), nullable=True)
-    full_name: Mapped[str] = mapped_column(String(128))
-    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    telegram_username: Mapped[str | None] = mapped_column(String(33), nullable=True)
-    birth_date: Mapped[date_ | None] = mapped_column(Date, nullable=True)
+    full_name: Mapped[str] = mapped_column(protected("membership_applications", "full_name"))
+    phone: Mapped[str | None] = mapped_column(protected("membership_applications", "phone"), nullable=True)
+    telegram_username: Mapped[str | None] = mapped_column(protected("membership_applications", "telegram_username"), nullable=True)
+    birth_date: Mapped[date_ | None] = mapped_column(protected("membership_applications", "birth_date"), nullable=True)
     university_id: Mapped[int | None] = mapped_column(ForeignKey("universities.id"), nullable=True)
-    faculty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    faculty: Mapped[str | None] = mapped_column(protected("membership_applications", "faculty"), nullable=True)
     # Только у заявок из собственной формы регистрации Mini App — внешняя
     # форма-отбор на academists.ru курс/уровень/статус не спрашивает
     # (см. api/routers/register.py).
     course: Mapped[int | None] = mapped_column(Integer, nullable=True)
     graduated_university: Mapped[bool] = mapped_column(Boolean, default=False)
     education_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    workplace: Mapped[str | None] = mapped_column(protected("membership_applications", "workplace"), nullable=True)
     # Статус (активист/член Братства/выпускник) — человек выбирает сам при
     # регистрации (MEMBER_STATUS_LABELS), переносится на Member при одобрении.
     # Не путать с state ниже — то состояние самой заявки (на рассмотрении/
@@ -936,7 +946,7 @@ class MembershipApplication(Base):
     state: Mapped[str] = mapped_column(String(16), default=APPLICATION_STATE_PENDING)
     reviewed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    reject_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reject_reason: Mapped[str | None] = mapped_column(protected("membership_applications", "reject_reason"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     region: Mapped["Region"] = relationship()
@@ -1005,10 +1015,10 @@ class MemberQuestProgress(Base):
     # прогресса увеличивается только после решения руководителя.
     pending_count: Mapped[int] = mapped_column(Integer, default=0)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    submitted_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    submitted_note: Mapped[str | None] = mapped_column(protected("member_quest_progress", "submitted_note"), nullable=True)
     assigned_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    assignment_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    assignment_note: Mapped[str | None] = mapped_column(protected("member_quest_progress", "assignment_note"), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     personal_seen_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
@@ -1024,7 +1034,7 @@ class QuestActivity(Base):
     quest_id: Mapped[int] = mapped_column(ForeignKey("quests.id"), index=True)
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     action: Mapped[str] = mapped_column(String(24))
-    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    note: Mapped[str | None] = mapped_column(protected("quest_activity", "note"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

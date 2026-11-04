@@ -5,6 +5,7 @@
 она сохраняется в посте в момент публикации.
 """
 
+import asyncio
 import hashlib
 import hmac
 import re
@@ -17,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import BOT_TOKEN, MAX_UPLOAD_BYTES, MEDIA_SIGNING_KEY, STORAGE_DIR
+from utils.private_files import write_private_file
 from database.models import (
     NEWS_REACTIONS,
     ROLE_CELL_LEADER,
@@ -176,13 +178,12 @@ async def create_news(
     # живой, и человек жал её снова. Кнопку мы починили, но полагаться только
     # на неё нельзя — сорвавшаяся сеть повторит запрос сама, и никакой
     # интерфейс этому не помешает.
-    recent = (
+    recent_candidates = (
         await session.execute(
             select(NewsPost).where(
                 NewsPost.author_user_id == author.id,
                 NewsPost.publication_state == "published",
                 NewsPost.content_kind == "post",
-                NewsPost.text == text,
                 NewsPost.region_id == region_id,
                 NewsPost.byline_kind == (BYLINE_OTDELENIE if region_id is not None else byline_kind_for(author, official)),
                 # Именно всемирное время: created_at пишет база (func.now()),
@@ -193,7 +194,8 @@ async def create_news(
                 - timedelta(seconds=DUPLICATE_WINDOW_SECONDS),
             ).order_by(NewsPost.created_at.desc())
         )
-    ).scalars().first()
+    ).scalars().all()
+    recent = next((post for post in recent_candidates if post.text == text), None)
     if recent is not None:
         recent.flagged_words = []
         recent.duplicate = True
@@ -468,7 +470,7 @@ async def attach_photos(session: AsyncSession, post: NewsPost, files: list, *, c
         target = STORAGE_DIR / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         track_upload(session, target)
-        target.write_bytes(payload)
+        await asyncio.to_thread(write_private_file, target, payload)
 
         session.add(
             NewsPhoto(
@@ -726,7 +728,7 @@ async def save_avatar(session: AsyncSession, member: Member, upload) -> str:
     relative = Path(AVATAR_DIR) / str(member.id) / stored_name
     target = STORAGE_DIR / relative
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(payload)
+    await asyncio.to_thread(write_private_file, target, payload)
 
     member.avatar_path = relative.as_posix()
     await session.commit()

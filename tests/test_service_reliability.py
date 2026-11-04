@@ -70,6 +70,9 @@ async def test_recurrences_do_not_copy_attendance(session, world):
 
 async def test_export_contains_both_counts_and_downloads_without_tma(client, world, tmp_path, monkeypatch):
     monkeypatch.setattr("services.report_downloads.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("utils.private_files.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.documents.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.reports.STORAGE_DIR", tmp_path)
     item = await event(client, world, total_attendees=60)
     member = (await client.post("/api/members", json={"region_id": world["moscow"].id, "full_name": "Участник встречи"})).json()
     await client.put(f"/api/events/{item['id']}/attendance", json={"member_ids": [member["id"]]})
@@ -94,6 +97,9 @@ async def test_export_contains_both_counts_and_downloads_without_tma(client, wor
 
 async def test_export_tickets_tampering_expiry_and_revocation(client, world, tmp_path, monkeypatch, session):
     monkeypatch.setattr("services.report_downloads.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("utils.private_files.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.documents.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.reports.STORAGE_DIR", tmp_path)
     login(world["leader_moscow"])
     base = f"/api/reports/region/file?region_id={world['moscow'].id}"
     response = await client.post(base)
@@ -258,6 +264,9 @@ async def test_migration_preserves_old_events_and_can_run_twice(tmp_path, monkey
 
 async def test_finance_download_is_scoped_and_supports_head(client, world, tmp_path, monkeypatch):
     monkeypatch.setattr("services.report_downloads.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("utils.private_files.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.documents.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.reports.STORAGE_DIR", tmp_path)
     login(world["leader_moscow"])
     response = await client.post("/api/downloads/prepare", json={"kind": "finance", "region_id": world["moscow"].id})
     assert response.status_code == 200, response.text
@@ -275,6 +284,9 @@ async def test_finance_download_is_scoped_and_supports_head(client, world, tmp_p
 
 async def test_document_download_revoked_when_document_is_deleted(client, world, tmp_path, monkeypatch):
     monkeypatch.setattr("services.report_downloads.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("utils.private_files.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.documents.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("api.routers.reports.STORAGE_DIR", tmp_path)
     login(world["leader_moscow"])
     upload = await client.post("/api/documents", data={"region_id": world["moscow"].id, "title": "Памятка"},
                                files={"file": ("Памятка.txt", "Проверка документа".encode(), "text/plain")})

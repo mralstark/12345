@@ -400,7 +400,7 @@ async def test_duplicate_mutation_with_same_key_runs_once(client, world, session
     )
     assert first.status_code == second.status_code == 200
     assert first.json()["id"] == second.json()["id"]
-    tasks = (await session.execute(select(Task).where(Task.title == "Один запрос"))).scalars().all()
+    tasks = (await session.execute(select(Task).where(Task.id == first.json()["id"]))).scalars().all()
     assert len(tasks) == 1
 
 
@@ -628,7 +628,8 @@ async def test_uploaded_photo_is_shrunk(client, world, session):
     # Имя на диске не должно обещать HEIC там, где лежит JPEG.
     assert photo.stored_path.endswith(".jpg")
 
-    stored = (STORAGE_DIR / photo.stored_path).read_bytes()
+    from utils.private_files import read_private_file
+    stored = read_private_file(STORAGE_DIR / photo.stored_path)
     assert max(Image.open(_io.BytesIO(stored)).size) == PHOTO_MAX_SIDE
 
 

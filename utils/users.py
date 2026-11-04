@@ -118,14 +118,14 @@ async def impersonation_candidates(session: AsyncSession, group: str) -> list[Us
             select(User)
             .join(Member, Member.id == User.member_id)
             .where(User.role == ROLE_PARTICIPANT, Member.status == value, User.is_active.is_(True))
-            .order_by(User.full_name)
+            .order_by(User.id)
         )
-        return list(result.scalars().all())
+        return sorted(result.scalars().all(), key=lambda u: (u.full_name.casefold(), u.id))
 
     result = await session.execute(
-        select(User).where(User.role == group, User.is_active.is_(True)).order_by(User.full_name)
+        select(User).where(User.role == group, User.is_active.is_(True)).order_by(User.id)
     )
-    return list(result.scalars().all())
+    return sorted(result.scalars().all(), key=lambda u: (u.full_name.casefold(), u.id))
 
 
 async def candidate_context(session: AsyncSession, user: User) -> str:

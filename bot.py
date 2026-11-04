@@ -15,7 +15,7 @@ from config import (
     require_bot_token,
     validate_security_config,
 )
-from database.db import init_db
+from database.db import init_db, check_database_encryption
 from handlers import apply, fallback, impersonate, start, tasks
 from services.notifier import notifier_loop
 from utils.bot_rate_limit import BotRateLimitMiddleware
@@ -78,6 +78,7 @@ async def run_bot(bot, dp, health):
     tasks = [asyncio.create_task(health.heartbeat())]
     try:
         await init_db()
+        await check_database_encryption()
         # Only authenticated identity and disabling a webhook are prerequisites.
         # Preserve the original transport timeout and every pending update.
         await retry_startup_network(bot.me)

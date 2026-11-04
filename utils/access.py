@@ -217,9 +217,9 @@ async def _correspondents_by_role(session: AsyncSession, user: User) -> list[Use
     между регионами."""
     if has_role(user, ROLE_SUPERUSER):
         result = await session.execute(
-            select(User).where(User.id != user.id, User.is_active.is_(True)).order_by(User.full_name)
+            select(User).where(User.id != user.id, User.is_active.is_(True)).order_by(User.id)
         )
-        return list(result.scalars().all())
+        return sorted(result.scalars().all(), key=lambda u: (u.full_name.casefold(), u.id))
 
     if has_any_role(user, (ROLE_FEDERAL, ROLE_COORDINATOR)):
         region_ids = await accessible_region_ids(session, user)

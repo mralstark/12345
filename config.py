@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -8,13 +9,34 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+_runtime_token = os.getenv("DATA_RUNTIME_CIPHERTEXT", "").strip()
+_runtime_secrets = {}
+_runtime_names = {"BOT_TOKEN", "DATABASE_URL", "MEDIA_SIGNING_KEY", "BOT_PROXY_URL", "VK_MINI_APP_SECRET"}
+if _runtime_token:
+    from utils.data_crypto import DataEncryptionError, decrypt_bytes
+    try:
+        _runtime_secrets = json.loads(decrypt_bytes(_runtime_token, "runtime-secrets"))
+        if not isinstance(_runtime_secrets, dict) or not set(_runtime_secrets) <= _runtime_names:
+            raise ValueError
+        if any(not isinstance(value, str) or len(value) > 8192 for value in _runtime_secrets.values()):
+            raise ValueError
+        if any(not _runtime_secrets.get(name, "").strip() for name in ("BOT_TOKEN", "DATABASE_URL", "MEDIA_SIGNING_KEY")):
+            raise ValueError
+    except (ValueError, TypeError, AttributeError):
+        raise DataEncryptionError("Invalid encrypted runtime configuration") from None
+
+
+def _private_setting(name: str, default: str = "") -> str:
+    return _runtime_secrets.get(name, os.getenv(name, default))
+
+
+BOT_TOKEN = _private_setting("BOT_TOKEN").strip()
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
 
 # Прокси для доступа к api.telegram.org, если он заблокирован напрямую.
 # Задаётся явно в .env, чтобы не зависеть от системных HTTP_PROXY/HTTPS_PROXY.
-BOT_PROXY_URL = os.getenv("BOT_PROXY_URL") or None
+BOT_PROXY_URL = _private_setting("BOT_PROXY_URL") or None
 
 # Публичный HTTPS-адрес Mini App. Telegram открывает WebApp только по HTTPS,
 # поэтому для локальной отладки нужен туннель (ngrok/cloudflared).
@@ -22,7 +44,7 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/") or None
 # Public VK ID application identifier; tokens are exchanged only by the API.
 VK_ID_CLIENT_ID = os.getenv("VK_ID_CLIENT_ID", "").strip()
 VK_MINI_APP_ID = os.getenv("VK_MINI_APP_ID", "").strip()
-VK_MINI_APP_SECRET = os.getenv("VK_MINI_APP_SECRET", "").strip()
+VK_MINI_APP_SECRET = _private_setting("VK_MINI_APP_SECRET").strip()
 
 # Внешние адреса, с которых браузеру разрешено обращаться к API. В обычной
 # установке Mini App и API находятся на одном origin, поэтому CORS вообще не
@@ -49,7 +71,7 @@ ALLOWED_HOSTS = tuple(
 
 # По умолчанию SQLite — чтобы проект поднимался локально без установки Postgres.
 # Прод: postgresql+asyncpg://... (см. .env.example).
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{BASE_DIR / 'bratstvo.db'}")
+DATABASE_URL = _private_setting("DATABASE_URL", f"sqlite+aiosqlite:///{BASE_DIR / 'bratstvo.db'}")
 
 # Часовой пояс, в котором считается «сегодня»: границы дня, дни рождения, дедлайны.
 APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Europe/Moscow")
@@ -80,7 +102,7 @@ AUTO_FEDERAL_TELEGRAM_IDS = {
 # Отдельный ключ для подписанных ссылок на закрытые фотографии и аватары.
 # В development для обратной совместимости используется BOT_TOKEN; в
 # production отсутствие отдельного ключа считается ошибкой конфигурации.
-MEDIA_SIGNING_KEY = os.getenv("MEDIA_SIGNING_KEY", "").strip()
+MEDIA_SIGNING_KEY = _private_setting("MEDIA_SIGNING_KEY").strip()
 
 # Временная мера (план «Убираем технического superuser», не постоянная
 # архитектура): пока руководители регионов не подтверждают анкеты сами, все
@@ -94,6 +116,30 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "25")) * 1024 * 1024
 MAX_STORAGE_BYTES = int(os.getenv("MAX_STORAGE_MB", "5120")) * 1024 * 1024
 MIN_FREE_STORAGE_BYTES = int(os.getenv("MIN_FREE_STORAGE_MB", "512")) * 1024 * 1024
+
+# Administrative identifiers are personal data too. The deployment migrator seals
+# these legacy env settings; only their ciphertext travels with a hosted config.
+_bootstrap_token = os.getenv("DATA_BOOTSTRAP_CIPHERTEXT", "").strip()
+if _bootstrap_token:
+    from utils.data_crypto import DataEncryptionError, decrypt_bytes
+    try:
+        _bootstrap = json.loads(decrypt_bytes(_bootstrap_token, "runtime-bootstrap"))
+        _super = _bootstrap.get("SUPERUSER_TELEGRAM_IDS", [])
+        _federal = _bootstrap.get("AUTO_FEDERAL_TELEGRAM_IDS", [])
+        if any(not isinstance(values, list) or len(values) > 100 for values in (_super, _federal)):
+            raise ValueError
+        if any(not isinstance(value, int) or isinstance(value, bool) or not 0 < value < 2**63 for value in _super + _federal):
+            raise ValueError
+        SUPERUSER_TELEGRAM_IDS = set(_super)
+        AUTO_FEDERAL_TELEGRAM_IDS = set(_federal)
+        PRIMARY_REVIEWER_FULL_NAME = _bootstrap.get("PRIMARY_REVIEWER_FULL_NAME", "")
+        OPERATIONS_ALERT_TELEGRAM_ID = _bootstrap.get("OPERATIONS_ALERT_TELEGRAM_ID", "")
+        if not isinstance(PRIMARY_REVIEWER_FULL_NAME, str) or len(PRIMARY_REVIEWER_FULL_NAME) > 256:
+            raise ValueError
+        if not isinstance(OPERATIONS_ALERT_TELEGRAM_ID, str):
+            raise ValueError
+    except (ValueError, TypeError, AttributeError):
+        raise DataEncryptionError("Invalid encrypted bootstrap configuration") from None
 
 
 def validate_security_config() -> None:
@@ -149,6 +195,15 @@ def validate_security_config() -> None:
             or parsed.fragment
         ):
             raise RuntimeError("CORS_ALLOWED_ORIGINS в production должен содержать точные HTTPS origin")
+    from utils.data_crypto import keyring
+    keyring()
+    if not _runtime_token or any(os.getenv(name, "").strip() for name in _runtime_names):
+        raise RuntimeError("Seal production credentials into DATA_RUNTIME_CIPHERTEXT and clear plaintext copies")
+    if any(os.getenv(name, "").strip() for name in (
+        "SUPERUSER_TELEGRAM_IDS", "AUTO_FEDERAL_TELEGRAM_IDS",
+        "PRIMARY_REVIEWER_FULL_NAME", "OPERATIONS_ALERT_TELEGRAM_ID",
+    )):
+        raise RuntimeError("Seal personal deployment settings into DATA_BOOTSTRAP_CIPHERTEXT")
 
 
 def require_bot_token() -> str:
