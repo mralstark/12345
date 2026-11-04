@@ -5,13 +5,15 @@ section order and action flow. It updates shared styles rather than adding a UI 
 
 ## Direction
 
-- Graphite/ink background with two static, broad warm/cool color fields.
+- Graphite/ink background with static elliptical folds of warm metal and cool slate light.
 - Locally hosted Forum display typography and Google Sans reading/control text.
 - Warm gold identifies primary actions, selection and progress.
-- Translucent panels have a fine edge and restrained inset highlight. Sticky chrome
-  and dialogs use stronger backdrop blur. Nested cards avoid a second blur layer.
-- Unsupported backdrop filters retain opaque defaults. Reduced transparency or
-  reduced motion selects opaque surfaces; forced colors retains visible boundaries.
+- Translucent panels reveal the wallpaper through 22px blur with restrained saturation,
+  a bright rim and a shaded lower edge. Sticky chrome uses 26px blur; dialogs retain
+  a dense reading surface. Nested cards avoid a second blur layer.
+- Unsupported backdrop filters retain opaque defaults. Reduced transparency or increased contrast selects
+  opaque surfaces; reduced motion disables motion while retaining static glass.
+  Forced colors retains visible boundaries.
 - No new image/font downloads, CDN, runtime package, animation framework or tracking.
 
 ## Layout and interactions
