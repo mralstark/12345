@@ -156,3 +156,13 @@ async def test_exclusion_deletes_own_dossier_but_preserves_other_participants(se
     assert await session.get(MentorPreparation,own_id) is None
     row=await session.get(MentorPreparation,remaining_id)
     assert row and row.invited_by_user_id is None and json.loads(row.payload)['member_id']==other_id
+
+
+async def test_deactivated_account_cannot_receive_new_preparation_decisions(client,session,world):
+    member,user,item=await invited(client,session,world)
+    login(user);item=(await change(client,item,'accept')).json()
+    item=(await change(client,item,'submit',step=0,note="Ответ до деактивации")).json()
+    user.is_active=False;await session.commit();login(world['leader_moscow'])
+    assert (await change(client,item,'approve',step=0,note="Не должно быть принято")).status_code==409
+    detail=(await client.get('/api/academy/preparation/'+str(item['id']))).json()
+    assert detail['eligible'] is False and detail['can_review'] is False

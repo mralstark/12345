@@ -99,7 +99,9 @@ async def invite(payload: InviteIn, background: BackgroundTasks, user: User = De
 @router.get("/{row_id}")
 async def detail(row_id: int = PathParam(gt=0, le=2**31-1), user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
     row, member, data = await prep.load(session, user, row_id)
-    return {**prep.present(row, member), "can_review": can_manage_academy(user) and user.member_id != member.id}
+    active = (await session.execute(select(User.id).where(User.member_id == member.id, User.is_active.is_(True)))).first() is not None
+    return {**prep.present(row, member), "eligible": prep.eligible(member) and active,
+            "can_review": active and can_manage_academy(user) and user.member_id != member.id}
 
 
 @router.post("/{row_id}")
@@ -110,6 +112,8 @@ async def change(payload: ChangeIn, background: BackgroundTasks, row_id: int = P
     if payload.revision != row.revision:
         raise HTTPException(409, "Запись уже изменилась. Обновите экран")
     prep.require_current(member)
+    if not (await session.execute(select(User.id).where(User.member_id == member.id, User.is_active.is_(True)))).first():
+        raise HTTPException(409, "Аккаунт участника неактивен; история сохранена")
     if own:
         if action == "accept" and data["status"] == "invited":
             data["status"] = "ready" if all(s["status"] == "approved" for s in data["steps"]) else "active"
