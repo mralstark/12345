@@ -1,0 +1,29 @@
+{
+  "upstream_commit": "4106aab86ddefe26d58a69745e04ae9479d22993",
+  "files": [
+    {
+      "file": "tinos-regular-v1.woff2",
+      "source": "https://raw.githubusercontent.com/googlefonts/tinos/4106aab86ddefe26d58a69745e04ae9479d22993/fonts/webfonts/Tinos-Regular.woff2",
+      "bytes": 181528,
+      "sha256": "990493259cd9f78dd1d1e7f697700bb450488968138251bb2c2c046d56a91548"
+    },
+    {
+      "file": "tinos-bold-v1.woff2",
+      "source": "https://raw.githubusercontent.com/googlefonts/tinos/4106aab86ddefe26d58a69745e04ae9479d22993/fonts/webfonts/Tinos-Bold.woff2",
+      "bytes": 201632,
+      "sha256": "cf4ba0b63a839e462c9461e86fb7c01fef1e734405ee403ec0121b7767b3f172"
+    },
+    {
+      "file": "tinos-italic-v1.woff2",
+      "source": "https://raw.githubusercontent.com/googlefonts/tinos/4106aab86ddefe26d58a69745e04ae9479d22993/fonts/webfonts/Tinos-Italic.woff2",
+      "bytes": 205504,
+      "sha256": "28d3159c92e590181a0436105a6a508f3ac334ff9586bf1e9bac761d259e8860"
+    },
+    {
+      "file": "tinos-bolditalic-v1.woff2",
+      "source": "https://raw.githubusercontent.com/googlefonts/tinos/4106aab86ddefe26d58a69745e04ae9479d22993/fonts/webfonts/Tinos-BoldItalic.woff2",
+      "bytes": 206396,
+      "sha256": "fe7ac295c7672860594e97cb66cec26f65dc0a76164e88696ef357335e4a2ad2"
+    }
+  ]
+}

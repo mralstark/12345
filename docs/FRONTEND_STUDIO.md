@@ -6,8 +6,11 @@ section order and action flow. It updates shared styles rather than adding a UI 
 ## Direction
 
 - Original matte obsidian texture with sparse gold mineral veins, softened by quiet
-  warm/cool light fields. The locally hosted WebP is decorative, with a graphite fallback.
-- Locally hosted Forum display typography and Google Sans reading/control text.
+  warm/cool light fields. The locally hosted JPEG is decorative, with a graphite fallback.
+- Display headings retain Forum and their original heading-specific overrides.
+  Reading/control text uses Times New Roman where installed, with locally hosted Tinos
+  as the phone fallback; regular, bold and italic faces include Cyrillic. Tinos comes
+  from pinned upstream sources with the SIL OFL and provenance stored beside the fonts.
 - Warm gold identifies primary actions, selection and progress.
 - Translucent panels reveal the wallpaper through 22px blur with restrained saturation,
   a bright rim and a shaded lower edge. Sticky chrome uses 26px blur; dialogs retain
@@ -16,7 +19,7 @@ section order and action flow. It updates shared styles rather than adding a UI 
   opaque surfaces; reduced motion disables motion while retaining static glass.
   Forced colors retains visible boundaries.
 - No external image/font requests, CDN, runtime package, animation framework or tracking.
-  `webapp/backgrounds/obsidian-gold-v1.webp` is an original generated material texture;
+  `webapp/backgrounds/obsidian-gold-v1.jpg` is an original generated material texture;
   found marble photographs served as visual research and were not copied into the app.
 
 ## Layout and interactions
