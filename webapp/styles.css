@@ -180,8 +180,8 @@ body {
   isolation: isolate;
 }
 
-/* Static folded-light wallpaper: warm metal and cool slate behind the glass.
-   Elliptical bands supply real detail to blur, without animated filters or assets. */
+/* Original matte stone texture, hosted locally. Quiet light fields keep the gold
+   mineral veins subordinate to the content; the panels supply the optical blur. */
 html { background: var(--bg); scroll-padding-top: 120px; }
 body::before {
   content: "";
@@ -189,13 +189,14 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse 90% 72% at 112% 12%, transparent 44%, rgba(216, 178, 121, .19) 48%, rgba(161, 129, 87, .07) 54%, transparent 64%),
-    radial-gradient(ellipse 88% 86% at -24% 74%, transparent 40%, rgba(103, 158, 175, .18) 46%, rgba(59, 106, 130, .07) 56%, transparent 67%),
-    radial-gradient(ellipse at 98% 4%, rgba(190, 145, 83, .30), transparent 58%),
-    radial-gradient(ellipse at 0% 85%, rgba(48, 112, 135, .30), transparent 62%),
-    radial-gradient(ellipse at 64% 100%, rgba(84, 113, 119, .12), transparent 52%),
-    linear-gradient(145deg, #111b22, #10191d 48%, #0c141a);
+  background-color: #111b22;
+  background-image:
+    radial-gradient(ellipse at 98% 4%, rgba(190, 145, 83, .16), transparent 58%),
+    radial-gradient(ellipse at 0% 85%, rgba(48, 112, 135, .16), transparent 62%),
+    url("/static/backgrounds/obsidian-gold-v1.webp");
+  background-size: cover;
+  background-position: 72% center;
+  background-repeat: no-repeat;
 }
 [data-theme="light"] body::before, body[data-theme="light"]::before {
   background: radial-gradient(ellipse at 100% 5%, rgba(217, 181, 123, .22), transparent 60%),

@@ -5,7 +5,8 @@ section order and action flow. It updates shared styles rather than adding a UI 
 
 ## Direction
 
-- Graphite/ink background with static elliptical folds of warm metal and cool slate light.
+- Original matte obsidian texture with sparse gold mineral veins, softened by quiet
+  warm/cool light fields. The locally hosted WebP is decorative, with a graphite fallback.
 - Locally hosted Forum display typography and Google Sans reading/control text.
 - Warm gold identifies primary actions, selection and progress.
 - Translucent panels reveal the wallpaper through 22px blur with restrained saturation,
@@ -14,7 +15,9 @@ section order and action flow. It updates shared styles rather than adding a UI 
 - Unsupported backdrop filters retain opaque defaults. Reduced transparency or increased contrast selects
   opaque surfaces; reduced motion disables motion while retaining static glass.
   Forced colors retains visible boundaries.
-- No new image/font downloads, CDN, runtime package, animation framework or tracking.
+- No external image/font requests, CDN, runtime package, animation framework or tracking.
+  `webapp/backgrounds/obsidian-gold-v1.webp` is an original generated material texture;
+  found marble photographs served as visual research and were not copied into the app.
 
 ## Layout and interactions
 
