@@ -2573,7 +2573,9 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 }
 .academy-layout { grid-column: 1 / -1; min-width: 0; }
 .prep-overview, .prep-step, .prep-history { padding: 24px; min-width: 0; }
-.prep-overview h2 { font: 400 30px/1.2 'Forum', serif; margin: 0 0 16px; }
+.prep-overview h2 { font: 400 30px/1.2 'Forum', serif; margin: 0 0 16px; overflow-wrap: anywhere; }
+.prep-about { margin-bottom: 20px; }
+.prep-about summary { color: var(--hint); cursor: pointer; }
 .prep-overview p { max-width: 72ch; line-height: 1.6; }
 .prep-status { color: var(--accent); }
 .prep-progress { height: 6px; background: var(--border); border-radius: 9px; overflow: hidden; }

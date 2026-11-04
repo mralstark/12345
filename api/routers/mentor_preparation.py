@@ -82,7 +82,7 @@ async def invite(payload: InviteIn, background: BackgroundTasks, user: User = De
     note = payload.note.strip()
     if len(note) < 5:
         raise HTTPException(422, "Опишите цель приглашения и к кому обращаться")
-    data = prep.initial(note)
+    data = prep.initial(note, member.id)
     data["history"].append({"action": "invited", "actor_id": user.id, "at": prep.timestamp(), "step": None, "note": note})
     row = MentorPreparation(member_id=member.id, invited_by_user_id=user.id, payload=json.dumps(data, ensure_ascii=False), revision=1)
     session.add(row)
@@ -155,6 +155,6 @@ async def change(payload: ChangeIn, background: BackgroundTasks, row_id: int = P
     await prep.save(session, row, data, payload.revision, user, action, step=payload.step, note=text)
     if not own:
         background.add_task(prep.deliver_notice, member.id)
-    elif action in {"submit", "withdraw"}:
+    elif action in {"submit", "withdraw"} and row.invited_by_user_id is not None:
         background.add_task(prep.deliver_notice, member.id, reviewer_id=row.invited_by_user_id)
     return prep.present(row, member)

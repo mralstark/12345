@@ -1053,7 +1053,7 @@ class MentorPreparation(Base):
     __tablename__ = "mentor_preparations"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id"), unique=True)
-    invited_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    invited_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     payload: Mapped[str] = mapped_column(protected("mentor_preparations", "payload"))
     revision: Mapped[int] = mapped_column(Integer, default=1)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

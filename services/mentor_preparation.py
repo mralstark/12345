@@ -29,14 +29,14 @@ def timestamp():
     return now().astimezone(timezone.utc).isoformat()
 
 
-def initial(note):
-    return {"version": 1, "status": "invited", "invitation": note, "steps": [
+def initial(note, member_id):
+    return {"version": 1, "member_id": member_id, "status": "invited", "invitation": note, "steps": [
         {"status": "draft", "response": "", "feedback": ""} for _ in STEPS], "history": []}
 
 
 def unpack(row):
     data = json.loads(row.payload)
-    if data.get("version") != 1 or len(data.get("steps", [])) != len(STEPS) or data.get("status") not in LABELS:
+    if data.get("version") != 1 or data.get("member_id") != row.member_id or len(data.get("steps", [])) != len(STEPS) or data.get("status") not in LABELS:
         raise HTTPException(409, "Версия программы не поддерживается")
     return data
 

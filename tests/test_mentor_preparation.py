@@ -129,3 +129,30 @@ async def test_additive_encryption_upgrade_is_authenticated_and_empty_only(sessi
     await conn.execute(text('UPDATE data_encryption_state SET schema_hash=:h'),{'h':previous_schema_hash()})
     await conn.execute(text("INSERT INTO mentor_preparations(member_id,invited_by_user_id,payload,revision) VALUES (999,1,'plaintext',1)"))
     with pytest.raises(DataEncryptionError):await ensure_encryption_ready(conn)
+
+
+async def test_copied_dossier_cannot_be_presented_as_another_members_work(client,session,world):
+    member,user,item=await invited(client,session,world)
+    other,second=await student(session,world,81003)
+    source=await session.get(MentorPreparation,item['id'])
+    session.add(MentorPreparation(member_id=other.id, invited_by_user_id=world['leader_moscow'].id,
+                                   payload=source.payload,revision=1))
+    await session.commit();login(second)
+    assert (await client.get('/api/academy/preparation/me')).status_code==409
+
+
+async def test_exclusion_deletes_own_dossier_but_preserves_other_participants(session,world):
+    from services.admin_actions import exclude_member
+    member,user=await student(session,world)
+    other,second=await student(session,world,81004)
+    own=MentorPreparation(member_id=member.id,invited_by_user_id=world['leader_moscow'].id,
+                          payload=json.dumps(initial('Тестовое приглашение',member.id)),revision=1)
+    remaining=MentorPreparation(member_id=other.id,invited_by_user_id=user.id,
+                                payload=json.dumps(initial('Тестовое приглашение',other.id)),revision=1)
+    session.add_all([own,remaining]);await session.commit()
+    own_id,remaining_id,other_id=own.id,remaining.id,other.id
+    await exclude_member(session,member.id)
+    session.expire_all()
+    assert await session.get(MentorPreparation,own_id) is None
+    row=await session.get(MentorPreparation,remaining_id)
+    assert row and row.invited_by_user_id is None and json.loads(row.payload)['member_id']==other_id

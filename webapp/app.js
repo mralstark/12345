@@ -4159,10 +4159,11 @@
       '<button class="btn" data-prep-action="recommend">Рекомендовать к менторству</button><button class="btn btn--ghost" data-prep-action="waitlist">Ожидание места</button>';
     if (reviewable && item.eligible && item.status === 'withdrawn') actions += '<div class="field prep-decision"><label for="prepDecision">Новое приглашение</label><textarea id="prepDecision" maxlength="2000"></textarea></div><button class="btn" data-prep-action="reinvite">Пригласить повторно</button>';
     return '<div class="card prep-overview" data-prep-revision="' + item.revision + '"><h2>' + (reviewing ? esc(item.name) : 'Подготовка к менторству') + '</h2>' +
-      '<p class="prep-status">' + esc(item.status_label) + '</p><p>Четыре шага с обратной связью: цель, план, практика и разбор результата. Темп можно обсудить с руководителем.</p>' +
+      '<p class="prep-status">' + esc(item.status_label) + '</p><details class="prep-about"' + (item.status === 'invited' ? ' open' : '') + '><summary>О программе и приглашении</summary><p>Четыре шага с обратной связью: цель, план, практика и разбор результата. Темп можно обсудить с руководителем.</p>' +
       '<p class="row__sub">Завершение подготовки не меняет статус в Братстве и не гарантирует место у наставника. Дальнейшее участие обсуждается лично.</p>' +
+      '<p class="prep-note">' + esc(item.invitation) + '</p></details>' +
       '<div class="prep-progress" role="progressbar" aria-label="Принятые шаги" aria-valuemin="0" aria-valuemax="4" aria-valuenow="' + item.completed + '"><span style="width:' + (item.completed * 25) + '%"></span></div><p>' + item.completed + ' из 4 шагов принято</p>' +
-      '<p class="prep-note">' + esc(item.invitation) + '</p>' + (item.decision ? '<p class="prep-note">' + esc(item.decision) + '</p>' : '') +
+      (item.decision ? '<p class="prep-note">' + esc(item.decision) + '</p>' : '') +
       (!item.eligible ? '<p>Участие сейчас недоступно. История сохранена.</p>' : '') + '<div class="btn-row prep-actions">' + actions + '</div></div>' +
       item.steps.map((step,i) => {
         const key = state.me.id + '/' + item.id + '/' + i;

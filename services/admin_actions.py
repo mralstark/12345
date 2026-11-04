@@ -35,6 +35,7 @@ from database.models import (
     Keyword,
     Member,
     MemberQuestProgress,
+    MentorPreparation,
     MembershipApplication,
     NewsComment,
     NewsPhoto,
@@ -456,6 +457,7 @@ async def reactivate_user(session: AsyncSession, user_id: int) -> User:
 # перечень писался руками и отстал от схемы на пять таблиц. Считать ссылки
 # глазами оказалось нельзя — теперь их считает тест.
 EXCLUDE_HANDLES_USER_REFS = frozenset({
+    "mentor_preparations.invited_by_user_id",
     "browser_sessions.user_id",
     "external_identities.user_id",
     "oauth_login_attempts.user_id",
@@ -479,6 +481,7 @@ EXCLUDE_HANDLES_USER_REFS = frozenset({
 })
 
 EXCLUDE_HANDLES_MEMBER_REFS = frozenset({
+    "mentor_preparations.member_id",
     "users.member_id",
     "birthday_notices.member_id",
     "events.responsible_member_id",
@@ -515,6 +518,7 @@ async def exclude_member(
     # уходит вместе с человеком, оставлять эти строки не за кем.
     await _delete_all(session, BirthdayNotice, BirthdayNotice.member_id == member_id)
     await _delete_all(session, MemberQuestProgress, MemberQuestProgress.member_id == member_id)
+    await _delete_all(session, MentorPreparation, MentorPreparation.member_id == member_id)
     await _delete_all(session, QuestActivity, QuestActivity.member_id == member_id)
     await _delete_all(session, ShopPurchase, ShopPurchase.member_id == member_id)
     await _delete_all(session, EventAttendance, EventAttendance.member_id == member_id)
@@ -522,6 +526,8 @@ async def exclude_member(
 
     user = (await session.execute(select(User).where(User.member_id == member_id))).scalar_one_or_none()
     if user is not None:
+        for preparation in (await session.execute(select(MentorPreparation).where(MentorPreparation.invited_by_user_id == user.id))).scalars():
+            preparation.invited_by_user_id = None
         for tx in (await session.execute(select(Transaction).where(Transaction.author_id == user.id))).scalars().all():
             tx.author_id = None
         for doc in (await session.execute(select(Document).where(Document.author_id == user.id))).scalars().all():
