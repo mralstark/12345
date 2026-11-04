@@ -1,5 +1,6 @@
 """Opt-in preparation, independent from archived quests and membership ranks."""
 import json
+import logging
 from datetime import timezone
 
 from fastapi import HTTPException
@@ -103,3 +104,29 @@ async def notify_user(session, member_id, text):
     account = (await session.execute(select(User).where(User.member_id == member_id, User.is_active.is_(True)))).scalars().first()
     if account and account.telegram_id:
         await notify_telegram(account.telegram_id, text)
+
+
+async def deliver_notice(member_id, *, reviewer_id=None, invitation=False):
+    """Best effort after HTTP completion; the in-app dossier is authoritative."""
+    from database.db import async_session
+    try:
+        async with async_session() as session:
+            member = await session.get(Member, member_id)
+            if member is None:
+                return
+            if reviewer_id is not None:
+                reviewer = await session.get(User, reviewer_id)
+                if not reviewer or not reviewer.is_active or reviewer.member_id == member.id:
+                    return
+                await access(session, reviewer, member, managing=True)
+                from utils.notify import notify_telegram
+                if reviewer.telegram_id:
+                    await notify_telegram(reviewer.telegram_id, "В Академии обновлена подготовка участника. Откройте «Подготовка → Участники».")
+            else:
+                message = ("В Академии появилось приглашение на подготовку к менторству. Откройте «Академия → Подготовка». Участие добровольное."
+                           if invitation else "В Академии обновлена ваша подготовка к менторству. Посмотрите обратную связь в разделе «Подготовка».")
+                await notify_user(session, member_id, message)
+    except AccessDenied:
+        pass
+    except Exception as error:
+        logging.getLogger(__name__).warning("Preparation notification failed: %s", type(error).__name__)

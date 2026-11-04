@@ -1,7 +1,7 @@
 """Preparation is invited explicitly; consent and review never change membership."""
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path as PathParam
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Path as PathParam
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/academy/preparation", tags=["academy"])
 
 
 class InviteIn(BaseModel):
-    member_id: int = Field(gt=0, le=2**63-1)
+    member_id: int = Field(gt=0, le=2**31-1)
     note: str = Field(min_length=5, max_length=2000)
 
 
@@ -65,7 +65,7 @@ async def candidates(region_id: int, user: User = Depends(get_current_user), ses
 
 
 @router.post("/invite")
-async def invite(payload: InviteIn, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
+async def invite(payload: InviteIn, background: BackgroundTasks, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
     member = (await session.execute(select(Member).where(Member.id == payload.member_id).with_for_update())).scalar_one_or_none()
     if member is None:
         raise HTTPException(404, "Участник не найден")
@@ -92,18 +92,18 @@ async def invite(payload: InviteIn, user: User = Depends(get_current_user), sess
         await session.rollback()
         raise HTTPException(409, "Приглашение уже создано. Обновите список") from None
     await session.refresh(row)
-    await prep.notify_user(session, member.id, "В Академии появилось приглашение на подготовку к менторству. Откройте «Академия → Подготовка». Участие добровольное.")
+    background.add_task(prep.deliver_notice, member.id, invitation=True)
     return prep.present(row, member)
 
 
 @router.get("/{row_id}")
-async def detail(row_id: int = PathParam(gt=0, le=2**63-1), user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
+async def detail(row_id: int = PathParam(gt=0, le=2**31-1), user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
     row, member, data = await prep.load(session, user, row_id)
     return {**prep.present(row, member), "can_review": can_manage_academy(user) and user.member_id != member.id}
 
 
 @router.post("/{row_id}")
-async def change(payload: ChangeIn, row_id: int = PathParam(gt=0, le=2**63-1), user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
+async def change(payload: ChangeIn, background: BackgroundTasks, row_id: int = PathParam(gt=0, le=2**31-1), user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)):
     row, member, data = await prep.load(session, user, row_id)
     own = user.member_id == member.id
     action, text = payload.action, payload.text.strip()
@@ -154,15 +154,7 @@ async def change(payload: ChangeIn, row_id: int = PathParam(gt=0, le=2**63-1), u
             raise HTTPException(409, "Действие сейчас недоступно")
     await prep.save(session, row, data, payload.revision, user, action, step=payload.step, note=text)
     if not own:
-        await prep.notify_user(session, member.id, "В Академии обновлена ваша подготовка к менторству. Посмотрите обратную связь в разделе «Подготовка».")
+        background.add_task(prep.deliver_notice, member.id)
     elif action in {"submit", "withdraw"}:
-        reviewer = await session.get(User, row.invited_by_user_id)
-        if reviewer and reviewer.is_active and reviewer.member_id != member.id:
-            try:
-                await prep.access(session, reviewer, member, managing=True)
-                from utils.notify import notify_telegram
-                if reviewer.telegram_id:
-                    await notify_telegram(reviewer.telegram_id, "В Академии обновлена подготовка участника. Откройте «Подготовка → Участники».")
-            except AccessDenied:
-                pass
+        background.add_task(prep.deliver_notice, member.id, reviewer_id=row.invited_by_user_id)
     return prep.present(row, member)
