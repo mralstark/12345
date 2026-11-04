@@ -11,13 +11,15 @@ from api.routers.documents import authorized_document
 from api.routers.finance import export_csv
 from database.models import Document, User
 from services.report_downloads import decode_ticket, generation_slots, save_export
+from services.academy_materials import authorized_book
 from utils.access import actor_cell
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
 
 
 class DownloadIn(BaseModel):
-    kind: Literal["finance", "document"]
+    kind: Literal["finance", "document", "academy_book"]
+    book_id: int | None = Field(default=None, gt=0, le=2**63-1)
     region_id: int | None = None
     document_id: int | None = None
     period: str = Field(default="year", max_length=16)
@@ -39,6 +41,11 @@ async def prepare(
             response = await export_csv(payload.region_id, payload.period, payload.offset, user, session)
             content, suffix, filename = response.body, "csv", f"finance_{payload.region_id}.csv"
             region_id = payload.region_id
+        elif payload.kind == "academy_book":
+            if payload.book_id is None:
+                raise HTTPException(422, "Укажите книгу")
+            book, path = await authorized_book(session, payload.book_id)
+            content, suffix, filename, region_id = b"", "pdf", book.original_name, 0
         else:
             if payload.document_id is None:
                 raise HTTPException(422, "Укажите документ")
@@ -54,6 +61,8 @@ async def prepare(
         cell = await actor_cell(session, user)
         ticket = await save_export(content, user.id, region_id, suffix, filename,
                                    kind=payload.kind, cell_id=cell.id if cell else None,
-                                   document_id=payload.document_id if payload.kind == "document" else None)
+                                   document_id=payload.document_id if payload.kind == "document" else None,
+                                   book_id=book.id if payload.kind == "academy_book" else None,
+                                   book_revision=book.source_sha256 if payload.kind == "academy_book" else None)
     return {"url": f"/api/reports/files/{decode_ticket(ticket)['file']}?t={ticket}",
             "filename": filename, "expires_in": 600}

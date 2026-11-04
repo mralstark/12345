@@ -1048,6 +1048,31 @@ class SectionRead(Base):
     last_item_id: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class AcademyBook(Base):
+    """Owner-approved shared library. PDF contents use private encrypted storage."""
+    __tablename__ = "academy_books"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True)
+    title: Mapped[str] = mapped_column(String(255))
+    stored_path: Mapped[str] = mapped_column(String(255))
+    original_name: Mapped[str] = mapped_column(String(255))
+    source_sha256: Mapped[str] = mapped_column(String(64))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AcademyTerm(Base):
+    """Approved editorial text, never generated or inferred from member data."""
+    __tablename__ = "academy_terms"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True)
+    term: Mapped[str] = mapped_column(String(120))
+    definition: Mapped[str] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class ShopPurchase(Base):
     """Покупка в магазине за звёзды (план «Персонаж и инвентарь») — каталог
     товаров захардкожен в api/routers/shop.py::SHOP_ITEMS (id/цена/тип), тут

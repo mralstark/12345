@@ -50,7 +50,7 @@ def decode_ticket(ticket: str) -> dict:
             raise ValueError
         return data
     except (ValueError, TypeError, KeyError, DataEncryptionError):
-        raise HTTPException(403, "Ссылка устарела. Сформируйте отчёт заново") from None
+        raise HTTPException(403, "Ссылка устарела. Подготовьте файл заново") from None
 
 
 def cache_dir() -> Path:
@@ -77,7 +77,8 @@ def export_path(file_id: str) -> Path:
 
 async def save_export(payload: bytes, user_id: int, region_id: int, format: str, filename: str,
                       *, kind: str = "report", cell_id: int | None = None,
-                      document_id: int | None = None) -> str:
+                      document_id: int | None = None, book_id: int | None = None,
+                      book_revision: str | None = None) -> str:
     if not isinstance(format, str) or format not in _FORMATS:
         raise HTTPException(400, "Формат файла не поддерживается")
     suffix = _FORMATS[format]
@@ -107,6 +108,7 @@ async def save_export(payload: bytes, user_id: int, region_id: int, format: str,
         path = export_path(file_id)
         await asyncio.to_thread(write_private_file, path, payload)
         data = {"uid": user_id, "rid": region_id, "file": file_id, "name": filename, "exp": int(now) + TTL,
-                "kind": kind, "cell_id": cell_id, "document_id": document_id}
+                "kind": kind, "cell_id": cell_id, "document_id": document_id,
+                "book_id": book_id, "book_revision": book_revision}
         raw = encrypt_bytes(json.dumps(data, ensure_ascii=False).encode(), "download-ticket")
         return raw + "." + _signature(raw)

@@ -190,7 +190,10 @@ development доступна по адресу `http://127.0.0.1:8000/docs`.
 | §13 | Экспорт отчёта | `api/routers/reports.py`, `utils/report_export.py` | «Отчёты» (XLSX/PDF) |
 | §14 | Уведомления | `services/notifier.py` | сообщения в бот |
 | — | Вузовские ячейки | `api/routers/cells.py`, `utils/university_cells.py` | «Вузовские ячейки» |
-| — | Академия и награды | `api/routers/character.py`, `api/routers/quests.py`, `api/routers/shop.py` | «Академия» |
+| — | Академия: библиотека PDF и вокабуляр | `api/routers/academy_materials.py`, `scripts/academy_content.py` | «Академия» для всех зарегистрированных |
+| — | Прежние награды и прогресс | `api/routers/character.py`, `api/routers/quests.py`, `api/routers/shop.py` | История скрыта, записи и баланс сохранены |
+
+Наполнение библиотеки и вокабуляра, права и обратимый переход: [Академия](docs/ACADEMY_MATERIALS.md).
 
 Суммы везде хранятся в копейках (int). Быстрая запись в боте понимает
 `2500 канцелярия` и вторую строку с датой задним числом (`вчера`, `21`, `26.06`).

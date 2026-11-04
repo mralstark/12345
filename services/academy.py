@@ -10,6 +10,12 @@ from database.models import (
 )
 from utils.access import AccessDenied, require_view
 from utils.permissions import has_any_role
+from config import ACADEMY_LEGACY_READ_ONLY
+
+
+def require_legacy_write() -> None:
+    if ACADEMY_LEGACY_READ_ONLY:
+        raise HTTPException(409, "Учебные задания Академии архивированы. Для поручений используйте раздел «Задачи»")
 
 
 def can_manage_academy(user: User) -> bool:
@@ -23,6 +29,7 @@ async def require_academy(session: AsyncSession, user: User, member: Member) -> 
 
 
 def require_student(member: Member) -> None:
+    require_legacy_write()
     if not member.is_active or member.status != MEMBER_STATUS_ACTIVIST:
         raise HTTPException(409, "Задания Академии доступны действующим корпорантам")
 

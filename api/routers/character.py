@@ -22,6 +22,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, get_db
+from config import ACADEMY_LEGACY_READ_ONLY
 from api.routers.shop import SHOP_ITEMS, owned_outfit_ids
 from database.models import (
     EVENT_STATUS_CANCELLED,
@@ -264,7 +265,7 @@ async def _character_payload(session: AsyncSession, member: Member) -> dict:
 
     return {
         "legacy_quests": legacy_quests,
-        "academy_enabled": member.is_active and member.status == MEMBER_STATUS_ACTIVIST,
+        "academy_enabled": member.is_active and member.status == MEMBER_STATUS_ACTIVIST and not ACADEMY_LEGACY_READ_ONLY,
         "outfits": outfits,
         "active_outfit": active_outfit,
         "quests": quest_items,

@@ -15,6 +15,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from api.routers import (
     academy,
+    academy_materials,
     analytics,
     applications,
     articles,
@@ -165,6 +166,7 @@ for router in (
     vk_login.router,
     browser_login.router,
     academy.router,
+    academy_materials.router,
     context.router,
     applications.router,
     bureau.router,

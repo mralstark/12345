@@ -33,6 +33,8 @@ def _private_setting(name: str, default: str = "") -> str:
 BOT_TOKEN = _private_setting("BOT_TOKEN").strip()
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
+# Reversible retirement; historical rows and earned rewards remain intact.
+ACADEMY_LEGACY_READ_ONLY = os.getenv("ACADEMY_LEGACY_READ_ONLY", "1").strip() != "0"
 
 # Прокси для доступа к api.telegram.org, если он заблокирован напрямую.
 # Задаётся явно в .env, чтобы не зависеть от системных HTTP_PROXY/HTTPS_PROXY.
