@@ -135,8 +135,12 @@ async def migrate_database(source_url: str, target_url: str, source_storage: Pat
             if "data_encryption_state" in metadata.tables:
                 state = (await original.execute(text("SELECT schema_hash,canary FROM data_encryption_state WHERE id=1"))).first()
                 if state:
-                    if state.schema_hash != schema_hash() or decrypt_bytes(state.canary, "database-canary") != b"bratstvo-database-ready-v1":
+                    from database.encryption_state import previous_schema_hash
+                    if state.schema_hash not in {schema_hash(), previous_schema_hash()} or decrypt_bytes(state.canary, "database-canary") != b"bratstvo-database-ready-v1":
                         raise DataEncryptionError("Source encryption schema or key is unsupported")
+                    if state.schema_hash == previous_schema_hash() and "mentor_preparations" in metadata.tables:
+                        if (await original.execute(select(metadata.tables["mentor_preparations"]).limit(1))).first():
+                            raise DataEncryptionError("Unmarked preparation data requires manual review")
                     source_encrypted = True
             ordered, deferred = copy_order(tables)
             for name in ordered:

@@ -28,6 +28,7 @@ FIELDS = {
     "news_comments": "text",
     "member_quest_progress": "submitted_note assignment_note",
     "quest_activity": "note",
+    "mentor_preparations": "payload",
 }
 DATE_FIELDS = {"birth_date", "activist_joined_at", "member_inducted_at", "alumni_graduated_at"}
 

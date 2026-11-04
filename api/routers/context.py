@@ -129,6 +129,7 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
         "personal_status_label": personal_status_label,
         "academy_enabled": bool(member and member.is_active and member.status == MEMBER_STATUS_ACTIVIST) and not ACADEMY_LEGACY_READ_ONLY,
         "academy_materials_enabled": True,
+        "can_manage_preparation": can_manage_academy(user),
         "can_manage_academy": can_manage_academy(user) and not ACADEMY_LEGACY_READ_ONLY,
         # Подпись и область рассылки проверяются сервером по доступным регионам.
         "can_post_news": can_post_news(user),

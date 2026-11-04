@@ -1544,6 +1544,7 @@
       '<div class="btn-row">' +
       (editable ? '<button class="btn" id="mSave">Сохранить</button>' : '') +
       (member ? '<button class="btn btn--ghost" id="mTask" hidden>Поставить задачу</button>' : '') +
+      (member && member.status === 'activist' && state.me.can_manage_preparation ? '<button class="btn btn--ghost" id="mPreparation">Подготовка к менторству</button>' : '') +
       (member ? '<button class="btn btn--ghost" id="mPurchases">Покупки' +
         (member.has_unseen_purchases ? ' <span class="dot dot--alert"></span>' : '') + '</button>' : '') +
       (editable && member ? '<button class="btn btn--danger" id="mDelete">Исключить</button>' : '') +
@@ -1570,6 +1571,8 @@
         updateMilestoneFields();
 
         document.getElementById('mClose').onclick = closeModal;
+        const prepButton = document.getElementById('mPreparation');
+        if (prepButton) prepButton.onclick = () => prepInvite(member.id).catch(fail);
         if (member) {
           const taskButton = document.getElementById('mTask');
           api('/tasks/assignees?personal=false').then((people) => {
@@ -4091,11 +4094,11 @@
 
   // --- Академия: утверждённые материалы ----------------------------------------
   async function renderAcademy(gen) {
-    const section = state.academySection === 'vocabulary' ? 'vocabulary' : 'library';
+    const section = ['vocabulary','preparation'].includes(state.academySection) ? state.academySection : 'library';
     const focusedSection = document.activeElement && document.activeElement.dataset.academySection;
-    let books, vocabulary;
+    let books, vocabulary, preparation;
     try {
-      [books, vocabulary] = await Promise.all([api('/academy/books'), api('/academy/vocabulary')]);
+      [books, vocabulary, preparation] = await Promise.all([api('/academy/books'), api('/academy/vocabulary'), api('/academy/preparation/me').catch(error=>({item:null,can_manage:state.me.can_manage_preparation,error:error.message}))]);
     } catch (error) {
       if (error === STALE_RENDER) throw error;
       setView('<div class="card academy-empty" role="status"><h2>Материалы не загрузились</h2>' +
@@ -4113,13 +4116,19 @@
       '" aria-label="' + esc('Скачать PDF: ' + book.title) + '">Скачать PDF</button></article>').join('');
     const terms = vocabulary.items.map((item) => '<div class="academy-term"><dt>' + esc(item.term) +
       '</dt><dd>' + esc(item.definition) + '</dd></div>').join('');
-    setView('<div class="academy-layout"><p class="academy-intro">Книги и вокабуляр Академиста</p>' +
+    const hasPreparation = preparation.item || preparation.can_manage;
+    const sections = [['library','Библиотека'],['vocabulary','Вокабуляр']];
+    if (hasPreparation) sections.push(['preparation','Подготовка']);
+    if (section === 'preparation' && !hasPreparation) state.academySection = 'library';
+    const content = section === 'preparation' && hasPreparation ? '<div id="prepContent" class="stack"></div>' :
+      '<section class="card academy-materials" aria-label="' + (section === 'vocabulary' ? 'Вокабуляр Академиста' : 'Библиотека') + '">' +
+      (section === 'vocabulary' ? '<h2 class="academy-vocabulary-title">Вокабуляр Академиста</h2>' + (terms ? '<dl class="academy-vocabulary">' + terms + '</dl>' : empty) : (bookRows || empty)) + '</section>';
+    setView('<div class="academy-layout"><p class="academy-intro">Книги, вокабуляр и личное развитие</p>' +
       '<div class="chips academy-sections" aria-label="Разделы Академии">' +
-      [['library','Библиотека'],['vocabulary','Вокабуляр']].map(([id,label]) =>
+      sections.map(([id,label]) =>
         '<button type="button" class="chip' + (section === id ? ' chip--active' : '') + '" data-academy-section="' + id +
         '" aria-pressed="' + (section === id) + '">' + label + '</button>').join('') + '</div>' +
-      '<section class="card academy-materials" aria-label="' + (section === 'library' ? 'Библиотека' : 'Вокабуляр Академиста') + '">' +
-      (section === 'library' ? (bookRows || empty) : '<h2 class="academy-vocabulary-title">Вокабуляр Академиста</h2>' + (terms ? '<dl class="academy-vocabulary">' + terms + '</dl>' : empty)) + '</section></div>', gen);
+      content + '</div>', gen);
     on('[data-academy-section]', 'click', (event) => {
       state.academySection = event.currentTarget.dataset.academySection;
       startRender(renderAcademy);
@@ -4129,6 +4138,105 @@
       download('/academy/books/' + id + '/download', 'book.pdf').catch(fail);
     });
     if (focusedSection) document.querySelector('[data-academy-section="' + section + '"]').focus();
+    if (section === 'preparation' && hasPreparation) await renderPreparation(preparation, gen);
+  }
+
+  const prepDrafts = new Map(); // Unsaved text stays only in this session's memory.
+  const PREP_STEP_LABELS = {draft:'Черновик',submitted:'На проверке',changes:'Доработка',approved:'Принято'};
+  const PREP_ACTION_LABELS = {invited:'Приглашение',accept:'Участие подтверждено',pause:'Пауза',resume:'Подготовка продолжена',withdraw:'Участие завершено',draft:'Черновик сохранён',submit:'Ответ отправлен',approve:'Шаг принят',changes:'Возвращён на доработку',recommend:'Рекомендация',waitlist:'Ожидание места',reinvite:'Повторное приглашение'};
+  function prepBody(item, reviewing) {
+    const working = item.status === 'active' && item.eligible;
+    const reviewable = reviewing && item.can_review;
+    let actions = '';
+    if (!reviewing && item.eligible) {
+      if (item.status === 'invited') actions += '<button class="btn" data-prep-action="accept">Принять приглашение</button>';
+      if (item.status === 'paused') actions += '<button class="btn" data-prep-action="resume">Продолжить</button>';
+      if (['active','ready','recommended','waitlist'].includes(item.status)) actions += '<button class="btn btn--ghost" data-prep-action="pause">Взять паузу</button>';
+      if (item.status !== 'withdrawn') actions += '<button class="btn btn--ghost" data-prep-action="withdraw">Отказаться от участия</button>';
+    }
+    if (reviewable && item.eligible && ['ready','recommended','waitlist'].includes(item.status)) actions +=
+      '<div class="field prep-decision"><label for="prepDecision">Дальнейшие шаги и обратная связь</label><textarea id="prepDecision" maxlength="2000">' + esc(item.decision) + '</textarea></div>' +
+      '<button class="btn" data-prep-action="recommend">Рекомендовать к менторству</button><button class="btn btn--ghost" data-prep-action="waitlist">Ожидание места</button>';
+    if (reviewable && item.eligible && item.status === 'withdrawn') actions += '<div class="field prep-decision"><label for="prepDecision">Новое приглашение</label><textarea id="prepDecision" maxlength="2000"></textarea></div><button class="btn" data-prep-action="reinvite">Пригласить повторно</button>';
+    return '<div class="card prep-overview" data-prep-revision="' + item.revision + '"><h2>' + (reviewing ? esc(item.name) : 'Подготовка к менторству') + '</h2>' +
+      '<p class="prep-status">' + esc(item.status_label) + '</p><details class="prep-about"' + (item.status === 'invited' ? ' open' : '') + '><summary>О программе и приглашении</summary><p>Четыре шага с обратной связью: цель, план, практика и разбор результата. Темп можно обсудить с руководителем.</p>' +
+      '<p class="row__sub">Завершение подготовки не меняет статус в Братстве и не гарантирует место у наставника. Дальнейшее участие обсуждается лично.</p>' +
+      '<p class="prep-note">' + esc(item.invitation) + '</p></details>' +
+      '<div class="prep-progress" role="progressbar" aria-label="Принятые шаги" aria-valuemin="0" aria-valuemax="4" aria-valuenow="' + item.completed + '"><span style="width:' + (item.completed * 25) + '%"></span></div><p>' + item.completed + ' из 4 шагов принято</p>' +
+      (item.decision ? '<p class="prep-note">' + esc(item.decision) + '</p>' : '') +
+      (!item.eligible ? '<p>Участие сейчас недоступно. История сохранена.</p>' : '') + '<div class="btn-row prep-actions">' + actions + '</div></div>' +
+      item.steps.map((step,i) => {
+        const key = state.me.id + '/' + item.id + '/' + i;
+        const editable = !reviewing && working && step.open && ['draft','changes'].includes(step.status);
+        const feedback = reviewable && working && step.status === 'submitted';
+        return '<details class="card prep-step"' + (step.status === 'submitted' || step.status === 'changes' || (step.open && step.status !== 'approved') ? ' open' : '') + '><summary><span>' + (i+1) + '. ' + esc(step.title) + '</span><span class="prep-step__status">' + (step.open ? esc(PREP_STEP_LABELS[step.status]) : 'После предыдущего шага') + '</span></summary>' +
+          '<div class="prep-step__body"><p>' + esc(step.purpose) + '</p><p class="row__sub">' + esc(step.prompt) + '</p>' +
+          (step.feedback ? '<div class="prep-note"><strong>Обратная связь</strong><p>' + esc(step.feedback) + '</p></div>' : '') +
+          (editable ? '<div class="field"><label for="prepAnswer' + i + '">Ваш ответ</label><textarea id="prepAnswer' + i + '" maxlength="4000" rows="6" data-prep-draft="' + i + '">' + esc(prepDrafts.has(key) ? prepDrafts.get(key) : step.response) + '</textarea><p class="row__sub">Сохраните черновик, чтобы вернуться к нему после закрытия приложения.</p></div><div class="btn-row"><button class="btn btn--ghost" data-prep-action="draft" data-prep-step="' + i + '">Сохранить черновик</button><button class="btn" data-prep-action="submit" data-prep-step="' + i + '">На проверку</button></div>' : (step.response ? '<p class="prep-response">' + esc(step.response) + '</p>' : '')) +
+          (feedback ? '<div class="field"><label for="prepFeedback' + i + '">Обратная связь участнику</label><textarea id="prepFeedback' + i + '" maxlength="2000"></textarea></div><div class="btn-row"><button class="btn" data-prep-action="approve" data-prep-step="' + i + '">Принять шаг</button><button class="btn btn--ghost" data-prep-action="changes" data-prep-step="' + i + '">На доработку</button></div>' : '') + '</div></details>';
+      }).join('') +
+      '<details class="card prep-history"><summary>История подготовки</summary>' + item.history.slice().reverse().map(h=>'<p><strong>' + esc(PREP_ACTION_LABELS[h.action] || 'Изменение') + '</strong> · ' + esc(dateRu(h.at)) + (h.note ? '<br>' + esc(h.note) : '') + '</p>').join('') + '</details>';
+  }
+
+  function wirePreparation(item, reviewing, refresh) {
+    on('[data-prep-draft]', 'input', event => prepDrafts.set(state.me.id + '/' + item.id + '/' + event.currentTarget.dataset.prepDraft, event.currentTarget.value));
+    on('[data-prep-action]', 'click', async event => {
+      const button = event.currentTarget, action = button.dataset.prepAction;
+      const step = button.dataset.prepStep === undefined ? null : Number(button.dataset.prepStep);
+      const field = document.getElementById((reviewing ? 'prepFeedback' : 'prepAnswer') + step) || document.getElementById('prepDecision');
+      const perform = async () => {
+        try {
+          await api('/academy/preparation/' + item.id, {method:'POST',body:{revision:item.revision,action,step,text:field ? field.value : ''}});
+          if (step !== null) prepDrafts.delete(state.me.id + '/' + item.id + '/' + step);
+          toast(action === 'draft' ? 'Черновик сохранён' : 'Изменения сохранены');
+          await refresh();
+        } catch(error) { fail(error); }
+      };
+      if (action === 'withdraw') { confirmAction({title:'Завершить участие?',body:'Ответы и обратная связь сохранятся. Вернуться можно будет по новому приглашению.',confirmLabel:'Завершить участие'},perform); }
+      else await perform();
+    });
+  }
+
+  async function prepDetail(id) {
+    const item = await api('/academy/preparation/' + id);
+    modal('Подготовка участника', prepBody(item,true) + '<button class="btn btn--ghost" id="prepClose">Закрыть</button>', () => {
+      document.getElementById('prepClose').onclick = closeModal;
+      wirePreparation(item,true,async()=>{closeModal();startRender(renderAcademy);await prepDetail(id);});
+    });
+  }
+
+  async function prepInvite(memberId) {
+    const regions = state.me.regions || [];
+    if (!regions.length) { toast('Нет доступных регионов'); return; }
+    modal('Пригласить на подготовку', '<div class="field"><label for="prepRegion">Регион</label><select id="prepRegion">' + regions.map(r=>'<option value="'+r.id+'"'+(r.id===state.regionId?' selected':'')+'>'+esc(r.name)+'</option>').join('') + '</select></div>' +
+      (!memberId ? '<div class="field"><label for="prepCandidate">Корпорант</label><select id="prepCandidate" disabled><option>Загрузка…</option></select></div>' : '') +
+      '<div class="field"><label for="prepInvitation">Зачем приглашаете и к кому обращаться</label><textarea id="prepInvitation" maxlength="2000"></textarea></div><p class="row__sub">Участник сам решит, принимать ли приглашение.</p><div class="btn-row"><button class="btn" id="prepInviteSave">Пригласить</button><button class="btn btn--ghost" id="prepInviteCancel">Отмена</button></div>', () => {
+        const region=document.getElementById('prepRegion'), candidate=document.getElementById('prepCandidate'), save=document.getElementById('prepInviteSave');
+        let generation=0;
+        const load=async()=>{if(!candidate)return;const n=++generation;candidate.disabled=true;save.disabled=true;try{const data=await api('/academy/preparation/candidates?region_id='+region.value);if(n!==generation||!candidate.isConnected)return;candidate.innerHTML=data.items.length ? data.items.map(m=>'<option value="'+m.id+'">'+esc(m.name)+'</option>').join('') : '<option value="">Нет доступных корпорантов</option>';candidate.disabled=!data.items.length;save.disabled=!data.items.length;}catch(error){fail(error);}};
+        region.onchange=load;load();
+        if(memberId)region.closest('.field').hidden=true;
+        document.getElementById('prepInviteCancel').onclick=closeModal;
+        save.onclick=async()=>{save.disabled=true;try{await api('/academy/preparation/invite',{method:'POST',body:{member_id:memberId||Number(candidate.value),note:document.getElementById('prepInvitation').value.trim()}});closeModal();toast('Приглашение отправлено');state.academySection='preparation';state.tab='character';renderTabs();renderTab();}catch(error){save.disabled=false;fail(error);}};
+      });
+  }
+
+  async function renderPreparation(data, gen) {
+    const root=document.getElementById('prepContent');
+    if(data.error){root.innerHTML='<div class="card academy-empty"><h2>Подготовка не загрузилась</h2><p>'+esc(data.error)+'</p><button class="btn" id="prepRetry">Повторить</button></div>';document.getElementById('prepRetry').onclick=()=>startRender(renderAcademy);return;}
+    if (data.can_manage && (state.cabinetMode!=='personal' || !data.item)) {
+      const offset=state.prepOffset||0;
+      const list=await api('/academy/preparation/participants?offset='+offset);
+      if(gen!==viewGen)throw STALE_RENDER;
+      root.innerHTML='<div class="card prep-overview"><h2>Подготовка к менторству</h2><p>Пригласите корпорантов, для которых готовы организовать обратную связь. Программа доступна после их согласия.</p><button class="btn" id="prepInvite">Пригласить корпоранта</button></div>' +
+        '<div class="card prep-roster">'+(list.items.length?list.items.map(i=>'<button class="prep-person" data-prep-person="'+i.id+'"><span><strong>'+esc(i.name)+'</strong><span>'+esc(i.status_label)+' · '+i.completed+'/4 принято'+(i.pending?' · На проверке: '+i.pending:'')+'</span></span><span aria-hidden="true">›</span></button>').join(''):'<div class="academy-empty"><h2>Участников пока нет</h2><p>Приглашайте только тех, кому сможете уделять внимание. Библиотека и вокабуляр остаются доступны всем.</p></div>')+'</div><div class="btn-row">'+(offset?'<button class="btn btn--ghost" id="prepPrev">Предыдущие</button>':'')+(list.has_more?'<button class="btn btn--ghost" id="prepNext">Следующие</button>':'')+'</div>';
+      document.getElementById('prepInvite').onclick=()=>prepInvite().catch(fail);
+      on('[data-prep-person]','click',e=>prepDetail(Number(e.currentTarget.dataset.prepPerson)).catch(fail));
+      for(const [id,value] of [['prepPrev',offset-50],['prepNext',offset+50]]){const button=document.getElementById(id);if(button)button.onclick=()=>{state.prepOffset=value;startRender(renderAcademy);};}
+    } else if(data.item) {
+      root.innerHTML=prepBody(data.item,false);
+      wirePreparation(data.item,false,async()=>startRender(renderAcademy));
+    }
   }
 
   // --- Прежние достижения и награды: данные сохранены ---------------------------
