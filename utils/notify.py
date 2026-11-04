@@ -6,6 +6,8 @@
 пользуются одним и тем же токеном и разными HTTP-сессиями.
 """
 
+from utils.data_crypto import private_log_ref
+
 import asyncio
 import html
 import logging
@@ -107,11 +109,11 @@ async def notify_telegram(
             if attempt < retries:
                 logger.warning(
                     "Сетевой сбой при отправке уведомления %s (попытка %s/%s): %s",
-                    telegram_id, attempt + 1, retries + 1, exc,
+                    private_log_ref(telegram_id), attempt + 1, retries + 1, type(exc).__name__,
                 )
                 await asyncio.sleep(retry_delay)
                 continue
-            logger.warning("Не удалось отправить уведомление %s: %s", telegram_id, exc)
+            logger.warning("Не удалось отправить уведомление %s: %s", private_log_ref(telegram_id), type(exc).__name__)
             return None
         except TelegramBadRequest as exc:
             # Отказ по содержимому: повторять то же самое бессмысленно, а вот
@@ -119,7 +121,7 @@ async def notify_telegram(
             if fallback_text is not None and fallback_text != text:
                 logger.warning(
                     "Telegram не принял сообщение для %s (%s) — шлю упрощённый вариант",
-                    telegram_id, exc,
+                    private_log_ref(telegram_id), type(exc).__name__,
                 )
                 return await notify_telegram(
                     telegram_id, fallback_text, bot=bot, reply_markup=reply_markup,
@@ -128,16 +130,16 @@ async def notify_telegram(
             if parse_mode is not None:
                 logger.warning(
                     "Telegram не принял HTML-сообщение для %s (%s) — шлю его как обычный текст",
-                    telegram_id, exc,
+                    private_log_ref(telegram_id), type(exc).__name__,
                 )
                 return await notify_telegram(
                     telegram_id, text, bot=bot, reply_markup=reply_markup,
                     retries=retries, retry_delay=retry_delay, parse_mode=None,
                 )
-            logger.warning("Не удалось отправить уведомление %s: %s", telegram_id, exc)
+            logger.warning("Не удалось отправить уведомление %s: %s", private_log_ref(telegram_id), type(exc).__name__)
             return None
         except TelegramAPIError as exc:
-            logger.warning("Не удалось отправить уведомление %s: %s", telegram_id, exc)
+            logger.warning("Не удалось отправить уведомление %s: %s", private_log_ref(telegram_id), type(exc).__name__)
             return None
     return None
 

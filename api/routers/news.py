@@ -5,6 +5,7 @@
 """
 
 import logging
+from utils.data_crypto import private_log_ref
 from html import escape
 
 from aiogram.exceptions import TelegramAPIError
@@ -18,10 +19,12 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from utils.private_files import private_file_response
 
 from api.auth import get_current_user, get_db
 from config import STORAGE_DIR, WEBAPP_URL
@@ -344,7 +347,7 @@ async def photo(
     photo_id: int,
     t: str = "",
     session: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     """Отдаём по подписи из ссылки, а не по заголовку авторизации: запрос
     делает тег <img>, и заголовок из api() к нему не прикрепляется (см.
     services/news.py::photo_token). Право на просмотр проверено раньше — в
@@ -359,7 +362,7 @@ async def photo(
     path = (STORAGE_DIR / item.stored_path).resolve()
     if not path.is_file() or STORAGE_DIR.resolve() not in path.parents:
         raise HTTPException(404, "Файл не найден")
-    return FileResponse(
+    return await private_file_response(
         path,
         media_type=item.content_type or "image/jpeg",
         filename=item.original_name,
@@ -486,7 +489,7 @@ async def _mark_notifications_deleted(byline: str, messages: list) -> None:
         except TelegramAPIError as exc:
             # Человек мог сам удалить сообщение или заблокировать бота —
             # это не повод считать удаление новости неудавшимся.
-            logger.warning("Не удалось пометить уведомление %s/%s: %s", chat_id, message_id, exc)
+            logger.warning("Не удалось пометить уведомление %s/%s: %s", private_log_ref(chat_id), message_id, type(exc).__name__)
 
 
 @router.delete("/{post_id}")

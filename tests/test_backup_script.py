@@ -22,7 +22,7 @@ def backup_fixture(tmp_path):
     (app / ".venv" / "bin").mkdir(parents=True)
     (app / ".venv" / "bin" / "python").symlink_to(sys.executable)
     (app / "config.py").write_text(
-        "import os\nfrom pathlib import Path\nSTORAGE_DIR=Path(os.environ['STORAGE_DIR'])\n"
+        "import os\nfrom pathlib import Path\nSTORAGE_DIR=Path(os.environ['STORAGE_DIR'])\nDATABASE_URL='postgresql+asyncpg://test:fixture@127.0.0.1/bratstvo_encrypted_test'\n"
     )
     (app / ".env").write_text("SYNTHETIC_SETTING=fixture-only\n")
     storage = tmp_path / "custom uploads"
@@ -34,11 +34,12 @@ def backup_fixture(tmp_path):
     commands.mkdir()
     # No PostgreSQL server or production credentials: only pg_dump is replaced.
     fake_sudo = commands / "sudo"
-    fake_sudo.write_text("#!/bin/sh\nprintf synthetic-pg-dump\n")
+    fake_sudo.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$DUMP_ARG_LOG\"\nprintf synthetic-pg-dump\n")
     fake_sudo.chmod(0o700)
     key = tmp_path / "key"
     key.write_text("synthetic-backup-key-for-tests-only")
     return dict(os.environ, APP_DIR=str(app), STORAGE_DIR=str(storage),
+                DUMP_ARG_LOG=str(tmp_path / "dump-args.txt"),
                 BACKUP_DIR=str(tmp_path / "backups"), BACKUP_KEY_FILE=str(key),
                 BACKUP_REMOTE_DIR=str(tmp_path / "offsite"),
                 PATH=str(commands) + os.pathsep + os.environ["PATH"])
@@ -54,6 +55,7 @@ def test_custom_storage_round_trip_keeps_restore_layout_and_private_modes(tmp_pa
     remote.mkdir()
     result = run_backup(env)
     assert result.returncode == 0, result.stderr.decode()
+    assert "bratstvo_encrypted_test" in (tmp_path / "dump-args.txt").read_text()
     archives = list(Path(env["BACKUP_DIR"]).glob("*.tar.gz.enc"))
     assert len(archives) == 1
     archive = archives[0]

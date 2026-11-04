@@ -24,3 +24,6 @@ reportlab>=4.2
 # файл ложился на диск ровно таким, каким пришёл с телефона: снимок на 3,8 МБ
 # ехал к читателю целиком ради картинки шириной в 350 точек.
 Pillow>=13.0.0,<14
+
+# Authenticated field/file encryption with nonce-misuse-resistant AES-SIV.
+cryptography>=50.0.2,<51

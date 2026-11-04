@@ -304,6 +304,7 @@ async def test_allowed_publication_signatures_remain_available(client, world, ro
 async def test_export_formats_roundtrip_with_unicode_name(client, world, tmp_path, monkeypatch, suffix):
     from services import report_downloads as exports
     monkeypatch.setattr(exports, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("utils.private_files.STORAGE_DIR", tmp_path)
     ticket = await exports.save_export(b"synthetic export", world["leader_moscow"].id, world["moscow"].id,
                                       suffix, "Отчёт." + suffix)
     file_id = exports.decode_ticket(ticket)["file"]
@@ -332,6 +333,7 @@ def test_export_boundary_rejects_traversal(tmp_path, monkeypatch, filename):
     from fastapi import HTTPException
     from services import report_downloads as exports
     monkeypatch.setattr(exports, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("utils.private_files.STORAGE_DIR", tmp_path)
     with pytest.raises(HTTPException):
         exports.export_path(filename)
 
@@ -339,6 +341,7 @@ def test_export_boundary_rejects_traversal(tmp_path, monkeypatch, filename):
 async def test_export_boundary_rejects_outside_symlink(client, world, tmp_path, monkeypatch):
     from services import report_downloads as exports
     monkeypatch.setattr(exports, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("utils.private_files.STORAGE_DIR", tmp_path)
     ticket = await exports.save_export(b"safe", world["leader_moscow"].id, world["moscow"].id, "txt", "display.txt")
     file_id = exports.decode_ticket(ticket)["file"]
     path = exports.export_path(file_id)

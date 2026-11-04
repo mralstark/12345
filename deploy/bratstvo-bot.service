@@ -8,6 +8,7 @@ Type=simple
 User=bratstvo
 Group=bratstvo
 WorkingDirectory=/opt/bratstvo
+LoadCredential=data-keyring:/run/bratstvo-keys/data-keyring.json
 StateDirectory=bratstvo-bot
 StateDirectoryMode=0700
 # .env читает сам python-dotenv из WorkingDirectory — EnvironmentFile не нужен.
@@ -16,6 +17,8 @@ Restart=always
 RestartSec=5
 # Сервер может быть общим: предел памяти не даёт нам утащить за собой соседей.
 MemoryMax=350M
+MemorySwapMax=0
+LimitCORE=0
 StandardOutput=journal
 StandardError=journal
 

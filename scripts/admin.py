@@ -28,7 +28,7 @@ import sys
 from sqlalchemy import delete, func, select
 
 from config import BOT_PROXY_URL, BOT_TOKEN
-from database.db import async_session, init_db
+from database.db import async_session, init_db, check_database_encryption
 from database.models import (
     ROLE_CELL_LEADER,
     ROLE_COORDINATOR,
@@ -180,8 +180,8 @@ async def cmd_cell_add(region_name: str, name: str, genitive: str | None, vk_url
 
 async def cmd_users() -> None:
     async with async_session() as session:
-        result = await session.execute(select(User).order_by(User.role, User.full_name))
-        users = list(result.scalars().all())
+        result = await session.execute(select(User).order_by(User.role, User.id))
+        users = sorted(result.scalars().all(), key=lambda u: (u.role, u.full_name.casefold(), u.id))
         if not users:
             print("Пользователей пока нет.")
             return
@@ -304,9 +304,8 @@ async def cmd_members_search(region_name: str | None, query: str) -> None:
                 print(f"Регион «{region_name}» не найден.")
                 return
             stmt = stmt.where(Member.region_id == region_obj.id)
-        if query:
-            stmt = stmt.where(Member.full_name.ilike(f"%{query}%"))
-        members = list((await session.execute(stmt.order_by(Member.full_name).limit(30))).scalars().all())
+        members = sorted((await session.execute(stmt.order_by(Member.id))).scalars().all(), key=lambda m: (m.full_name.casefold(), m.id))
+        members = [m for m in members if not query or query.casefold() in m.full_name.casefold()][:30]
         if not members:
             print("Никого не найдено.")
             return
@@ -503,6 +502,7 @@ def build_parser() -> argparse.ArgumentParser:
 async def main() -> None:
     args = build_parser().parse_args()
     await init_db()
+    await check_database_encryption()
 
     if args.command == "regions":
         await cmd_regions()

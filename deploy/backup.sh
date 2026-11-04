@@ -44,7 +44,23 @@ umask 077
 work_dir=$(mktemp -d "$BACKUP_DIR/.work.XXXXXXXX")
 trap 'rm -rf -- "$work_dir"' EXIT
 
-sudo -u postgres pg_dump --format=custom bratstvo > "$work_dir/database.dump"
+database_config=$(
+    cd -- "$APP_DIR" || exit 1
+    .venv/bin/python - <<'PY'
+import re
+from urllib.parse import unquote, urlsplit
+from config import DATABASE_URL
+value = urlsplit(DATABASE_URL)
+name = unquote(value.path.removeprefix('/'))
+if value.scheme not in {'postgresql', 'postgresql+asyncpg'} or value.hostname not in {'localhost', '127.0.0.1', '::1'}:
+    raise SystemExit('This backup entry point requires the configured local PostgreSQL database')
+if not re.fullmatch(r'[a-zA-Z0-9_]{1,63}', name):
+    raise SystemExit('Unsupported local PostgreSQL database name')
+print(name, value.port or 5432)
+PY
+)
+read -r database_name database_port <<< "$database_config"
+sudo -u postgres pg_dump --format=custom --port "$database_port" --dbname "$database_name" > "$work_dir/database.dump"
 tar czf "$work_dir/storage.tar.gz" --transform='flags=rh;s,^\.,storage,' -C "$storage_dir" .
 install -m 600 "$APP_DIR/.env" "$work_dir/application.env"
 

@@ -164,7 +164,7 @@ async def search_members(
     cell = await actor_cell(session, user)
     if cell is not None:
         stmt = stmt.where(Member.cell_id == cell.id)
-    rows = list((await session.execute(stmt.order_by(Member.full_name).limit(200))).scalars().all())
+    rows = sorted((await session.execute(stmt.order_by(Member.id))).scalars().all(), key=lambda m: (m.full_name.casefold(), m.id))[:200]
     matches = [m for m in rows if needle in m.full_name.lower()][:15]
 
     existing_ids = {
@@ -203,8 +203,8 @@ async def list_members(
     if status:
         stmt = stmt.where(Member.status == _validate_status(status))
 
-    result = await session.execute(stmt.order_by(Member.full_name).limit(1_000))
-    rows = list(result.all())
+    result = await session.execute(stmt.order_by(Member.id))
+    rows = sorted(result.all(), key=lambda row: (row[0].full_name.casefold(), row[0].id))[:1_000]
 
     if q:
         # Регистронезависимый поиск считаем в Python: встроенный lower() в SQLite

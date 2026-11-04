@@ -128,9 +128,9 @@ async def test_reject_does_not_create_member(session, world, application):
 
     assert result.state == APPLICATION_STATE_REJECTED
     members = (
-        await session.execute(select(Member).where(Member.full_name == application.full_name))
+        await session.execute(select(Member))
     ).scalars().all()
-    assert members == []
+    assert [m for m in members if m.full_name == application.full_name] == []
 
     users = (await session.execute(select(User).where(User.telegram_id == 777001))).scalars().all()
     assert users == []

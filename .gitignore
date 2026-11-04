@@ -3,6 +3,8 @@
 !.env.example
 *.pem
 *.key
+*keyring*.json
+.bratstvo-keys/
 *.p12
 *.pfx
 *.db

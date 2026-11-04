@@ -1,5 +1,6 @@
 """Модуль «Документы» (ТЗ §9): файлы лежат на диске сервера, в БД — метаданные."""
 
+import asyncio
 import re
 import uuid
 import zipfile
@@ -8,9 +9,11 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from utils.private_files import private_file_response, write_private_file
 
 from api.auth import get_current_user, get_db
 from api.serializers import document_dict
@@ -192,7 +195,7 @@ async def upload_document(
 
     target = STORAGE_DIR / relative_path
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(payload)
+    await asyncio.to_thread(write_private_file, target, payload)
 
     document = Document(
         region_id=region_id,
@@ -211,12 +214,7 @@ async def upload_document(
     return document_dict(document, author_name=user.full_name)
 
 
-@router.get("/{document_id}/download")
-async def download_document(
-    document_id: int,
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db),
-) -> FileResponse:
+async def authorized_document(document_id: int, user: User, session: AsyncSession) -> tuple[Document, Path]:
     document = await session.get(Document, document_id)
     if document is None:
         raise HTTPException(404, "Документ не найден")
@@ -225,8 +223,17 @@ async def download_document(
     path = (STORAGE_DIR / document.stored_path).resolve()
     if not path.is_file() or STORAGE_DIR.resolve() not in path.parents:
         raise HTTPException(404, "Файл отсутствует на диске")
+    return document, path
 
-    return FileResponse(
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    document, path = await authorized_document(document_id, user, session)
+    return await private_file_response(
         path,
         filename=document.original_name,
         media_type=document.content_type or "application/octet-stream",

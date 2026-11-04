@@ -11,6 +11,8 @@ Type=simple
 User=bratstvo
 Group=bratstvo
 WorkingDirectory=/opt/bratstvo
+# Operator unlocks the key into RAM after a host reboot; never back it up here.
+LoadCredential=data-keyring:/run/bratstvo-keys/data-keyring.json
 # Порт не открываем сами, а принимаем от systemd готовым (дескриптор 3):
 # так перезапуск не рвёт соединения. Адрес и порт заданы в bratstvo-api.socket.
 # Nginx logs requests without query strings. Uvicorn's duplicate access log
@@ -22,6 +24,8 @@ RestartSec=5
 # A bounded decoder handles one photo (up to 25 MP) at a time. Its transient
 # EXIF/resize buffers must fit alongside the API; 350M killed valid phone uploads.
 MemoryMax=768M
+MemorySwapMax=0
+LimitCORE=0
 StandardOutput=journal
 StandardError=journal
 

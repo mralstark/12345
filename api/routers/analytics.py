@@ -52,17 +52,17 @@ async def regions_dashboard(
         members_map.setdefault(region_id, {})[status] = count
 
     new_members_result = await session.execute(
-        select(Member.region_id, func.count(Member.id))
+        select(Member.region_id, Member.activist_joined_at)
         .where(
             Member.region_id.in_(region_ids),
             Member.is_active.is_(True),
             Member.activist_joined_at.is_not(None),
-            Member.activist_joined_at >= start,
-            Member.activist_joined_at <= end,
         )
-        .group_by(Member.region_id)
     )
-    new_members_map = dict(new_members_result.all())
+    new_members_map: dict[int, int] = {}
+    for region_id, joined in new_members_result.all():
+        if start <= joined <= end:
+            new_members_map[region_id] = new_members_map.get(region_id, 0) + 1
 
     events_result = await session.execute(
         select(Event.region_id, func.count(Event.id))
