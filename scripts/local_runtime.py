@@ -199,7 +199,7 @@ class Supervisor:
 
     def api(self):
         self.launch('api', [str(self.python), '-m', 'uvicorn', 'api.main:app', '--host', '127.0.0.1', '--port', '8000',
-                            '--proxy-headers', '--forwarded-allow-ips', '127.0.0.1'], self.env)
+                            '--proxy-headers', '--forwarded-allow-ips', '127.0.0.1', '--no-access-log'], self.env)
 
     def bot(self):
         self.launch('bot', [str(self.python), self.config['bot_script']], self.env)
@@ -272,6 +272,7 @@ class Supervisor:
                     self.save()
                 except Exception as error:
                     # No cascading shutdown and no raw exceptions/credentials in state.
+                    self.state.update(local_ready=False, public_ready=False)
                     self.record('supervisor_' + type(error).__name__)
                     self.state['phase'] = 'degraded'; self.save()
                 self.pause(10)

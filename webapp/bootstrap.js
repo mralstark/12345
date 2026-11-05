@@ -27,13 +27,15 @@
 
   (async () => {
     if (vk) {
-      await load(script.dataset.vkBridge || '/static/vendor/vk-bridge.min.js', 15000);
-      await load(script.dataset.vk || '/static/vk-platform.js', 15000);
+      await load(script.dataset.vkBridge || '/static/vendor/vk-bridge.min.js', 90000);
+      await load(script.dataset.vk || '/static/vk-platform.js', 90000);
       await window.CabinetVK.initialize();
     }
     if (embedded) await load('https://telegram.org/js/telegram-web-app.js', 8000);
-    await load(articles, 15000);
-    await load(app, 15000);
+    // A temporary tunnel or a slow mobile connection may need more than 15s.
+    // Keep a finite timeout and the existing explicit retry screen.
+    await load(articles, 90000);
+    await load(app, 90000);
   })().catch(() => {
     const view = document.getElementById('view');
     if (!view) return;

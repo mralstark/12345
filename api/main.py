@@ -44,6 +44,7 @@ from api.routers import (
     vk_mini,
 )
 from api.idempotency import idempotency_store
+from api.static_compression import PublicAssetCompression
 from config import (
     ALLOWED_HOSTS,
     BASE_DIR,
@@ -83,6 +84,7 @@ app = FastAPI(
     redoc_url=None if IS_PRODUCTION else "/redoc",
     openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
+app.add_middleware(PublicAssetCompression)
 
 if ALLOWED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(ALLOWED_HOSTS))
