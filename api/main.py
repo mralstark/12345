@@ -44,6 +44,7 @@ from api.routers import (
     vk_mini,
 )
 from api.idempotency import idempotency_store
+from api.static_compression import PublicAssetCompression
 from config import (
     ALLOWED_HOSTS,
     BASE_DIR,
@@ -83,6 +84,7 @@ app = FastAPI(
     redoc_url=None if IS_PRODUCTION else "/redoc",
     openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
+app.add_middleware(PublicAssetCompression)
 
 if ALLOWED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(ALLOWED_HOSTS))
@@ -198,6 +200,15 @@ for router in (
 @app.get("/healthz")
 async def healthz() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readyz() -> JSONResponse:
+    from api.readiness import ready
+    available = await ready()
+    return JSONResponse({"status": "ok" if available else "unavailable"},
+                        status_code=200 if available else 503,
+                        headers={"Cache-Control": "no-store"})
 
 
 def _asset_version(name: str) -> int:
