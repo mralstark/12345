@@ -200,6 +200,15 @@ async def healthz() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/readyz")
+async def readyz() -> JSONResponse:
+    from api.readiness import ready
+    available = await ready()
+    return JSONResponse({"status": "ok" if available else "unavailable"},
+                        status_code=200 if available else 503,
+                        headers={"Cache-Control": "no-store"})
+
+
 def _asset_version(name: str) -> int:
     return int((WEBAPP_DIR / name).stat().st_mtime)
 
