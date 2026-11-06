@@ -194,10 +194,10 @@
 :root,
 [data-theme="dark"] {
   --font-reading: "Roboto", system-ui, sans-serif;
-  --bg: #0e1416;
-  --secondary-bg: #1b2427;
+  --bg: #101010;
+  --secondary-bg: #1c1c1c;
   --text: #f3efe7;
-  --hint: #b5bfbc;
+  --hint: #b9b9b6;
   --link: #d9b57b;
   --button: #d9b57b;
   --button-text: #201a12;
@@ -206,20 +206,20 @@
   --alert: #b74336;
   --success: #95c6a4;
   --radius: 22px;
-  --border: rgba(235, 240, 233, .11);
-  --surface: #1b2427;
-  --surface-raised: #293235;
-  --field-bg: #121b1f;
+  --border: rgba(255, 255, 255, .11);
+  --surface: #1c1c1c;
+  --surface-raised: #292929;
+  --field-bg: #141414;
   --accent-soft: rgba(217, 181, 123, .11);
   --danger-bg: #542f2a;
   --success-bg: #233d2c;
-  --nav-bg: #172023;
+  --nav-bg: #181818;
   --rule-strong: rgba(243, 239, 231, .20);
-  --glass-panel: rgba(22, 32, 38, .48);
-  --glass-chrome: rgba(19, 28, 34, .64);
-  --glass-highlight: rgba(244, 249, 255, .12);
-  --glass-edge: rgba(235, 245, 255, .20);
-  --panel-shadow: 0 16px 40px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 -1px 0 rgba(0, 0, 0, .15);
+  --glass-panel: rgba(28, 28, 28, .48);
+  --glass-chrome: rgba(22, 22, 22, .72);
+  --glass-dialog: rgba(24, 24, 24, .86);
+  --glass-edge: rgba(255, 255, 255, .13);
+  --panel-shadow: none;
   color-scheme: dark;
 }
 
@@ -247,7 +247,7 @@
   --rule-strong: rgba(32, 29, 25, .26);
   --glass-panel: rgba(255, 255, 255, .9);
   --glass-chrome: rgba(245, 241, 233, .92);
-  --glass-highlight: rgba(255, 255, 255, .2);
+  --glass-dialog: rgba(250, 250, 250, .90);
   --glass-edge: rgba(32, 29, 25, .16);
   --panel-shadow: 0 8px 28px rgba(32, 29, 25, .05);
   color-scheme: light;
@@ -317,8 +317,8 @@ body {
   isolation: isolate;
 }
 
-/* Original matte stone texture, hosted locally. Quiet light fields keep the gold
-   mineral veins subordinate to the content; the panels supply the optical blur. */
+/* Local neutral stone texture. Gold belongs to actions and selection;
+   the background stays graphite and panels supply the optical blur. */
 html { background: var(--bg); scroll-padding-top: 120px; }
 body::before {
   content: "";
@@ -326,18 +326,16 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-color: #111b22;
-  background-image:
-    radial-gradient(ellipse at 98% 4%, rgba(190, 145, 83, .16), transparent 58%),
-    radial-gradient(ellipse at 0% 85%, rgba(48, 112, 135, .16), transparent 62%),
-    url("/static/backgrounds/obsidian-gold-v1.jpg");
+  background-color: #141414;
+  background-image: url("/static/backgrounds/obsidian-gold-v1.jpg");
+  filter: grayscale(1) brightness(.85);
   background-size: cover;
   background-position: 72% center;
   background-repeat: no-repeat;
 }
 [data-theme="light"] body::before, body[data-theme="light"]::before {
-  background: radial-gradient(ellipse at 100% 5%, rgba(217, 181, 123, .22), transparent 60%),
-              radial-gradient(ellipse at 0% 85%, rgba(103, 158, 175, .16), transparent 65%);
+  background: #eeeeec;
+  filter: none;
 }
 .screen-heading { padding: 4px 0 8px; }
 .skip-link { position: fixed; top: 12px; left: 16px; z-index: 110; padding: 12px 20px; border-radius: 12px; background: var(--button); color: var(--button-text); transform: translateY(-180%); }
@@ -922,7 +920,7 @@ body::before {
   border: 1px solid transparent;
   border-radius: 14px;
   background: var(--button);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+  box-shadow: none;
   color: var(--button-text);
   font-size: 15px;
   font-weight: 500;
@@ -1173,7 +1171,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
      и «а», и плашка превращалась в две строки поперёк. */
   white-space: nowrap;
 }
-.badge--new { background: rgba(126, 170, 214, .13); color: #abcbed; }
+.badge--new { background: rgba(255, 255, 255, .10); color: var(--text); }
 .badge--in_progress { background: var(--accent-soft); color: var(--accent); }
 .badge--review { background: rgba(217,181,123,.2); color: var(--accent); }
 .badge--done { background: var(--success-bg); color: var(--success); }
@@ -2257,7 +2255,7 @@ textarea {
 }
 .quest-description { margin-top: var(--space-4); line-height: 1.4; }
 .quest-review { margin-top: var(--space-8); padding: var(--space-8) var(--space-12); border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 13px; line-height: 1.4; }
-.quest-assigned { margin-top: var(--space-8); padding: var(--space-8) var(--space-12); border-radius: 10px; background: rgba(95,134,181,.13); color: #9fc5ed; font-size: 13px; line-height: 1.4; }
+.quest-assigned { margin-top: var(--space-8); padding: var(--space-8) var(--space-12); border-radius: 10px; background: rgba(255,255,255,.08); color: var(--text); font-size: 13px; line-height: 1.4; }
 
 .hero-card { margin-bottom: 0; padding: var(--space-32); border: 1px solid var(--border); border-radius: 24px; background: var(--surface); box-shadow: var(--panel-shadow); }
 .hero-card h2 { margin: var(--space-8) 0 var(--space-12);
@@ -2555,8 +2553,8 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .article-remove-photo { display:block; margin:10px auto 0; padding:8px 12px; min-height:36px; border:1px solid var(--rule-strong); border-radius:8px; background:transparent; color:var(--hint); font:inherit; font-size:12px; line-height:1.4; cursor:pointer; }
 .article-remove-photo:hover, .article-remove-photo:focus-visible { color:var(--danger); border-color:var(--danger); }
 .article-media-hint { color:var(--hint); font-size:12px; line-height:1.7; margin:24px 0; overflow-wrap:anywhere; }
-.btn--vk { background:#0077ff; color:#fff; border-color:#0077ff; }
-.btn--vk:hover { background:#0069e6; border-color:#0069e6; }
+.btn--vk { background:var(--surface-raised); color:var(--text); border-color:var(--border); }
+.btn--vk:hover { background:var(--field-bg); border-color:var(--accent); }
 .browser-login { width:min(100%,480px); margin:clamp(24px,10vh,100px) auto; box-sizing:border-box; }
 .browser-login__brand { display: grid; justify-items: start; gap: 24px; padding: 4px 0 12px; }
 .browser-login__brand img { object-fit: contain; opacity: .9; }
@@ -2616,26 +2614,25 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 .account-pair__result:not(:empty) { margin-top: 16px; }
 
 
-/* Optical depth comes from the backdrop, a bright rim and a shaded lower edge.
-   One blur layer per panel; nested cards and form controls stay inexpensive. */
+/* Flat translucent graphite: depth comes from background blur, without
+   simulated reflections or highlighted edges. One blur layer per panel. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .card, .post, .stat, .hero-card, .compose {
-    background: linear-gradient(135deg, var(--glass-highlight), transparent 42%),
-                linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, .08)), var(--glass-panel);
+    background: var(--glass-panel);
     border-color: var(--glass-edge);
     box-shadow: var(--panel-shadow);
-    -webkit-backdrop-filter: blur(22px) saturate(150%);
-    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
   }
   .card .card, .modal .card { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--field-bg); box-shadow: none; }
   .topbar, .bottom-nav, .modal {
-    background: linear-gradient(120deg, var(--glass-highlight), transparent 55%), var(--glass-chrome);
+    background: var(--glass-chrome);
     border-color: var(--glass-edge);
-    -webkit-backdrop-filter: blur(26px) saturate(150%);
-    backdrop-filter: blur(26px) saturate(150%);
+    -webkit-backdrop-filter: blur(26px);
+    backdrop-filter: blur(26px);
   }
   .bottom-nav, .modal { box-shadow: var(--panel-shadow); }
-  .modal { background-color: var(--surface); }
+  .modal { background: var(--glass-dialog); }
   .modal__header { background: var(--glass-chrome); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 }
 @media (min-width: 900px) {
