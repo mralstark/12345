@@ -78,7 +78,7 @@ def export_path(file_id: str) -> Path:
 async def save_export(payload: bytes, user_id: int, region_id: int, format: str, filename: str,
                       *, kind: str = "report", cell_id: int | None = None,
                       document_id: int | None = None, book_id: int | None = None,
-                      book_revision: str | None = None) -> str:
+                      book_revision: str | None = None, region_ids: list[int] | None = None) -> str:
     if not isinstance(format, str) or format not in _FORMATS:
         raise HTTPException(400, "Формат файла не поддерживается")
     suffix = _FORMATS[format]
@@ -110,5 +110,7 @@ async def save_export(payload: bytes, user_id: int, region_id: int, format: str,
         data = {"uid": user_id, "rid": region_id, "file": file_id, "name": filename, "exp": int(now) + TTL,
                 "kind": kind, "cell_id": cell_id, "document_id": document_id,
                 "book_id": book_id, "book_revision": book_revision}
+        if region_ids is not None:
+            data["region_ids"] = region_ids
         raw = encrypt_bytes(json.dumps(data, ensure_ascii=False).encode(), "download-ticket")
         return raw + "." + _signature(raw)

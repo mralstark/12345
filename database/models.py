@@ -311,6 +311,7 @@ class UniversityCell(Base):
     __tablename__ = "university_cells"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    formation_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"), index=True)
     university_id: Mapped[int | None] = mapped_column(ForeignKey("universities.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(128))

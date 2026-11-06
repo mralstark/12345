@@ -8,6 +8,7 @@ POST /{cell_id}/leader ниже) — руководитель региона в�
 регистрацию, план «Снизу вверх», §4)."""
 
 from urllib.parse import urlparse
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -37,6 +38,7 @@ router = APIRouter(prefix="/cells", tags=["cells"])
 
 
 class CellPatch(BaseModel):
+    formation_status: Literal["registered", "administration_support", "forming"] | None = None
     name: str | None = Field(default=None, min_length=2, max_length=128)
     genitive_name: str | None = Field(default=None, max_length=128)
     vk_url: str | None = Field(default=None, max_length=255)
@@ -88,6 +90,7 @@ async def _cell_brief(session: AsyncSession, cell: UniversityCell) -> dict:
 
     return {
         "id": cell.id,
+        "formation_status": cell.formation_status,
         "region_id": cell.region_id,
         "name": cell.name,
         "genitive_name": cell.genitive_name,
@@ -124,7 +127,7 @@ async def list_cells(
     # опечаткой и с тех пор пустая. Прятать безопасно: назовёт кто-нибудь этот
     # вуз снова — resolve_member_cell найдёт ту же ячейку, и она вернётся со
     # всей своей историей.
-    return {"items": [i for i in items if i["members_total"] > 0]}
+    return {"items": [i for i in items if i["members_total"] > 0 or i["formation_status"] is not None]}
 
 
 @router.get("/{cell_id}")

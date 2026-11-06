@@ -18,7 +18,9 @@ router = APIRouter(prefix="/downloads", tags=["downloads"])
 
 
 class DownloadIn(BaseModel):
-    kind: Literal["finance", "document", "academy_book"]
+    kind: Literal["finance", "document", "academy_book", "cells"]
+    mode: Literal["list", "members", "finance", "all"] = "list"
+    cell_id: int | None = Field(default=None, gt=0)
     book_id: int | None = Field(default=None, gt=0, le=2**63-1)
     region_id: int | None = None
     document_id: int | None = None
@@ -35,7 +37,12 @@ async def prepare(
     if generation_slots.locked():
         raise HTTPException(429, "Файлы уже формируются. Попробуйте немного позже")
     async with generation_slots:
-        if payload.kind == "finance":
+        scope = None
+        if payload.kind == "cells":
+            from services.cell_exports import prepare_cells
+            content, scope = await prepare_cells(session, user, payload.region_id, payload.mode, payload.cell_id)
+            suffix, filename, region_id = "xlsx", "cells_" + payload.mode + ".xlsx", scope[0]
+        elif payload.kind == "finance":
             if payload.region_id is None:
                 raise HTTPException(422, "Укажите регион")
             response = await export_csv(payload.region_id, payload.period, payload.offset, user, session)
@@ -63,6 +70,7 @@ async def prepare(
                                    kind=payload.kind, cell_id=cell.id if cell else None,
                                    document_id=payload.document_id if payload.kind == "document" else None,
                                    book_id=book.id if payload.kind == "academy_book" else None,
+                                   region_ids=scope,
                                    book_revision=book.source_sha256 if payload.kind == "academy_book" else None)
     return {"url": f"/api/reports/files/{decode_ticket(ticket)['file']}?t={ticket}",
             "filename": filename, "expires_in": 600}

@@ -116,6 +116,12 @@ async def download_region_report(
         await require_view(session, user, data["rid"])
     cell = await actor_cell(session, user)
     kind = data.get("kind", "report")
+    if kind == "cells":
+        from services.cell_exports import export_scope
+        allowed = await export_scope(session, user)
+        scope = data.get("region_ids")
+        if not scope or not set(scope).issubset(allowed):
+            raise HTTPException(403, "Область доступа к ячейкам изменилась")
     if kind == "report" and cell is not None:
         raise HTTPException(403, "Нет доступа к полному отчёту региона")
     if kind == "finance" and cell is not None and cell.id != data.get("cell_id"):
@@ -125,7 +131,7 @@ async def download_region_report(
         document = await session.get(Document, data.get("document_id"))
         if document is None or document.region_id != data["rid"]:
             raise HTTPException(404, "Документ удалён или перемещён")
-    if kind not in {"report", "finance", "document", "academy_book"}:
+    if kind not in {"report", "finance", "document", "academy_book", "cells"}:
         raise HTTPException(403, "Ссылка недействительна")
     path = export_path(data["file"])
     if not path.is_file():

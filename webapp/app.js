@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  // Studio visual system: Forum + Times New Roman / Tinos, matte obsidian / warm gold / optical glass.
+  // Studio visual system: Forum + Roboto, matte obsidian / warm gold / optical glass.
   // Keep a JS revision so Telegram's existing version check refreshes old CSS too.
 
   // Самопроверка версии: у некоторых клиентов Telegram (замечено на
@@ -823,9 +823,8 @@
     if (state.me && state.me.role !== 'cell_leader') {
       items.push({ id: 'cells', label: 'Вузовские ячейки' });
     }
-    if (canManageUniversities()) {
-      items.push({ id: 'universities', label: 'ВУЗы' });
-    }
+    // University catalogue remains available to registration and profile APIs.
+    // Its standalone management tab is hidden by product decision.
     if (state.me && !state.me.cell) items.push({ id: 'documents', label: 'Документы' });
     // Отчёты — по региону/ячейке в целом, руководителю ячейки не нужны
     // (у него нет полномочий за пределами своей ячейки).
@@ -2823,6 +2822,7 @@
       esc(cell.leader_name ? cell.leader_name.trim()[0].toUpperCase() : '—') + '</span>' +
       '<span class="' + (cell.leader_name ? '' : 'row__sub') + '">' +
       esc(cell.leader_name || 'Руководитель не назначен') + '</span></span>' +
+      '<span class="cell__line row__sub">' + esc(cellStatusLabel(cell.formation_status)) + '</span>' +
 
       '<span class="cell__line row__sub">' + iconPeople() + declChelovek(cell.members_total) + ' в составе</span>' +
 
@@ -2832,12 +2832,35 @@
         : '') +
       '</button>').join('') : '<div class="empty">Вузовских ячеек в этом отделении нет</div>';
 
-    setView(rows, gen);
+    const exports = '<div class="card"><div class="card__title">Выгрузка ячеек</div>' +
+      '<div class="field"><label for="cellExportScope">Регионы</label><select id="cellExportScope"><option value="current">Текущий регион</option><option value="all">Все доступные регионы</option></select></div>' +
+      '<div class="field"><label for="cellExportCell">Ячейка</label><select id="cellExportCell"><option value="">Все ячейки</option>' + data.items.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('') + '</select></div>' +
+      '<div class="btn-row">' + [['list','Список ячеек'],['members','Численность и состав'],['finance','Финансы'],['all','Всё вместе']].map(([id,label]) => '<button class="btn btn--ghost" data-cell-export="' + id + '">' + label + '</button>').join('') + '</div><div id="cellExportResult" aria-live="polite"></div></div>';
+    setView(exports + rows, gen);
+    on('[data-cell-export]', 'click', async (event) => {
+      const buttons = [...document.querySelectorAll('[data-cell-export]')];
+      if (buttons.some(b => b.disabled)) return;
+      const mode = event.currentTarget.dataset.cellExport;
+      const scope = document.getElementById('cellExportScope');
+      const result = document.getElementById('cellExportResult');
+      buttons.forEach(b => b.disabled = true); scope.disabled = true;
+      result.textContent = 'Формирую Excel…';
+      try {
+        const file = await api('/downloads/prepare', {method:'POST', body:{kind:'cells',mode:mode,cell_id:Number(document.getElementById('cellExportCell').value) || null,region_id:scope.value === 'all' ? null : state.regionId}});
+        if (!result.isConnected) return;
+        result.innerHTML = '<p>Файл готов. Ссылка действует 10 минут.</p><a class="btn" id="cellExportDownload" href="' + esc(new URL(file.url, location.origin).href) + '" download="' + esc(file.filename) + '">Скачать Excel</a>';
+        wireDownloadLink(document.getElementById('cellExportDownload'), file);
+      } catch(error) { if (result.isConnected) result.textContent = error.message; fail(error); }
+      finally { buttons.forEach(b => b.disabled = false); scope.disabled = false; }
+    });
 
     on('[data-cell]', 'click', (event) => {
       cellDetail(Number(event.currentTarget.dataset.cell)).catch(fail);
     });
   }
+
+  const cellStatuses = {registered:'Зарегистрированная ячейка', administration_support:'Поддержка администрации', forming:'В процессе формирования'};
+  function cellStatusLabel(value) { return cellStatuses[value] || 'Статус не указан'; }
 
   function iconPeople() {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="cell__icon">' +
@@ -2938,7 +2961,8 @@
     const draw = () => {
       const body = document.getElementById('cellBody');
       if (!body) return;
-      body.innerHTML = head() + tabsHtml() +
+      body.innerHTML = head() + '<div class="field"><label for="cellFormationStatus">Статус ячейки</label>' +
+        (editable && state.me.role !== 'cell_leader' ? '<select id="cellFormationStatus"><option value="">Не указан</option>' + Object.entries(cellStatuses).map(([id,label]) => '<option value="' + id + '"' + (cell.formation_status === id ? ' selected' : '') + '>' + esc(label) + '</option>').join('') + '</select>' : '<p>' + esc(cellStatusLabel(cell.formation_status)) + '</p>') + '</div>' + tabsHtml() +
         (tab === 'members' ? membersHtml()
           : tab === 'events' ? eventsHtml()
             : editing ? vkForm() : linksHtml());
@@ -2948,6 +2972,13 @@
     const wire = () => {
       on('[data-ctab]', 'click', (event) => { tab = event.currentTarget.dataset.ctab; editing = false; draw(); });
 
+      const statusInput = document.getElementById('cellFormationStatus');
+      if (statusInput) statusInput.onchange = async () => {
+        const before = cell.formation_status; statusInput.disabled = true;
+        try { await api('/cells/' + cellId, {method:'PATCH',body:{formation_status:statusInput.value || null}}); cell.formation_status = statusInput.value || null; toast('Статус сохранён'); }
+        catch(error) { statusInput.value = before || ''; fail(error); }
+        finally { statusInput.disabled = false; }
+      };
       const editLink = document.getElementById('cellVkEdit');
       if (editLink) editLink.onclick = () => { editing = true; draw(); };
 
