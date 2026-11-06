@@ -2780,3 +2780,12 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
   .funding-totals { gap: 16px; }
   .funding-totals strong { font-size: 22px; }
 }
+
+/* Orientation and report preparation share the existing neutral surfaces. */
+.management-guide { margin: 0 0 24px; }
+.management-guide__context { display:flex; align-items:center; flex-wrap:wrap; gap:12px; color:var(--hint); font-size:14px; }
+.management-guide__context > span { flex:1 1 180px; overflow-wrap:anywhere; }
+.management-shortcuts { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.management-shortcuts .btn { flex:1 1 130px; white-space:normal; }
+.section-description { display:block; margin-top:6px; font-size:13px; line-height:1.45; font-weight:400; color:var(--hint); }
+.more-list__item[hidden], #rpPeriodField[hidden], #rpMonthField[hidden], #rpPdf[hidden] { display:none; }

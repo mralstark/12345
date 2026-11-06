@@ -584,10 +584,14 @@
     node.dataset.screen = state.tab || '';
     const section = state.me && gen !== undefined && tabsConfig().find((item) => item.id === state.tab);
     const hasOwnHeading = ['profile', 'person', 'academyManage', 'funding'].includes(state.tab);
-    node.innerHTML = (section && !hasOwnHeading
+    node.innerHTML = managementGuide() + (section && !hasOwnHeading
       ? '<header class="screen-heading"><h1>' + esc(section.label) + '</h1></header>' : '') + html;
     associateFieldLabels(node);
+    on('[data-section-go]', 'click', event => goSection(event.currentTarget.dataset.sectionGo), node);
+    const managementBack = node.querySelector('#backToManagement');
+    if (managementBack) managementBack.onclick = () => switchCabinet('own');
     if (!changed) return;
+    window.scrollTo(0, 0);
     // Перезапуск анимации: без снятия класса и обращения к offsetWidth
     // повторное добавление того же класса браузер не считает изменением.
     node.classList.remove('view--enter', 'view--from-right', 'view--from-left');
@@ -789,6 +793,7 @@
         items.push({ id: 'applications', label: 'Заявки', badge: counters.pending_applications });
       }
       if (state.me.funding_enabled) items.push({ id: 'funding', label: 'Финансирование' });
+      items.push({ id: 'reports', label: 'Отчёты' });
       items.push({ id: 'bureau', label: 'Бюро' });
       items.push({ id: 'tasks', label: 'Задачи', badge: counters.management_tasks });
       items.push({ id: 'character', label: 'Академия' });
@@ -959,26 +964,48 @@
       renderTabs();
       renderTab();
     }, tabs);
-    if (hidden.length) document.getElementById('tabMore').onclick = () => moreSheet(hidden);
+    if (hidden.length) document.getElementById('tabMore').onclick = () => moreSheet(items);
   }
 
+  const sectionHelp = {
+    dashboard: 'Состав, деньги и ближайшие события региона', analytics: 'Сравнить показатели доступных регионов',
+    members: 'Найти участника, изменить сведения и статус', events: 'Создать мероприятие и отметить участников',
+    finance: 'Записать доходы и расходы региона', funding: 'Планы по месяцам, выдачи и остаток финансирования',
+    reports: 'Скачать отчёт по региону, ячейкам или финансированию', cells: 'Руководители, состав и статус вузовских ячеек',
+    applications: 'Рассмотреть новые заявки на вступление', tasks: 'Поручения и проверка выполнения',
+    bureau: 'Состав бюро, должности и закреплённые регионы', regions: 'Открыть отделение и управлять назначениями',
+    character: 'Библиотека, вокабуляр и подготовка к менторству', documents: 'Загрузить и скачать документы региона',
+    news: 'Лента, публикации и черновики', profile: 'Личные сведения и настройки', home: 'Новости и события',
+    myEvents: 'Мероприятия, в которых можно участвовать', shop: 'Товары и заказы'
+  };
+  function goSection(id) { state.tab = id; renderTabs(); renderTab(); }
   function moreSheet(items) {
-    modal('Ещё',
-      '<div class="more-list">' + items.map((item) =>
-        '<button class="more-list__item' + (state.tab === item.id ? ' more-list__item--active' : '') +
-        '" data-more="' + item.id + '">' +
-        tabIcon(item.id) +
-        '<span class="more-list__label">' + esc(item.label) + '</span>' +
-        (item.badge ? '<span class="more-list__badge">' + item.badge + '</span>' : '') +
-        '</button>').join('') + '</div>',
-      () => {
-        on('[data-more]', 'click', (event) => {
-          state.tab = event.currentTarget.dataset.more;
-          closeModal();
-          renderTabs();
-          renderTab();
-        });
+    modal('Все разделы', '<div class="field"><label for="sectionSearch">Найти раздел или действие</label>' +
+      '<input id="sectionSearch" type="search" placeholder="Например, отчёт или участник" /></div>' +
+      '<div class="more-list">' + items.map(item =>
+        '<button class="more-list__item" data-more="' + item.id + '">' + tabIcon(item.id) +
+        '<span class="more-list__label">' + esc(item.label) + '<small class="section-description">' + esc(sectionHelp[item.id] || '') + '</small></span>' +
+        (item.badge ? '<span class="more-list__badge">' + item.badge + '</span>' : '') + '</button>').join('') +
+      '</div><p id="sectionSearchEmpty" hidden>Ничего не найдено. Попробуйте другое слово.</p>', () => {
+        document.getElementById('sectionSearch').oninput = event => {
+          const q = event.target.value.trim().toLocaleLowerCase('ru'); let found = 0;
+          document.querySelectorAll('[data-more]').forEach(button => { button.hidden = !button.textContent.toLocaleLowerCase('ru').includes(q); if (!button.hidden) found++; });
+          document.getElementById('sectionSearchEmpty').hidden = Boolean(found);
+        };
+        on('[data-more]', 'click', event => { const id = event.currentTarget.dataset.more; closeModal(); goSection(id); });
       });
+  }
+  function managementGuide() {
+    if (!state.me || state.cabinetMode === 'personal') return '';
+    const own = state.cabinetMode === 'own';
+    const name = own ? ownCabinetLabel() : ((state.me.regions || []).find(r => r.id === state.regionId) || {}).name;
+    const home = own ? 'analytics' : 'dashboard';
+    const isHome = state.tab === home;
+    const shortcuts = tabsConfig().filter(t => ['applications','tasks','reports',own ? 'regions' : 'members',own ? 'funding' : 'events'].includes(t.id));
+    return '<nav class="management-guide" aria-label="Кабинет и быстрые действия"><div class="management-guide__context"><span>' + esc(name || 'Кабинет региона') + '</span>' +
+      (!isHome ? '<button class="btn btn--small btn--ghost" data-section-go="' + home + '">К сводке</button>' : '') +
+      (!own && hasOwnCabinet() ? '<button class="btn btn--small btn--ghost" id="backToManagement">Все мои регионы</button>' : '') + '</div>' +
+      (isHome ? '<div class="management-shortcuts">' + shortcuts.map(t => '<button class="btn btn--ghost" data-section-go="' + t.id + '">' + esc(t.label) + (t.badge ? ' · ' + t.badge : '') + '</button>').join('') + '</div>' : '') + '</nav>';
   }
 
   function ownCabinetLabel() {
@@ -2023,10 +2050,10 @@
       '<div class="stat"><div class="stat__label">Итог периода</div><div class="stat__value">' + money(overview.net) + '</div></div>' +
       '</div>' +
       (canEdit()
-        ? '<div class="btn-row"><button class="btn" id="addTx"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Операция</button>' +
+        ? '<div class="btn-row"><button class="btn" id="addTx"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Записать доход или расход</button>' +
           (!state.me.cell ? '<button class="btn btn--ghost" id="manageCats">📁 Категории</button>' : '') +
-          '<button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> CSV</button></div>'
-        : '<div class="btn-row"><button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> CSV</button></div>') +
+          '<button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> Скачать операции (CSV)</button></div>'
+        : '<div class="btn-row"><button class="btn btn--ghost" id="exportCsv"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> Скачать операции (CSV)</button></div>') +
       '<div class="card"><div class="card__title">Расходы по категориям</div>' + breakdown + '</div>' +
       '<div class="card"><div class="card__title">Операции · ' + esc(transactions.period_label) + '</div>' + list + '</div>'
     , gen);
@@ -2867,7 +2894,10 @@
       '<div class="field"><label for="cellExportScope">Регионы</label><select id="cellExportScope"><option value="current">Текущий регион</option><option value="all">Все доступные регионы</option></select></div>' +
       '<div class="field"><label for="cellExportCell">Ячейка</label><select id="cellExportCell"><option value="">Все ячейки</option>' + data.items.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('') + '</select></div>' +
       '<div class="btn-row">' + [['list','Список ячеек'],['members','Численность и состав'],['finance','Финансы'],['all','Всё вместе']].map(([id,label]) => '<button class="btn btn--ghost" data-cell-export="' + id + '">' + label + '</button>').join('') + '</div><div id="cellExportResult" aria-live="polite"></div></div>';
-    setView(exports + rows, gen);
+    setView(rows + exports, gen);
+    const cellScope = document.getElementById('cellExportScope');
+    const cellChoice = document.getElementById('cellExportCell');
+    cellScope.onchange = () => { cellChoice.value = ''; cellChoice.disabled = cellScope.value === 'all'; };
     let exportBusy = false;
     on('[data-cell-export]', 'click', async (event) => {
       const buttons = [...document.querySelectorAll('[data-cell-export]')];
@@ -2876,7 +2906,7 @@
       const mode = event.currentTarget.dataset.cellExport;
       const scope = document.getElementById('cellExportScope');
       const result = document.getElementById('cellExportResult');
-      buttons.forEach(b => b.disabled = true); scope.disabled = true;
+      buttons.forEach(b => b.disabled = true); scope.disabled = true; cellChoice.disabled = true;
       result.textContent = 'Формирую Excel…';
       try {
         const file = await api('/downloads/prepare', {method:'POST', body:{kind:'cells',mode:mode,cell_id:Number(document.getElementById('cellExportCell').value) || null,region_id:scope.value === 'all' ? null : state.regionId}});
@@ -2884,7 +2914,7 @@
         result.innerHTML = '<p>Файл готов. Ссылка действует 10 минут.</p><a class="btn" id="cellExportDownload" href="' + esc(new URL(file.url, location.origin).href) + '" download="' + esc(file.filename) + '">Скачать Excel</a>';
         wireDownloadLink(document.getElementById('cellExportDownload'), file);
       } catch(error) { if (result.isConnected) result.textContent = error.message; fail(error); }
-      finally { exportBusy = false; buttons.forEach(b => b.disabled = false); scope.disabled = false; }
+      finally { exportBusy = false; buttons.forEach(b => b.disabled = false); scope.disabled = false; cellChoice.disabled = scope.value === 'all'; }
     });
 
     on('[data-cell]', 'click', (event) => {
@@ -3299,7 +3329,7 @@
     const data = await api('/analytics/regions?period=' + period.kind + '&offset=' + period.offset);
 
     const head = '<tr><th>Регион</th><th class="num">Состав</th><th class="num">Новых</th><th class="num">Баланс</th>' +
-      '<th class="num">Доходы</th><th class="num">Расходы</th><th class="num">Мероприятий</th></tr>';
+      '<th class="num">Доходы</th><th class="num">Расходы</th><th class="num">Мероприятия<br><small>проведено / всего</small></th></tr>';
     const body = data.items.map((row) =>
       '<tr data-region="' + row.region_id + '"><td>' + esc(row.region) +
       '<div class="row__sub">' + esc(row.leader || '—') + '</div></td>' +
@@ -3321,6 +3351,7 @@
       '<div class="stat"><div class="stat__label">Мероприятий · ' + esc(data.period_label) + '</div><div class="stat__value">' + (data.totals.events || 0) + '</div></div>' +
       '</div>' +
       '<div class="card"><div class="card__title">Сравнение регионов · ' + esc(data.period_label) + '</div>' +
+      '<p class="row__sub">Нажмите на строку региона, чтобы открыть его кабинет. На небольшом экране таблицу можно прокручивать вбок.</p>' +
       '<div class="table-scroll" role="region" aria-label="Сравнение регионов: таблица с горизонтальной прокруткой" tabindex="0"><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>'
     , gen);
 
@@ -3338,54 +3369,52 @@
   // --- Отчёты ---------------------------------------------------------------
 
   async function renderReports(gen) {
-    if (needRegion(gen)) return;
-    const regionName = (state.me.regions.find((r) => r.id === state.regionId) || {}).name || '';
-
-    setView(
-      '<div class="card"><div class="btn-row"><button class="btn btn--small btn--ghost" id="rpBack">В кабинет</button></div>' +
-      '<div class="card__title">Отчёт по региону: ' + esc(regionName) + '</div>' +
-      '<p class="row__sub">Полный отчёт — финансы, состав и мероприятия — одним файлом.</p>' +
-      '<div class="field"><label>Период</label><select id="rpPeriod">' +
-      '<option value="month">Текущий месяц</option>' +
-      '<option value="semester">Текущий семестр</option>' +
-      '<option value="year" selected>Текущий год</option>' +
-      '<option value="all">За всё время</option></select></div>' +
-      '<div class="btn-row"><button class="btn" id="rpXlsx"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> Excel (.xlsx)</button>' +
-      '<button class="btn btn--ghost" id="rpPdf"><svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg> PDF</button></div>' +
-      '<div id="rpResult" aria-live="polite"></div></div>'
-    , gen);
-
-    const xlsx = document.getElementById('rpXlsx');
-    const pdf = document.getElementById('rpPdf');
-    const periodInput = document.getElementById('rpPeriod');
-    const result = document.getElementById('rpResult');
-    document.getElementById('rpBack').onclick = () => {
-      state.tab = state.cabinetMode === 'personal' ? 'home' : state.cabinetMode === 'own' ? 'analytics' : 'dashboard';
-      renderTabs(); renderTab();
+    const regions = state.me.regions || [];
+    const own = state.cabinetMode === 'own';
+    const selected = own && regions.some(r => r.id === state.reportRegion) ? state.reportRegion : state.regionId || (regions[0] || {}).id;
+    setView('<p class="row__sub">Выберите нужные сведения. Полный отчёт по региону объединяет состав, финансы и мероприятия в одном файле.</p>' +
+      '<div class="card"><div class="field"><label for="rpKind">Что выгрузить</label><select id="rpKind">' +
+      '<option value="region">Полный отчёт по региону</option><option value="cells">Ячейки: список, состав и финансы вместе</option><option value="finance">Доходы и расходы региона</option>' +
+      (state.me.funding_enabled ? '<option value="funding">Финансирование: планы и выдачи</option>' : '') + '</select></div>' +
+      '<div class="field"><label for="rpRegion">Область отчёта</label><select id="rpRegion">' +
+      regions.map(r => '<option value="' + r.id + '"' + (r.id === selected ? ' selected' : '') + '>' + esc(r.name) + '</option>').join('') +
+      (own ? '<option value="all" disabled>Все доступные регионы</option>' : '') + '</select></div>' +
+      '<p id="rpHelp" class="row__sub"></p><div class="field" id="rpPeriodField"><label for="rpPeriod">Период</label><select id="rpPeriod"><option value="month">Текущий месяц</option><option value="semester">Текущий семестр</option><option value="year" selected>Текущий год</option><option value="all">За всё время</option></select></div>' +
+      '<div class="field" id="rpMonthField" hidden><label for="rpMonth">Месяц плана</label><input type="month" id="rpMonth" min="2000-01" max="2100-12" value="' + todayIsoLocal().slice(0,7) + '" /></div>' +
+      '<div class="btn-row"><button class="btn" id="rpXlsx">Подготовить Excel</button><button class="btn btn--ghost" id="rpPdf">Подготовить PDF</button></div><div id="rpResult" aria-live="polite"></div></div>',gen);
+    const kind = document.getElementById('rpKind'), region = document.getElementById('rpRegion'), period = document.getElementById('rpPeriod'), month = document.getElementById('rpMonth');
+    const buildButton = document.getElementById('rpXlsx'), pdf = document.getElementById('rpPdf'), result = document.getElementById('rpResult');
+    const update = () => {
+      const k = kind.value, all = region.querySelector('[value="all"]');
+      if (all) { all.disabled = !['cells','funding'].includes(k); all.textContent = k === 'funding' ? 'Все доступные регионы и бюджет отдела' : 'Все доступные регионы'; if (all.disabled && region.value === 'all') region.value = String(regions[0]?.id || ''); }
+      document.getElementById('rpPeriodField').hidden = ['cells','funding'].includes(k);
+      document.getElementById('rpMonthField').hidden = k !== 'funding';
+      pdf.hidden = k !== 'region'; buildButton.textContent = k === 'finance' ? 'Подготовить CSV' : 'Подготовить Excel';
+      buildButton.disabled = !region.value; pdf.disabled = !region.value;
+      document.getElementById('rpHelp').textContent = {region:'Состав, доходы, расходы и мероприятия выбранного региона.',cells:'Актуальные сведения по ячейкам: руководители, контакты, численность, состав и финансы. Период не применяется.',finance:'Операции за выбранный период. CSV можно открыть в Excel.',funding:'План, выдачи и остаток за выбранный месяц. Это отдельный реестр финансирования.'}[k];
+      result.replaceChildren();
     };
+    kind.onchange = update; region.onchange = () => { if (region.value !== 'all') state.reportRegion = Number(region.value); update(); }; period.onchange = () => result.replaceChildren(); month.onchange = () => result.replaceChildren(); update();
     let busy = false;
-    const build = async (format) => {
+    async function build(format) {
       if (busy) return;
-      busy = true;
-      xlsx.disabled = pdf.disabled = periodInput.disabled = true;
-      result.innerHTML = '<p class="row__sub">Формирую отчёт…</p>';
+      const k = kind.value, rid = region.value === 'all' ? null : Number(region.value);
+      if (k === 'funding' && !/^(20\d{2}|2100)-(0[1-9]|1[0-2])$/.test(month.value)) { toast('Выберите месяц плана'); return; }
+      busy = true; const controls = [kind,region,period,month,buildButton,pdf]; controls.forEach(c => c.disabled = true);
+      result.textContent = 'Готовим файл… После подготовки появится кнопка скачивания.';
       try {
-        const file = await api('/reports/region/file?region_id=' + state.regionId + '&format=' + format + '&period=' + periodInput.value, { method: 'POST' });
+        let file;
+        if (k === 'region') file = await api('/reports/region/file?region_id=' + rid + '&format=' + format + '&period=' + period.value,{method:'POST'});
+        else if (k === 'funding') file = await api('/funding/export?month=' + month.value + (rid ? '&region_id=' + rid : ''),{method:'POST'});
+        else file = await api('/downloads/prepare',{method:'POST',body:{kind:k,mode:'all',region_id:rid,period:period.value}});
         if (!result.isConnected) return;
-        const href = new URL(file.url, location.origin).href;
-        result.innerHTML = '<p>Отчёт готов. Ссылка действует 10 минут.</p>' +
-          '<a class="btn" id="rpDownload" href="' + esc(href) + '" download="' + esc(file.filename) + '">Скачать ' + format.toUpperCase() + '</a>';
-        wireDownloadLink(document.getElementById('rpDownload'), file);
-      } catch (error) {
-        if (result.isConnected) result.textContent = error.message;
-        fail(error);
-      } finally {
-        busy = false;
-        xlsx.disabled = pdf.disabled = periodInput.disabled = false;
-      }
-    };
-    xlsx.onclick = () => build('xlsx');
-    pdf.onclick = () => build('pdf');
+        result.innerHTML = '<p>Файл готов. Скачайте его в течение 10 минут.</p><a class="btn" id="rpDownload" href="' + esc(new URL(file.url,location.origin).href) + '" download="' + esc(file.filename) + '">Скачать файл</a>';
+        wireDownloadLink(document.getElementById('rpDownload'),file);
+        result.scrollIntoView({block:'center',behavior:'instant'});
+      } catch(error) { if (result.isConnected) result.textContent = 'Не удалось подготовить файл: ' + error.message + '. Повторите попытку.'; }
+      finally { busy = false; controls.forEach(c => c.disabled = false); }
+    }
+    buildButton.onclick = () => build('xlsx'); pdf.onclick = () => build('pdf');
   }
 
   // --- Регионы (создание, назначение руководителя/координатора) -------------
@@ -5152,7 +5181,7 @@
 
     setView(
       '<div class="card"><div class="card__title">Федеральное бюро</div>' +
-      '<div class="row__sub">Кураторствует регионы и ведёт то, что к региону не привязано.</div>' +
+      '<div class="row__sub">Здесь назначают членов бюро и закрепляют за ними регионы. Поручения и проверка выполнения находятся в разделе «Задачи».</div>' +
       '</div>' +
       '<div class="card" style="padding:0 var(--space-12)">' + rows + '</div>' +
       (data.can_edit
