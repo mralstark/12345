@@ -112,10 +112,16 @@ async def download_region_report(
     if user is None or not user.is_active:
         raise HTTPException(403, "Доступ закрыт")
     enforce_user_rate_limit(user.telegram_id, "GET", "/api/downloads")
-    if data.get("kind") != "academy_book":
+    if data.get("kind") not in {"academy_book", "funding"}:
         await require_view(session, user, data["rid"])
     cell = await actor_cell(session, user)
     kind = data.get("kind", "report")
+    if kind == "funding":
+        from services.funding import scope
+        ids, _, department = await scope(session, user)
+        saved = data.get("region_ids")
+        if not isinstance(saved, list) or not set(saved).issubset(ids) or (data.get("includes_department") and not department):
+            raise HTTPException(403, "Область доступа к финансированию изменилась")
     if kind == "cells":
         from services.cell_exports import export_scope
         allowed = await export_scope(session, user)
@@ -131,7 +137,7 @@ async def download_region_report(
         document = await session.get(Document, data.get("document_id"))
         if document is None or document.region_id != data["rid"]:
             raise HTTPException(404, "Документ удалён или перемещён")
-    if kind not in {"report", "finance", "document", "academy_book", "cells"}:
+    if kind not in {"report", "finance", "document", "academy_book", "cells", "funding"}:
         raise HTTPException(403, "Ссылка недействительна")
     path = export_path(data["file"])
     if not path.is_file():

@@ -37,8 +37,12 @@ def generate_key(output: Path, key_id: str = "primary") -> None:
 
 def copy_order(tables):
     """Defer only nullable cycle edges; other optional FKs may be CHECK-required."""
+    # Funding cancellations must retain their original-entry reference at insert
+    # time (a CHECK requires it). Their self-edge is handled by row ordering.
+    row_ordered = {("funding_entries", "cancels_id")}
     edges = {name: [(column.name, fk.column.table.name, column.nullable)
-                    for column in table.columns for fk in column.foreign_keys]
+                    for column in table.columns for fk in column.foreign_keys
+                    if (name, column.name) not in row_ordered]
              for name, table in tables.items()}
     deferred = {(name, field) for name, links in edges.items() for field, target, nullable in links
                 if name == target and nullable}
@@ -135,12 +139,12 @@ async def migrate_database(source_url: str, target_url: str, source_storage: Pat
             if "data_encryption_state" in metadata.tables:
                 state = (await original.execute(text("SELECT schema_hash,canary FROM data_encryption_state WHERE id=1"))).first()
                 if state:
-                    from database.encryption_state import previous_schema_hash
-                    if state.schema_hash not in {schema_hash(), previous_schema_hash()} or decrypt_bytes(state.canary, "database-canary") != b"bratstvo-database-ready-v1":
+                    from database.encryption_state import legacy_empty_tables
+                    if state.schema_hash not in {schema_hash(), *legacy_empty_tables()} or decrypt_bytes(state.canary, "database-canary") != b"bratstvo-database-ready-v1":
                         raise DataEncryptionError("Source encryption schema or key is unsupported")
-                    if state.schema_hash == previous_schema_hash() and "mentor_preparations" in metadata.tables:
-                        if (await original.execute(select(metadata.tables["mentor_preparations"]).limit(1))).first():
-                            raise DataEncryptionError("Unmarked preparation data requires manual review")
+                    for name in legacy_empty_tables().get(state.schema_hash, ()):
+                        if name in metadata.tables and (await original.execute(select(metadata.tables[name]).limit(1))).first():
+                            raise DataEncryptionError("Unmarked protected data requires manual review")
                     source_encrypted = True
             ordered, deferred = copy_order(tables)
             for name in ordered:
@@ -149,6 +153,8 @@ async def migrate_database(source_url: str, target_url: str, source_storage: Pat
                     counts[name] = 0
                     continue
                 rows = (await original.execute(select(metadata.tables[name]))).mappings().all()
+                if name == "funding_entries":
+                    rows.sort(key=lambda row: (row['cancels_id'] is not None, row['id']))
                 counts[name] = len(rows)
                 for row in rows:
                     values = {c.name: row[c.name] for c in table.columns if c.name in row}

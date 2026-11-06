@@ -2731,3 +2731,52 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
   body::before { display: none; }
   .card, .post, .stat, .hero-card, .compose, .topbar, .bottom-nav, .modal { backdrop-filter: none; -webkit-backdrop-filter: none; border: 1px solid CanvasText; }
 }
+
+/* Shared monthly allocations: neutral glass, fixed money columns and readable
+   regional names. Forms reuse existing fields and modal controls. */
+.funding-intro { color: var(--hint); max-width: 76ch; }
+.funding-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; margin: 24px 0; }
+.funding-toolbar .field { flex: 1 1 190px; min-width: 0; margin: 0; }
+.funding-toolbar > .btn { flex: 0 1 auto; }
+.funding-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 20px; padding: 8px 0 24px; border-bottom: 1px solid var(--border); }
+.funding-totals span { display: block; color: var(--hint); font-size: 14px; }
+.funding-totals strong { display: block; font-size: 24px; font-weight: 500; margin-top: 8px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.funding-accounts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); align-items: start; gap: 20px; margin: 24px 0; }
+.funding-account { margin: 0; min-width: 0; }
+.funding-account__heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+.funding-account h2 { font: 400 28px/1.2 'Forum', Georgia, serif; margin: 0; overflow-wrap: anywhere; }
+.funding-account--department .badge { background: var(--accent-soft); color: var(--accent); }
+.funding-numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+.funding-numbers dt { color: var(--hint); font-size: 13px; line-height: 1.4; min-height: 2.8em; }
+.funding-numbers dd { margin: 8px 0 0; font-size: clamp(16px, 2.3vw, 21px); font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.funding-unset { font-size: 15px; font-weight: 400; color: var(--hint); }
+.funding-overrun dt, .funding-overrun dd, .funding-form-error { color: var(--danger); }
+.funding-note, .funding-entry__comment { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.funding-note { color: var(--hint); font-size: 14px; }
+.funding-actions { margin-top: 20px; gap: 8px; }
+.funding-actions .btn { flex: 1 1 140px; white-space: normal; }
+.funding-ledger { padding-bottom: 16px; }
+.funding-entry { padding: 24px 0; border-top: 1px solid var(--border); }
+.funding-entry__top, .funding-entry__bottom { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; }
+.funding-entry__top > div:first-child { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.funding-entry__amount { font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.funding-entry--cancelled .funding-entry__amount { color: var(--hint); }
+.funding-entry__bottom { align-items: center; }
+.funding-entry__bottom > .row__sub { overflow-wrap: anywhere; }
+.funding-pagination { align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid var(--border); }
+.funding-warning { background: var(--accent-soft); border: 1px solid var(--border); padding: 16px; border-radius: 12px; margin: 16px 0; }
+.funding-warning p { margin-top: 0; }
+.funding-checkbox { display: flex; align-items: start; gap: 12px; color: var(--text); cursor: pointer; }
+.funding-checkbox input { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; }
+.funding-form-error:empty { display: none; }
+.funding-history article { padding: 20px 0; border-bottom: 1px solid var(--border); }
+.funding-region-summary { margin: 24px 0; }
+@media (max-width: 520px) {
+  .funding-toolbar { gap: 12px; margin-block: 20px; }
+  .funding-toolbar > .btn { width: 100%; }
+  .funding-accounts { gap: 16px; }
+  .funding-account h2 { font-size: 26px; }
+  .funding-numbers { gap: 12px; }
+  .funding-totals { gap: 16px; }
+  .funding-totals strong { font-size: 22px; }
+}

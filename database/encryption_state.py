@@ -18,6 +18,16 @@ def previous_schema_hash() -> str:
     return "d624012c2fdf209f2808e7f2bed2d84e6637fe888465a6c695e24312e2a97cfc"
 
 
+FUNDING_TABLES = ("funding_plans", "funding_entries", "funding_plan_audits")
+
+
+def legacy_empty_tables() -> dict[str, tuple[str, ...]]:
+    return {
+        previous_schema_hash(): ("mentor_preparations", *FUNDING_TABLES),
+        "7dac02060a32993c6d10dba40f55e8c5d0a143435975a0b383a0d7aeb242cafa": FUNDING_TABLES,
+    }
+
+
 async def write_state(conn) -> None:
     active, _ = keyring()
     await conn.execute(text("DELETE FROM data_encryption_state"))
@@ -47,14 +57,15 @@ async def ensure_encryption_ready(conn) -> None:
             "canary": encrypt_bytes(b"bratstvo-database-ready-v1", "database-canary"),
         })
         row = (await conn.execute(text("SELECT key_id,schema_hash,canary FROM data_encryption_state WHERE id=1"))).one()
-    if row.key_id != active or row.schema_hash not in {schema_hash(), previous_schema_hash()}:
+    if row.key_id != active or row.schema_hash not in {schema_hash(), *legacy_empty_tables()}:
         raise DataEncryptionError("Database encryption key or schema does not match; migrate offline")
     if decrypt_bytes(row.canary, "database-canary") != b"bratstvo-database-ready-v1":
         raise DataEncryptionError("Database encryption key verification failed")
     if row.schema_hash != schema_hash():
         # Only an EMPTY newly created table may join an existing authenticated
         # inventory automatically. Never bless existing unknown/plaintext values.
-        if (await conn.execute(text("SELECT 1 FROM mentor_preparations LIMIT 1"))).first():
-            raise DataEncryptionError("Offline encryption migration is required")
+        for table in legacy_empty_tables()[row.schema_hash]:
+            if (await conn.execute(text("SELECT 1 FROM " + table + " LIMIT 1"))).first():
+                raise DataEncryptionError("Offline encryption migration is required")
         await conn.execute(text("UPDATE data_encryption_state SET schema_hash=:new WHERE id=1 AND schema_hash=:old"),
-                           {"new": schema_hash(), "old": previous_schema_hash()})
+                           {"new": schema_hash(), "old": row.schema_hash})

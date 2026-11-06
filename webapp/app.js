@@ -583,7 +583,7 @@
     lastRenderedTab = state.tab;
     node.dataset.screen = state.tab || '';
     const section = state.me && gen !== undefined && tabsConfig().find((item) => item.id === state.tab);
-    const hasOwnHeading = ['profile', 'person', 'academyManage'].includes(state.tab);
+    const hasOwnHeading = ['profile', 'person', 'academyManage', 'funding'].includes(state.tab);
     node.innerHTML = (section && !hasOwnHeading
       ? '<header class="screen-heading"><h1>' + esc(section.label) + '</h1></header>' : '') + html;
     associateFieldLabels(node);
@@ -788,6 +788,7 @@
       if (state.me && state.me.is_supervisor) {
         items.push({ id: 'applications', label: 'Заявки', badge: counters.pending_applications });
       }
+      if (state.me.funding_enabled) items.push({ id: 'funding', label: 'Финансирование' });
       items.push({ id: 'bureau', label: 'Бюро' });
       items.push({ id: 'tasks', label: 'Задачи', badge: counters.management_tasks });
       items.push({ id: 'character', label: 'Академия' });
@@ -874,6 +875,7 @@
     documents: 'doc',
     tasks: 'checks',
     reports: 'download',
+    funding: 'wallet',
     analytics: 'chart',
     regions: 'globe',
     applications: 'inbox',
@@ -922,6 +924,7 @@
     // куда уходят с «Главной». Подсвечиваем её, чтобы панель не выглядела
     // так, будто человек нигде.
     let activeId = state.cabinetMode === 'personal' && state.tab === 'news' ? 'home' : state.tab;
+    if (state.tab === 'funding' && state.cabinetMode === 'region') activeId = 'finance';
     // Страница человека — не вкладка: подсвечиваем ту, с которой на неё ушли.
     if (state.tab === 'person') activeId = state.personBackTab || 'home';
     // Панель всегда из пяти кнопок: не помещается — последняя становится «Ещё».
@@ -1279,6 +1282,7 @@
       dashboard: renderDashboard,
       members: renderMembers,
       finance: renderFinance,
+      funding: renderFunding,
       events: renderEvents,
       documents: renderDocuments,
       cells: renderCells,
@@ -1957,6 +1961,13 @@
     });
   }
 
+  async function renderFunding(gen) {
+    if (!window.CabinetFunding) throw new Error('Обновите кабинет для загрузки финансирования');
+    return window.CabinetFunding.render({api, state, gen, setView, esc, money, modal, closeModal,
+      submitOnce, on, fail, toast, dateRu, todayIsoLocal, wireDownloadLink,
+      regionId: state.regionId, refresh: () => { if (state.tab === 'funding') startRender(renderFunding); }});
+  }
+
   async function renderFinance(gen) {
     if (needRegion(gen)) return;
     const period = state.financePeriod;
@@ -1965,6 +1976,19 @@
       api('/finance/overview?' + query),
       api('/finance/transactions?' + query + '&limit=60'),
     ]);
+
+    let fundingCard = '';
+    if (state.me.funding_enabled && !state.me.cell) {
+      const month = period.kind === 'month' ? overview.period.start.slice(0, 7) : '';
+      let row = null;
+      if (month) {
+        const allocation = await api('/funding?month=' + month + '&region_id=' + state.regionId);
+        row = allocation.items[0] || null;
+      }
+      fundingCard = '<section class="card funding-region-summary"><div class="card__title">Финансирование' + (month ? ' · ' + esc(month) : '') + '</div>' +
+        (row && window.CabinetFunding ? window.CabinetFunding.summary(row, {esc, money}) : '<p class="row__sub">Месячные планы и выдачи от координатора.</p>') +
+        '<p class="row__sub">Выдачи учитываются отдельно от доходов и расходов региона.</p><button class="btn btn--ghost" id="openRegionFunding">Открыть финансирование</button></section>';
+    }
 
     const breakdown = overview.expense_by_category.length
       ? overview.expense_by_category.map((row) => {
@@ -1989,6 +2013,7 @@
 
     setView(
       periodControls(period, 'fin') +
+      fundingCard +
       '<div class="grid">' +
       '<div class="stat"><div class="stat__label">Баланс (всего)</div><div class="stat__value">' + money(overview.balance) + '</div></div>' +
       '<div class="stat"><div class="stat__label">Доходы · ' + esc(overview.period.label) + '</div>' +
@@ -2007,6 +2032,12 @@
     , gen);
 
     bindPeriod(period, 'fin', () => startRender(renderFinance));
+    const openFunding = document.getElementById('openRegionFunding');
+    if (openFunding) openFunding.onclick = () => {
+      if (period.kind === 'month') state.fundingMonth = overview.period.start.slice(0, 7);
+      state.fundingSkip = 0; state.tab = 'funding'; renderTabs(); renderTab();
+    };
+
     document.getElementById('exportCsv').onclick = () =>
       download('/finance/export.csv?' + query, 'finance.csv').catch(fail);
     if (canEdit()) {

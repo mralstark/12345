@@ -29,6 +29,9 @@ FIELDS = {
     "member_quest_progress": "submitted_note assignment_note",
     "quest_activity": "note",
     "mentor_preparations": "payload",
+    "funding_plans": "note",
+    "funding_entries": "comment",
+    "funding_plan_audits": "payload",
 }
 DATE_FIELDS = {"birth_date", "activist_joined_at", "member_inducted_at", "alumni_graduated_at"}
 

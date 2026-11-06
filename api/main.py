@@ -30,6 +30,7 @@ from api.routers import (
     event_tasks,
     events,
     finance,
+    funding,
     members,
     news,
     profile,
@@ -176,6 +177,7 @@ for router in (
     bureau.router,
     members.router,
     finance.router,
+    funding.router,
     events.router,
     event_tasks.router,
     documents.router,
@@ -242,6 +244,6 @@ if WEBAPP_DIR.exists():
         """Подставляем в ссылки на app.js/styles.css версию по mtime файла —
         адрес меняется сам при каждом деплое. index.html отдаём с no-store."""
         html = (WEBAPP_DIR / "index.html").read_text(encoding="utf-8")
-        for asset in ("app.js", "styles.css", "articles.js", "bootstrap.js", "vk-platform.js", "vendor/vk-bridge.min.js"):
+        for asset in ("app.js", "styles.css", "articles.js", "funding.js", "bootstrap.js", "vk-platform.js", "vendor/vk-bridge.min.js"):
             html = html.replace(f"/static/{asset}", f"/static/{asset}?v={_asset_version(asset)}")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})

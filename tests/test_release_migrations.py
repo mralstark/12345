@@ -1,13 +1,16 @@
-"""Run the actual deployment sequences against a pre-articles database."""
+"""Run release migrations, with the required offline upgrade for legacy encryption."""
 import importlib
 from pathlib import Path
 import re
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import BigInteger, Date, MetaData, Text, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from database.models import Base, Member, MemberQuestProgress, NewsPost, Quest, Region, User
+from database.encrypted import EncryptedValue
+from scripts.data_encryption import migrate_database
+from utils.data_crypto import DataEncryptionError
 
 
 @pytest.mark.parametrize('script', ['deploy/update_vps.py','deploy/deploy.sh','deploy/deploy.ps1','deploy/setup_server.sh'])
@@ -21,17 +24,21 @@ async def test_deployment_upgrades_old_schema_before_catalog_orm(tmp_path, monke
     old=create_async_engine(f"sqlite+aiosqlite:///{(tmp_path/'legacy.db').as_posix()}")
     factory=async_sessionmaker(old,expire_on_commit=False)
     try:
+        legacy = MetaData()
+        for table in Base.metadata.tables.values():
+            table.to_metadata(legacy)
+        for table in legacy.tables.values():
+            for column in table.columns:
+                if isinstance(column.type, EncryptedValue):
+                    column.type = BigInteger() if column.type.kind == 'int' else Date() if column.type.kind == 'date' else Text()
         async with old.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        async with factory() as db:
-            region=Region(name='Сохранённый регион');author=User(full_name='Сохранённый автор',role='federal')
-            db.add_all([region,author]);await db.flush()
-            member=Member(region_id=region.id,full_name='Сохранённый участник',status='activist')
-            quest=Quest(title='Сыграть в килу',emoji='⚽',thresholds='1,3,10')
-            db.add_all([member,quest]);await db.flush()
-            db.add(MemberQuestProgress(member_id=member.id,quest_id=quest.id,count=1))
-            db.add(NewsPost(author_user_id=author.id,text='Прежняя публикация'))
-            await db.commit()
+            await conn.run_sync(legacy.create_all)
+            await conn.execute(legacy.tables['regions'].insert().values(id=1,name='Сохранённый регион'))
+            await conn.execute(legacy.tables['users'].insert().values(id=1,full_name='Сохранённый автор',role='federal'))
+            await conn.execute(legacy.tables['members'].insert().values(id=1,region_id=1,full_name='Сохранённый участник',status='activist'))
+            await conn.execute(legacy.tables['quests'].insert().values(id=1,title='Сыграть в килу',emoji='⚽',thresholds='1,3,10'))
+            await conn.execute(legacy.tables['member_quest_progress'].insert().values(member_id=1,quest_id=1,count=1))
+            await conn.execute(legacy.tables['news_posts'].insert().values(author_user_id=1,text='Прежняя публикация'))
         # Remove exactly the schema that did not exist in the deployed release.
         async with old.begin() as conn:
             await conn.execute(text('DROP INDEX ix_news_posts_publication_state'))
@@ -45,6 +52,19 @@ async def test_deployment_upgrades_old_schema_before_catalog_orm(tmp_path, monke
             monkeypatch.setattr(module,'engine',old)
             if hasattr(module,'async_session'):
                 monkeypatch.setattr(module,'async_session',factory)
+            if name == 'migrate_funding':
+                # Old article migrations added VARCHAR fields before field
+                # encryption existed. A funding migration must not silently
+                # authenticate that legacy inventory or bless existing data.
+                with pytest.raises(DataEncryptionError):
+                    await module.migrate()
+                encrypted_url = f"sqlite+aiosqlite:///{(tmp_path/'encrypted.db').as_posix()}"
+                await migrate_database(str(old.url), encrypted_url)
+                await old.dispose()
+                old = create_async_engine(encrypted_url)
+                factory = async_sessionmaker(old,expire_on_commit=False)
+                monkeypatch.setattr(database.db,'engine',old)
+                monkeypatch.setattr(module,'engine',old)
             await module.migrate()
         async with factory() as db:
             progress=(await db.execute(select(MemberQuestProgress))).scalar_one()

@@ -43,6 +43,58 @@ class DataEncryptionState(Base):
     canary: Mapped[str] = mapped_column(Text)
 
 
+class FundingPlan(Base):
+    """Monthly funding allocation. NULL region is the shared department budget."""
+    __tablename__ = "funding_plans"
+    __table_args__ = (
+        UniqueConstraint("month", "region_id", name="uq_funding_region_month"),
+        Index("uq_funding_department_month", "month", unique=True,
+              sqlite_where=text("region_id IS NULL"), postgresql_where=text("region_id IS NULL")),
+        CheckConstraint("amount >= 0 AND amount <= 2147483647", name="ck_funding_plan_amount"),
+        CheckConstraint("revision > 0", name="ck_funding_plan_revision"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    month: Mapped[date_] = mapped_column(Date, index=True)
+    region_id: Mapped[int | None] = mapped_column(ForeignKey("regions.id"), nullable=True, index=True)
+    amount: Mapped[int] = mapped_column(BigInteger)
+    note: Mapped[str | None] = mapped_column(protected("funding_plans", "note"), nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class FundingEntry(Base):
+    """Append-only issuance ledger; corrections are separate cancellation entries."""
+    __tablename__ = "funding_entries"
+    __table_args__ = (
+        UniqueConstraint("created_by_id", "request_id", name="uq_funding_request"),
+        UniqueConstraint("cancels_id", name="uq_funding_cancel"),
+        CheckConstraint("amount > 0 AND amount <= 2147483647", name="ck_funding_entry_amount"),
+        CheckConstraint("(kind = 'issue' AND cancels_id IS NULL) OR (kind = 'cancel' AND cancels_id IS NOT NULL)", name="ck_funding_entry_kind"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("funding_plans.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(8), default="issue")
+    cancels_id: Mapped[int | None] = mapped_column(ForeignKey("funding_entries.id"), nullable=True)
+    amount: Mapped[int] = mapped_column(BigInteger)
+    date: Mapped[date_] = mapped_column(Date, index=True)
+    comment: Mapped[str] = mapped_column(protected("funding_entries", "comment"))
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    request_id: Mapped[str] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class FundingPlanAudit(Base):
+    __tablename__ = "funding_plan_audits"
+    __table_args__ = (UniqueConstraint("plan_id", "revision", name="uq_funding_audit_revision"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("funding_plans.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    payload: Mapped[str] = mapped_column(protected("funding_plan_audits", "payload"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class ExternalIdentity(Base):
     """An explicitly linked provider identity; never matched by name/phone."""
     __tablename__ = "external_identities"

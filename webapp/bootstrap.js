@@ -35,6 +35,7 @@
     // A temporary tunnel or a slow mobile connection may need more than 15s.
     // Keep a finite timeout and the existing explicit retry screen.
     await load(articles, 90000);
+    await load(script.dataset.funding || '/static/funding.js', 90000);
     await load(app, 90000);
   })().catch(() => {
     const view = document.getElementById('view');

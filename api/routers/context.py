@@ -32,7 +32,7 @@ from database.models import (
     User,
 )
 from services.news import can_post_news
-from utils.access import accessible_regions, actor_cell, can_edit_region, require_view
+from utils.access import AccessDenied, accessible_regions, actor_cell, can_edit_region, require_view
 from utils.balance_calc import get_balance, get_cell_totals, get_totals
 from utils.counters import (
     new_event_tasks_count,
@@ -104,8 +104,17 @@ async def me(user: User = Depends(get_current_user), session: AsyncSession = Dep
         Task.from_user_id == user.id, Task.status == "review", Task.review_is_read.is_(False),
     ))).scalar() or 0
     incoming = await new_tasks_count(session, user.id) + await new_event_tasks_count(session, user.member_id)
+    from services.funding import scope as funding_scope
+    try:
+        _, funding_manager, funding_department = await funding_scope(session, user)
+        funding_enabled = True
+    except AccessDenied:
+        funding_enabled = funding_manager = funding_department = False
     return {
         "id": user.id,
+        "funding_enabled": funding_enabled,
+        "can_manage_funding": funding_manager,
+        "funding_department_enabled": funding_department,
         "full_name": user.full_name,
         "role": user.role,
         "roles": role_codes(user),
