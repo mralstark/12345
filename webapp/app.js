@@ -2837,9 +2837,11 @@
       '<div class="field"><label for="cellExportCell">Ячейка</label><select id="cellExportCell"><option value="">Все ячейки</option>' + data.items.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('') + '</select></div>' +
       '<div class="btn-row">' + [['list','Список ячеек'],['members','Численность и состав'],['finance','Финансы'],['all','Всё вместе']].map(([id,label]) => '<button class="btn btn--ghost" data-cell-export="' + id + '">' + label + '</button>').join('') + '</div><div id="cellExportResult" aria-live="polite"></div></div>';
     setView(exports + rows, gen);
+    let exportBusy = false;
     on('[data-cell-export]', 'click', async (event) => {
       const buttons = [...document.querySelectorAll('[data-cell-export]')];
-      if (buttons.some(b => b.disabled)) return;
+      if (exportBusy) return;
+      exportBusy = true;
       const mode = event.currentTarget.dataset.cellExport;
       const scope = document.getElementById('cellExportScope');
       const result = document.getElementById('cellExportResult');
@@ -2851,7 +2853,7 @@
         result.innerHTML = '<p>Файл готов. Ссылка действует 10 минут.</p><a class="btn" id="cellExportDownload" href="' + esc(new URL(file.url, location.origin).href) + '" download="' + esc(file.filename) + '">Скачать Excel</a>';
         wireDownloadLink(document.getElementById('cellExportDownload'), file);
       } catch(error) { if (result.isConnected) result.textContent = error.message; fail(error); }
-      finally { buttons.forEach(b => b.disabled = false); scope.disabled = false; }
+      finally { exportBusy = false; buttons.forEach(b => b.disabled = false); scope.disabled = false; }
     });
 
     on('[data-cell]', 'click', (event) => {
