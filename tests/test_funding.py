@@ -387,3 +387,28 @@ async def test_encrypted_offline_clone_keeps_cancel_reference(client,session,wor
             assert rows[1]['kind']=='cancel' and rows[1]['comment']=='Контроль переноса отмены'
             await ensure_encryption_ready(conn)
     finally:await target.dispose()
+
+
+async def test_rollback_checks_actual_encrypted_inventory_not_only_helper_files(session,tmp_path,monkeypatch):
+    import io
+    import tarfile
+    from pathlib import Path
+    from scripts import check_rollback_compatibility as check
+    monkeypatch.setattr(check,'engine',engine)
+    async with engine.begin() as conn:await write_state(conn)
+    inventory=(Path(__file__).resolve().parents[1]/'database/protected_fields.py').read_text(encoding='utf-8')
+    for old in (False,True):
+        source=inventory
+        if old:
+            for name,field in [('funding_plans','note'),('funding_entries','comment'),('funding_plan_audits','payload')]:
+                source=source.replace(f'    "{name}": "{field}",\n','')
+        path=tmp_path/('old.tar.gz' if old else 'current.tar.gz')
+        files={'database/protected_fields.py':source.encode(),'api/auth.py':b'resolve_user_by_id'}
+        for name in ['services/news.py','services/navigation.py','api/routers/profile.py']:
+            files[name]=b'publication_state'
+        for name in ['database/encrypted.py','utils/data_crypto.py','utils/private_files.py','services/vk_login.py']:
+            files[name]=b'# Compatibility fixture'
+        with tarfile.open(path,'w:gz') as archive:
+            for name,content in files.items():
+                info=tarfile.TarInfo(name);info.size=len(content);archive.addfile(info,io.BytesIO(content))
+        assert await check.safe_to_restore(path) is (not old)
