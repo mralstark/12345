@@ -599,22 +599,23 @@ body::before {
 
 .bottom-nav {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--vk-safe-bottom, 0px)));
   z-index: 20;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   background: var(--nav-bg);
   border: 1px solid var(--rule-strong);
-  border-bottom: 0;
-  border-radius: 24px 24px 0 0;
-  box-shadow: 0 -4px 32px rgba(0,0,0,.14);
+  border-radius: 28px;
+  padding: 4px;
+  isolation: isolate;
+  box-shadow: 0 12px 32px rgba(0,0,0,.18);
   overflow: hidden;
   /* Домашний индикатор на iPhone перекрывает нижние пиксели — отступ по
      safe-area (в index.html для этого стоит viewport-fit=cover). */
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--vk-safe-bottom, 0px));
+  /* Home-indicator space is outside the floating navigation surface. */
 }
 
 .tab {
@@ -624,7 +625,10 @@ body::before {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 72px;
+  min-height: 64px;
+  min-width: 0;
+  border-radius: 23px;
+  z-index: 1;
   padding: var(--space-12) var(--space-4);
   border: none;
   background: none;
@@ -635,7 +639,7 @@ body::before {
   text-align: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color .2s ease;
+  transition: color .2s ease, transform .18s ease;
 }
 
 .tab__icon { flex: none; width: 22px; height: 22px; }
@@ -649,8 +653,8 @@ body::before {
   hyphens: none;
   font-weight: 500;
 }
-.tab--active { color: var(--accent); background: var(--accent-soft); }
-.tab:active { background: var(--accent-soft); }
+.tab--active { color: var(--accent); background: transparent; }
+.tab:active { transform: scale(.96); }
 .tab__badge {
   position: absolute;
   top: var(--space-4);
@@ -686,7 +690,7 @@ body::before {
   gap: var(--space-12);
   width: 100%;
   min-height: 56px;
-  padding: var(--space-16) var(--space-4);
+  padding: var(--space-16) var(--space-12);
   border: none;
   border-bottom: 1px solid var(--border);
   background: none;
@@ -697,10 +701,10 @@ body::before {
   cursor: pointer;
 }
 .more-list__item:last-child { border-bottom: none; }
-.more-list__item--active { color: var(--accent); }
+.more-list__item--active { color: var(--accent); background: var(--accent-soft); border-radius: 14px; }
 .more-list__item .tab__icon { color: var(--hint); }
 .more-list__item--active .tab__icon { color: var(--accent); }
-.more-list__label { flex: 1 1 auto; }
+.more-list__label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .more-list__badge {
   flex: none;
   min-width: 17px;
@@ -930,7 +934,7 @@ body::before {
   cursor: pointer;
   min-height: 48px;
   font-family: inherit;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
   min-width: 0;
   max-width: 100%;
   line-height: 1.35;
@@ -1198,7 +1202,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, .66);
+  top: var(--visible-top, 0px);
+  bottom: auto;
+  height: var(--visible-height, 100dvh);
+  background: rgba(0, 0, 0, .56);
+  animation: backdropEnter 180ms ease-out;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1209,10 +1217,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   width: 100%;
   max-width: 620px;
   max-height: 92vh;
-  max-height: min(92vh, calc(100dvh - max(var(--space-16), var(--top-inset))));
+  max-height: min(92vh, calc(var(--visible-height, 100dvh) - max(var(--space-16), var(--top-inset))));
   overflow-y: auto;
   background: var(--surface);
-  border-radius: 24px 24px 0 0;
+  border-radius: 28px 28px 0 0;
+  animation: sheetEnter 360ms cubic-bezier(.16, 1, .3, 1);
   /* По бокам просторнее, чем у обычного экрана: окно шире (до 560 точек), и
      на этой ширине те же 16 читались как «текст прижат к краю». */
   padding: var(--space-24) var(--space-24) calc(var(--space-24) + env(safe-area-inset-bottom, 0px));
@@ -2317,7 +2326,7 @@ textarea {
   from { opacity: 0; transform: translateX(-14px); }
   to { opacity: 1; transform: none; }
 }
-.view--enter { animation: viewEnter .14s ease-out; }
+.view--enter { animation: viewEnter 280ms cubic-bezier(.2, .8, .2, 1); }
 .view--from-right { animation-name: viewFromRight; }
 .view--from-left { animation-name: viewFromLeft; }
 
@@ -2325,12 +2334,13 @@ textarea {
    переезжает: сама сетка при смене раздела перерисовывается целиком. */
 .tabs__marker {
   position: absolute;
-  top: 0;
+  top: 4px;
+  bottom: 4px;
   left: 0;
-  height: 2px;
-  border-radius: 0 0 2px 2px;
-  background: var(--accent);
-  transition: transform .18s ease, opacity .18s ease;
+  z-index: 0;
+  border-radius: 23px;
+  background: var(--accent-soft);
+  transition: transform .32s cubic-bezier(.2, .8, .2, 1), opacity .18s ease;
   pointer-events: none;
 }
 
@@ -2782,10 +2792,55 @@ body[data-cabinet-mode="own"] .row, body[data-cabinet-mode="region"] .row { padd
 }
 
 /* Orientation and report preparation share the existing neutral surfaces. */
-.management-guide { margin: 0 0 24px; }
+.management-guide { margin: -12px 0 0; grid-column: 1 / -1; }
 .management-guide__context { display:flex; align-items:center; flex-wrap:wrap; gap:12px; color:var(--hint); font-size:14px; }
 .management-guide__context > span { flex:1 1 180px; overflow-wrap:anywhere; }
-.management-shortcuts { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
-.management-shortcuts .btn { flex:1 1 130px; white-space:normal; }
+.management-shortcuts { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin-top:20px; }
+.management-shortcut { display:flex; align-items:center; gap:12px; min-height:56px; padding:12px; background:var(--glass-panel); border:1px solid var(--glass-edge); border-radius:16px; color:var(--text); font:500 14px/1.4 var(--font-reading); text-align:left; cursor:pointer; transition:background-color 160ms,transform 160ms; }
+.management-shortcut .tab__icon { color:var(--accent); width:20px; height:20px; }
+.management-shortcut span { min-width:0; overflow-wrap:anywhere; }
+.management-shortcut:active { background:var(--accent-soft); }
+.inline-help { color:var(--hint); font-size:14px; }
+.inline-help summary { min-height:44px; display:flex; align-items:center; gap:10px; cursor:pointer; list-style:none; }
+.inline-help summary::-webkit-details-marker { display:none; }
+.inline-help summary::before { content:'+'; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; display:inline-flex; justify-content:center; align-items:center; flex:none; }
+.inline-help[open] summary::before { content:'−'; }
+.inline-help p { margin:8px 0; }
+@media (min-width:768px) { .management-shortcuts { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 .section-description { display:block; margin-top:6px; font-size:13px; line-height:1.45; font-weight:400; color:var(--hint); }
 .more-list__item[hidden], #rpPeriodField[hidden], #rpMonthField[hidden], #rpPdf[hidden] { display:none; }
+
+/* Motion has a purpose: navigation, acknowledgement and reversible sheets.
+   Transform/opacity only; no continuous animation on blurred surfaces. */
+@keyframes sheetEnter {
+  from { opacity: .4; transform: translateY(36px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sheetExit { to { opacity: 0; transform: translateY(28px); } }
+@keyframes backdropEnter { from { background-color: transparent; } }
+@keyframes backdropExit { to { background-color: transparent; } }
+.modal-backdrop--closing { animation: backdropExit 180ms ease-in forwards; pointer-events: none; }
+.modal-backdrop--closing .modal { animation: sheetExit 180ms ease-in forwards; }
+.btn:not(:disabled):active, .btn-icon:not(:disabled):active, .cabinet:active,
+.modal__close:active { transform: scale(.975); }
+.modal__close, .cabinet, .btn-icon { transition: transform 160ms ease, background-color 160ms ease; }
+.screen-loading { min-height: 38vh; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--hint); }
+.screen-loading__spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: loadingTurn 800ms linear infinite; }
+@keyframes loadingTurn { to { transform: rotate(360deg); } }
+.toast { animation: toastEnter 240ms cubic-bezier(.2, .8, .2, 1); }
+@keyframes toastEnter { from { opacity: 0; translate: 0 10px; } }
+/* A desktop dialog stays close to the user's gaze, rather than the monitor edge. */
+@media (min-width: 768px) {
+  .modal-backdrop { align-items: center; padding: 32px; }
+  .modal { border-radius: 28px; border-bottom: 1px solid var(--rule-strong); max-height: calc(var(--visible-height, 100dvh) - 64px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn:active, .btn-icon:active, .cabinet:active, .modal__close:active, .tab:active { transform: none; }
+  .modal, .modal-backdrop, .toast, .screen-loading__spinner { animation: none; }
+}
+
+.feed-empty { padding-block:32px; }
+.feed-empty__icon { display:inline-flex; color:var(--accent); margin-bottom:20px; }
+.feed-empty__icon .tab__icon { width:28px; height:28px; }
+.feed-empty .btn-row { margin-top:24px; }
+.feed-empty .btn { flex:1 1 150px; }

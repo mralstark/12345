@@ -178,7 +178,7 @@
 
   function revealFocusedField() {
     if (!focusedField || !focusedField.isConnected || document.activeElement !== focusedField) return;
-    focusedField.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    focusedField.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   document.addEventListener('focusin', (event) => {
@@ -193,7 +193,16 @@
   // сообщают об этом по-разному: visualViewport есть в браузере, а Telegram
   // шлёт свой viewportChanged (подписка ниже, где создаётся tg).
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', revealFocusedField);
+    const syncVisibleViewport = () => {
+      const viewport = window.visualViewport;
+      // Pinch zoom must remain browser-controlled; never resize a dialog to a magnified viewport.
+      const normalScale = Math.abs(viewport.scale - 1) < .01;
+      document.documentElement.style.setProperty('--visible-height', normalScale ? viewport.height + 'px' : '100dvh');
+      document.documentElement.style.setProperty('--visible-top', normalScale ? viewport.offsetTop + 'px' : '0px');
+    };
+    window.visualViewport.addEventListener('resize', () => { syncVisibleViewport(); revealFocusedField(); });
+    window.visualViewport.addEventListener('scroll', syncVisibleViewport);
+    syncVisibleViewport();
   }
   window.addEventListener('resize', revealFocusedField);
 
@@ -503,8 +512,10 @@
   }
 
   function toast(text) {
+    document.querySelectorAll('.toast').forEach((item) => item.remove());
     const node = document.createElement('div');
     node.className = 'toast';
+    node.setAttribute('role', 'status');
     node.textContent = text;
     document.body.appendChild(node);
     setTimeout(() => node.remove(), 2600);
@@ -551,16 +562,25 @@
     const gen = ++viewGen;
     Promise.resolve()
       .then(() => renderer(gen))
-      .catch((error) => { if (error !== STALE_RENDER && gen === viewGen) fail(error); });
+      .catch((error) => {
+        if (error === STALE_RENDER || gen !== viewGen) return;
+        if (view().getAttribute('aria-busy') === 'true') {
+          setView('<section class="card" role="alert"><h2 class="card__title">Не удалось загрузить раздел</h2>' +
+            '<p class="row__sub">Проверьте соединение и повторите попытку. Можно также открыть другой раздел внизу.</p>' +
+            '<button class="btn" id="retrySection">Попробовать снова</button></section>', gen);
+          document.getElementById('retrySection').onclick = renderTab;
+        } else fail(error);
+      });
   }
 
   // gen — номер рендера, от имени которого идёт запись. Без него (вызов не из
   // рендерера — например, фатальная ошибка при запуске) пишем всегда.
   // Между разделами — короткое проявление. Только при смене раздела: та же
   // анимация на каждой перерисовке (отметил задачу, поставил лайк) мигала бы
-  // всем экраном на любое действие. 140 мс выбраны так, чтобы переход
+  // всем экраном на любое действие. 280 мс выбраны так, чтобы переход
   // читался, но не заставлял ждать: на кнопку жмут подряд.
   let lastRenderedTab = null;
+  let lastRenderedCabinet = null;
   let fieldLabelSequence = 0;
 
   function associateFieldLabels(root) {
@@ -578,14 +598,17 @@
   function setView(html, gen) {
     if (gen !== undefined && gen !== viewGen) throw STALE_RENDER;
     const node = view();
-    const changed = lastRenderedTab !== state.tab;
+    const cabinet = (state.cabinetMode || 'personal') + ':' + (state.regionId || '');
+    const changed = lastRenderedTab !== state.tab || lastRenderedCabinet !== cabinet;
     const from = tabDirection(lastRenderedTab, state.tab);
     lastRenderedTab = state.tab;
+    lastRenderedCabinet = cabinet;
+    node.removeAttribute('aria-busy');
     node.dataset.screen = state.tab || '';
     const section = state.me && gen !== undefined && tabsConfig().find((item) => item.id === state.tab);
     const hasOwnHeading = ['profile', 'person', 'academyManage', 'funding'].includes(state.tab);
-    node.innerHTML = managementGuide() + (section && !hasOwnHeading
-      ? '<header class="screen-heading"><h1>' + esc(section.label) + '</h1></header>' : '') + html;
+    node.innerHTML = (section && !hasOwnHeading
+      ? '<header class="screen-heading"><h1>' + esc(section.label) + '</h1></header>' : '') + managementGuide() + html;
     associateFieldLabels(node);
     on('[data-section-go]', 'click', event => goSection(event.currentTarget.dataset.sectionGo), node);
     const managementBack = node.querySelector('#backToManagement');
@@ -671,14 +694,27 @@
   // фотографии, и отпускать их надо в любом случае.
   let modalCleanups = [];
   let modalReturnFocus = null;
+  let pointerModalOpener = null;
+  let pointerModalOpenerAt = 0;
+  // Safari does not focus buttons on pointer clicks. Remember the actual
+  // activating control so closing a dialog still returns keyboard focus.
+  document.addEventListener('pointerdown', (event) => {
+    pointerModalOpener = event.target.closest('button, a[href], [role="button"]');
+    pointerModalOpenerAt = performance.now();
+  }, {capture: true, passive: true});
 
   function onModalClose(handler) {
     modalCleanups.push(handler);
   }
 
   function modal(title, bodyHtml, onMount) {
-    closeModal();
+    closeModal(true);
     modalReturnFocus = document.activeElement;
+    if ((!modalReturnFocus || modalReturnFocus === document.body) && pointerModalOpener &&
+        pointerModalOpener.isConnected && performance.now() - pointerModalOpenerAt < 1500) {
+      modalReturnFocus = pointerModalOpener;
+    }
+    pointerModalOpener = null;
     const root = document.getElementById('modalRoot');
     root.innerHTML =
       '<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">' +
@@ -688,7 +724,7 @@
       '</div></div>';
     const backdrop = root.querySelector('.modal-backdrop');
     backdrop.addEventListener('click', (event) => { if (event.target === backdrop) closeModal(); });
-    document.getElementById('modalCloseX').onclick = closeModal;
+    document.getElementById('modalCloseX').onclick = () => closeModal();
     if (onMount) onMount(root);
     associateFieldLabels(root);
     document.body.classList.add('has-modal');
@@ -707,15 +743,40 @@
     });
   }
 
-  function closeModal() {
+  // Cleanup is synchronous: pending requests and object URLs are released
+  // immediately. Only the existing visual shell remains during its exit.
+  function closeModal(immediate) {
+    const root = document.getElementById('modalRoot');
+    const backdrop = root.querySelector('.modal-backdrop');
+    if (backdrop && backdrop.classList.contains('modal-backdrop--closing')) {
+      if (immediate === true) backdrop.finishClose();
+      return;
+    }
     const pending = modalCleanups;
     modalCleanups = [];
     for (const handler of pending) handler();
-    document.getElementById('modalRoot').innerHTML = '';
-    document.body.classList.remove('has-modal');
-    document.querySelectorAll('.topbar, #view, #tabs').forEach((node) => { node.inert = false; });
-    if (modalReturnFocus && modalReturnFocus.isConnected) modalReturnFocus.focus({preventScroll: true});
+    const returnFocus = modalReturnFocus;
     modalReturnFocus = null;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      if (backdrop) backdrop.remove();
+      // A newly opened dialog owns the background lock and focus now.
+      if (root.querySelector('.modal-backdrop')) return;
+      document.body.classList.remove('has-modal');
+      document.querySelectorAll('.topbar, #view, #tabs').forEach((node) => { node.inert = false; });
+      if (returnFocus && returnFocus.isConnected) returnFocus.focus({preventScroll: true});
+    };
+    if (!backdrop || immediate === true || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      finish(); return;
+    }
+    backdrop.finishClose = finish;
+    backdrop.inert = true;
+    backdrop.classList.add('modal-backdrop--closing');
+    backdrop.querySelector('.modal').addEventListener('animationend', finish, {once: true});
+    // Hidden tabs and interrupted/reduced animations may not emit animationend.
+    setTimeout(finish, 240);
   }
 
   // Строкой — как раньше, объектом — когда одной фразы мало: у снятия с
@@ -903,7 +964,7 @@
   // теряется: на «Ещё» загорается точка.
   const NAV_SLOTS = 5;
 
-  // Полоска под активной вкладкой переезжает, а не перескакивает. Живёт
+  // Подложка активной вкладки переезжает, а не перескакивает. Живёт
   // отдельным элементом поверх сетки кнопок: сама сетка перерисовывается
   // целиком при каждой смене раздела, и полоска внутри неё анимироваться бы
   // не смогла — новый элемент начинает сразу на месте.
@@ -916,11 +977,18 @@
     }
     const active = tabs.querySelector('.tab--active');
     if (!active) { marker.style.opacity = '0'; return; }
-    const width = 22;
+    const width = Math.max(0, active.offsetWidth - 4);
     marker.style.opacity = '1';
     marker.style.width = width + 'px';
     marker.style.transform = 'translateX(' +
-      Math.round(active.offsetLeft + active.offsetWidth / 2 - width / 2) + 'px)';
+      Math.round(active.offsetLeft + 2) + 'px)';
+    marker.setAttribute('aria-hidden', 'true');
+  }
+
+  // Resize and font loading can change Russian labels and the selected pill.
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => moveTabMarker(document.getElementById('tabs')))
+      .observe(document.getElementById('tabs'));
   }
 
   function renderTabs() {
@@ -960,6 +1028,7 @@
     tabs.insertAdjacentHTML('afterbegin', html);
     moveTabMarker(tabs);
     on('[data-tab]', 'click', (event) => {
+      if (state.tab === event.currentTarget.dataset.tab) return;
       state.tab = event.currentTarget.dataset.tab;
       renderTabs();
       renderTab();
@@ -983,7 +1052,7 @@
     modal('Все разделы', '<div class="field"><label for="sectionSearch">Найти раздел или действие</label>' +
       '<input id="sectionSearch" type="search" placeholder="Например, отчёт или участник" /></div>' +
       '<div class="more-list">' + items.map(item =>
-        '<button class="more-list__item" data-more="' + item.id + '">' + tabIcon(item.id) +
+        '<button class="more-list__item' + (item.id === state.tab ? ' more-list__item--active' : '') + '"' + (item.id === state.tab ? ' aria-current="page"' : '') + ' data-more="' + item.id + '">' + tabIcon(item.id) +
         '<span class="more-list__label">' + esc(item.label) + '<small class="section-description">' + esc(sectionHelp[item.id] || '') + '</small></span>' +
         (item.badge ? '<span class="more-list__badge">' + item.badge + '</span>' : '') + '</button>').join('') +
       '</div><p id="sectionSearchEmpty" hidden>Ничего не найдено. Попробуйте другое слово.</p>', () => {
@@ -1001,11 +1070,11 @@
     const name = own ? ownCabinetLabel() : ((state.me.regions || []).find(r => r.id === state.regionId) || {}).name;
     const home = own ? 'analytics' : 'dashboard';
     const isHome = state.tab === home;
-    const shortcuts = tabsConfig().filter(t => ['applications','tasks','reports',own ? 'regions' : 'members',own ? 'funding' : 'events'].includes(t.id));
+    const shortcuts = tabsConfig().filter(t => ['applications','reports',own ? 'regions' : 'members',own ? 'funding' : 'events'].includes(t.id));
     return '<nav class="management-guide" aria-label="Кабинет и быстрые действия"><div class="management-guide__context"><span>' + esc(name || 'Кабинет региона') + '</span>' +
       (!isHome ? '<button class="btn btn--small btn--ghost" data-section-go="' + home + '">К сводке</button>' : '') +
       (!own && hasOwnCabinet() ? '<button class="btn btn--small btn--ghost" id="backToManagement">Все мои регионы</button>' : '') + '</div>' +
-      (isHome ? '<div class="management-shortcuts">' + shortcuts.map(t => '<button class="btn btn--ghost" data-section-go="' + t.id + '">' + esc(t.label) + (t.badge ? ' · ' + t.badge : '') + '</button>').join('') + '</div>' : '') + '</nav>';
+      (isHome ? '<div class="management-shortcuts">' + shortcuts.map(t => '<button class="management-shortcut" data-section-go="' + t.id + '">' + tabIcon(t.id) + '<span>' + esc(t.label) + (t.badge ? ' · ' + t.badge : '') + '</span></button>').join('') + '</div>' : '') + '</nav>';
   }
 
   function ownCabinetLabel() {
@@ -1331,7 +1400,10 @@
     };
     const renderer = renderers[state.tab] || renderDashboard;
     startRender((gen) => {
-      setView('<div class="loader">Загрузка…</div>', gen);
+      // Loading must not consume the content's entrance animation. Reserve
+      // space so a fast response does not collapse the page into a tiny label.
+      view().setAttribute('aria-busy', 'true');
+      view().innerHTML = '<div class="screen-loading" role="status"><span class="screen-loading__spinner" aria-hidden="true"></span><span>Загрузка…</span></div>';
       return renderer(gen);
     });
   }
@@ -3342,7 +3414,7 @@
 
     setView(
       periodControls(period, 'an') +
-      '<div class="card__note">Новых — действующие участники, у которых дата вступления корпорантом попадает в выбранный период. После одобрения анкеты и сохранения этой даты показатель обновляется. Создание аккаунта само по себе его не меняет.</div>' +
+      '<details class="inline-help"><summary>Как считаются новые участники</summary><p>Новых — действующие участники, у которых дата вступления корпорантом попадает в выбранный период. После одобрения анкеты и сохранения этой даты показатель обновляется. Создание аккаунта само по себе его не меняет.</p></details>' +
       '<div class="grid">' +
       '<div class="stat"><div class="stat__label">Регионов</div><div class="stat__value">' + data.items.length + '</div></div>' +
       '<div class="stat"><div class="stat__label">Всего людей</div><div class="stat__value">' + (data.totals.members || 0) + '</div></div>' +
@@ -4836,12 +4908,18 @@
     const articlesOnly = state.feedFilter === 'articles';
     const items = articlesOnly ? data.items.filter((item) => item.content_kind === 'article') : data.items;
     const posts = items.map((item) => newsPostHtml(item, data.reaction_set || [])).join('');
+    const emptyFeed = state.cabinetMode === 'personal' && !articlesOnly
+      ? '<section class="card feed-empty"><span class="feed-empty__icon">' + tabIcon('news') + '</span>' +
+        '<h2 class="card__title">Публикаций пока нет</h2><p class="row__sub">Новости появятся здесь. А пока можно посмотреть мероприятия или открыть Академию.</p>' +
+        '<div class="btn-row"><button class="btn" data-section-go="myEvents">Мероприятия</button>' +
+        '<button class="btn btn--ghost" data-section-go="character">Открыть Академию</button></div></section>'
+      : '<div class="empty">' + (articlesOnly ? 'Статей пока нет' : 'Новостей пока нет') + '</div>';
 
     setView(
       (data.can_post ? composeRowHtml(data.me_avatar, data.me_name) : '') +
       (data.can_post ? '<div class="article-compose-actions"><button class="btn btn--small btn--ghost" id="newArticle">Создать статью</button><button class="btn btn--small btn--ghost" id="articleDrafts">Мои черновики</button></div>' : '') +
       ((articlesOnly || data.items.some((item) => item.content_kind === 'article')) ? '<div class="chips feed-filters"><button class="chip' + (!articlesOnly ? ' chip--active' : '') + '" data-feed-filter="all">Все публикации</button><button class="chip' + (articlesOnly ? ' chip--active' : '') + '" data-feed-filter="articles">Статьи</button></div>' : '') +
-      (items.length ? '<div class="feed">' + posts + '</div>' : '<div class="empty">' + (articlesOnly ? 'Статей пока нет' : 'Новостей пока нет') + '</div>')
+      (items.length ? '<div class="feed">' + posts + '</div>' : emptyFeed)
     , gen);
 
     if (data.can_post) document.getElementById('addNews').onclick = () => newsForm().catch(fail);
